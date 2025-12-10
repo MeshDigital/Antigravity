@@ -4,33 +4,22 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
 using System.Runtime.CompilerServices;
-using SLSKDONET.Models;
 
 namespace SLSKDONET.Models;
 
 /// <summary>
-/// Status of a track within a playlist/source job.
-/// </summary>
-public enum TrackStatus
-{
-    Missing,      // Not in local library, needs download
-    Downloading,  // Currently being downloaded
-    Downloaded,   // Successfully downloaded
-    Failed        // Download failed
-}
-
-/// <summary>
 /// Represents a playlist/source import job (e.g., from Spotify, CSV).
-/// This is the central object for library management and Rekordbox export.
-/// Tracks the status of all tracks in the imported source.
+/// This is the playlist header/metadata in the relational library structure.
+/// Foreign Keys: One-to-Many relationship with PlaylistTrack.
 /// </summary>
 public class PlaylistJob : INotifyPropertyChanged
 {
     private int _successfulCount;
     private int _failedCount;
+    private int _missingCount;
 
     /// <summary>
-    /// Unique identifier for this job.
+    /// Unique identifier for this job (Primary Key).
     /// </summary>
     public Guid Id { get; set; } = Guid.NewGuid();
 
@@ -56,10 +45,11 @@ public class PlaylistJob : INotifyPropertyChanged
     public ObservableCollection<Track> OriginalTracks { get; set; } = new();
 
     /// <summary>
-    /// Status of each track, keyed by the track's UniqueHash.
-    /// Maps each track to its current status (Missing, Downloading, Downloaded, Failed).
+    /// Related PlaylistTrack entries (Foreign Key relationship).
+    /// This is populated when loading from the database.
+    /// In-memory during import, persisted to the relational index.
     /// </summary>
-    public Dictionary<string, TrackStatus> TrackStatuses { get; set; } = new();
+    public List<PlaylistTrack> PlaylistTracks { get; set; } = new();
 
     /// <summary>
     /// When the job was created/imported.
@@ -72,7 +62,7 @@ public class PlaylistJob : INotifyPropertyChanged
     public int TotalTracks => OriginalTracks.Count;
 
     /// <summary>
-    /// Number of tracks successfully downloaded.
+    /// Number of tracks successfully downloaded (status = Downloaded).
     /// </summary>
     public int SuccessfulCount
     {
@@ -81,7 +71,7 @@ public class PlaylistJob : INotifyPropertyChanged
     }
 
     /// <summary>
-    /// Number of tracks that failed to download.
+    /// Number of tracks that failed to download (status = Failed).
     /// </summary>
     public int FailedCount
     {
@@ -90,9 +80,13 @@ public class PlaylistJob : INotifyPropertyChanged
     }
 
     /// <summary>
-    /// Number of tracks yet to be downloaded (Missing status).
+    /// Number of tracks yet to be downloaded (status = Missing).
     /// </summary>
-    public int MissingCount => TotalTracks - SuccessfulCount - FailedCount;
+    public int MissingCount
+    {
+        get => _missingCount;
+        set { SetProperty(ref _missingCount, value); }
+    }
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -111,25 +105,13 @@ public class PlaylistJob : INotifyPropertyChanged
     }
 
     /// <summary>
-    /// Updates a track's status and refreshes UI counts.
-    /// </summary>
-    public void UpdateTrackStatus(string trackHash, TrackStatus status)
-    {
-        if (TrackStatuses.ContainsKey(trackHash))
-        {
-            TrackStatuses[trackHash] = status;
-            RefreshStatusCounts();
-        }
-    }
-
-    /// <summary>
-    /// Recalculates status counts from the current TrackStatuses dictionary.
+    /// Recalculates status counts from PlaylistTracks.
     /// </summary>
     public void RefreshStatusCounts()
     {
-        SuccessfulCount = TrackStatuses.Values.Count(s => s == TrackStatus.Downloaded);
-        FailedCount = TrackStatuses.Values.Count(s => s == TrackStatus.Failed);
-        OnPropertyChanged(nameof(MissingCount));
+        SuccessfulCount = PlaylistTracks.Count(t => t.Status == Models.TrackStatus.Downloaded);
+        FailedCount = PlaylistTracks.Count(t => t.Status == Models.TrackStatus.Failed);
+        MissingCount = PlaylistTracks.Count(t => t.Status == Models.TrackStatus.Missing);
     }
 
     /// <summary>

@@ -133,29 +133,62 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
             var libraryEntries = _libraryService.LoadDownloadedTracks();
             var libraryHashToPath = libraryEntries.ToDictionary(e => e.UniqueHash, e => e.FilePath);
 
-            // Perform deduplication and calculate FilePath
+            // Create PlaylistTracks with deduplication logic
+            var playlistTracks = new List<PlaylistTrack>();
+            int trackNumber = 1;
+            
             foreach (var track in sourceTracks)
             {
                 var hash = track.UniqueHash;
+                PlaylistTrack playlistTrack;
                 
                 if (libraryHashToPath.TryGetValue(hash, out var libFilePath))
                 {
-                    // Track already in library - use actual path
+                    // Track already in library - status = Downloaded
                     track.FilePath = libFilePath;
                     track.LocalPath = libFilePath;
-                    playlistJob.TrackStatuses[hash] = TrackStatus.Downloaded;
+                    playlistTrack = new PlaylistTrack
+                    {
+                        Id = Guid.NewGuid(),
+                        PlaylistId = playlistJob.Id,
+                        TrackUniqueHash = hash,
+                        Artist = track.Artist ?? "Unknown",
+                        Title = track.Title ?? "Unknown",
+                        Album = track.Album ?? "Unknown",
+                        Status = TrackStatus.Downloaded,
+                        ResolvedFilePath = libFilePath,
+                        TrackNumber = trackNumber
+                    };
                     _logger.LogDebug("Track already in library: {Hash} at {Path}", hash, track.FilePath);
                 }
                 else
                 {
-                    // Track is missing - calculate expected path
+                    // Track is missing - calculate expected path, status = Missing
                     var expectedFilename = FormatFilename(track);
-                    track.FilePath = Path.Combine(destinationFolder, expectedFilename);
-                    playlistJob.TrackStatuses[hash] = TrackStatus.Missing;
-                    _logger.LogDebug("Track missing, will be downloaded to: {Path}", track.FilePath);
+                    var expectedPath = Path.Combine(destinationFolder, expectedFilename);
+                    track.FilePath = expectedPath;
+                    playlistTrack = new PlaylistTrack
+                    {
+                        Id = Guid.NewGuid(),
+                        PlaylistId = playlistJob.Id,
+                        TrackUniqueHash = hash,
+                        Artist = track.Artist ?? "Unknown",
+                        Title = track.Title ?? "Unknown",
+                        Album = track.Album ?? "Unknown",
+                        Status = TrackStatus.Missing,
+                        ResolvedFilePath = expectedPath,
+                        TrackNumber = trackNumber
+                    };
+                    _logger.LogDebug("Track missing, will be downloaded to: {Path}", expectedPath);
                 }
+                
+                playlistTracks.Add(playlistTrack);
+                trackNumber++;
             }
 
+            // Save all playlist tracks to persistent storage
+            await _libraryService.SavePlaylistTracksAsync(playlistTracks);
+            playlistJob.PlaylistTracks = playlistTracks;
             playlistJob.RefreshStatusCounts();
 
             // Save the job for persistence
