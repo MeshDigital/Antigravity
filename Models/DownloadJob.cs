@@ -1,5 +1,11 @@
 using System.ComponentModel;
+using System.Diagnostics;
+using System.IO;
 using System.Runtime.CompilerServices;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Windows.Input;
+using SLSKDONET.Views;
 
 namespace SLSKDONET.Models;
 
@@ -11,11 +17,31 @@ public class DownloadJob : INotifyPropertyChanged
     public string Id { get; set; } = Guid.NewGuid().ToString();
     public Track Track { get; set; } = null!;
 
+    /// <summary>
+    /// Per-job cancellation token to allow UI-triggered cancellation.
+    /// </summary>
+    public CancellationTokenSource CancellationTokenSource { get; } = new();
+
     private DownloadState _state = DownloadState.Pending;
     public DownloadState State
     {
         get => _state;
-        set => SetProperty(ref _state, value);
+        set
+        {
+            if (SetProperty(ref _state, value))
+            {
+                OnPropertyChanged(nameof(Status));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Alias for State to align with UI naming.
+    /// </summary>
+    public DownloadStatus Status
+    {
+        get => (DownloadStatus)State;
+        set => State = (DownloadState)value;
     }
 
     private double _progress; // 0.0 to 1.0
@@ -41,6 +67,19 @@ public class DownloadJob : INotifyPropertyChanged
 
 
     public string? OutputPath { get; set; }
+
+    /// <summary>
+    /// Final destination path for easy access from UI.
+    /// </summary>
+    public string? DestinationPath { get; set; }
+
+    /// <summary>
+    /// Name of the originating source (e.g., playlist name).
+    /// </summary>
+    public string? SourceTitle { get; set; }
+
+    public ICommand OpenFolderCommand { get; }
+    public ICommand CancelCommand { get; }
 
     private string? _errorMessage;
     public string? ErrorMessage
@@ -70,6 +109,39 @@ public class DownloadJob : INotifyPropertyChanged
 
     public double? SizeInMb => Track.Size.HasValue ? (double)Track.Size.Value / 1024 / 1024 : null;
 
+    public DownloadJob()
+    {
+        OpenFolderCommand = new RelayCommand(OpenContainingFolder);
+        CancelCommand = new AsyncRelayCommand(CancelDownloadAsync);
+    }
+
+    private void OpenContainingFolder()
+    {
+        var directory = string.IsNullOrWhiteSpace(DestinationPath)
+            ? (string.IsNullOrWhiteSpace(OutputPath) ? null : Path.GetDirectoryName(OutputPath))
+            : Path.GetDirectoryName(DestinationPath);
+
+        if (!string.IsNullOrWhiteSpace(directory) && Directory.Exists(directory))
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = directory,
+                UseShellExecute = true,
+                Verb = "open"
+            });
+        }
+    }
+
+    private Task CancelDownloadAsync()
+    {
+        if (!CancellationTokenSource.IsCancellationRequested)
+        {
+            CancellationTokenSource.Cancel();
+            Status = DownloadStatus.Cancelled;
+        }
+        return Task.CompletedTask;
+    }
+
     public override string ToString()
     {
         return $"[{State}] {Track.Artist} - {Track.Title} ({Progress:P})";
@@ -95,6 +167,19 @@ public class DownloadJob : INotifyPropertyChanged
 /// Represents the state of a download.
 /// </summary>
 public enum DownloadState
+{
+    Pending,
+    Searching,
+    Downloading,
+    Completed,
+    Failed,
+    Cancelled
+}
+
+/// <summary>
+/// Alias enum to align with UI wording.
+/// </summary>
+public enum DownloadStatus
 {
     Pending,
     Searching,

@@ -53,8 +53,8 @@ public partial class App : System.Windows.Application
                 }
                 else
                 {
-                    // Show dialog for non-network errors
-                    System.Windows.MessageBox.Show($"Unobserved task exception: {ev.Exception.Message}\n\n{ev.Exception.StackTrace}", "Unhandled Task Exception", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+                    // Log instead of showing dialog to avoid crash loops
+                    System.Diagnostics.Debug.WriteLine($"Unobserved task exception: {ev.Exception}");
                 }
                 ev.SetObserved();
             }
@@ -174,7 +174,6 @@ public partial class App : System.Windows.Application
 
         // Pages for navigation
         services.AddTransient<SearchPage>();
-        services.AddTransient<ImportedPage>();
         services.AddTransient<DownloadsPage>();
         services.AddTransient<LibraryPage>();
         services.AddTransient<SettingsPage>();

@@ -48,6 +48,15 @@ public class SearchQuery
     public string? Title { get; set; }
     public string? Artist { get; set; }
     public string? Album { get; set; }
+    /// <summary>
+    /// Name of the originating source (e.g., Spotify playlist name).
+    /// </summary>
+    public string? SourceTitle { get; set; }
+
+    /// <summary>
+    /// Total number of tracks contained in the source list/playlist.
+    /// </summary>
+    public int TotalTracks { get; set; }
     public int? Length { get; set; } // in seconds
     public bool ArtistMaybeWrong { get; set; }
     public int? AlbumTrackCount { get; set; }

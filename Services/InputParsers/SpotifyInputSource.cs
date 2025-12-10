@@ -34,10 +34,16 @@ public class SpotifyInputSource
 
         var spotify = new SpotifyClient(spotifyConfig);
         var queries = new List<SearchQuery>();
+        var playlistName = "Spotify Playlist";
+        var totalTracks = 0;
 
         try
         {
             var playlistId = url.Split('/').Last().Split('?').First();
+            // Fetch playlist metadata first
+            var playlist = await spotify.Playlists.Get(playlistId);
+            playlistName = playlist?.Name ?? playlistName;
+            totalTracks = playlist?.Tracks?.Total ?? 0;
             var playlistItems = await spotify.Playlists.GetItems(playlistId);
 
             if (playlistItems == null) return queries;
@@ -50,7 +56,9 @@ public class SpotifyInputSource
                     {
                         Artist = track.Artists.FirstOrDefault()?.Name,
                         Title = track.Name,
-                        Album = track.Album.Name
+                        Album = track.Album.Name,
+                        SourceTitle = playlistName,
+                        TotalTracks = totalTracks
                     });
                 }
             }

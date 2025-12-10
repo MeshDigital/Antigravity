@@ -98,7 +98,6 @@ public partial class MainWindow : Window
             LogToFile("Registering navigation pages...");
             // Register all pages before navigating so the frame can resolve them.
             navigationService.RegisterPage("Search", typeof(SearchPage));
-            navigationService.RegisterPage("Imported", typeof(ImportedPage));
             navigationService.RegisterPage("Library", typeof(LibraryPage));
             navigationService.RegisterPage("Downloads", typeof(DownloadsPage));
             navigationService.RegisterPage("Settings", typeof(SettingsPage));

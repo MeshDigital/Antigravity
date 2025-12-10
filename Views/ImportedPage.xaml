@@ -23,8 +23,12 @@
         </Border>
 
         <DataGrid Grid.Row="1" ItemsSource="{Binding ImportedQueries}"
-                  Style="{StaticResource ModernDataGridStyle}" Margin="0"
-                  AutoGenerateColumns="False" CanUserAddRows="False" SelectionMode="Extended">
+              Style="{StaticResource ModernDataGridStyle}"
+              ColumnHeaderStyle="{StaticResource ModernColumnHeaderStyle}"
+              CellStyle="{StaticResource ModernCellStyle}"
+              RowStyle="{StaticResource ModernRowStyle}"
+              Margin="0"
+              AutoGenerateColumns="False" CanUserAddRows="False" SelectionMode="Extended">
             <DataGrid.Columns>
                 <DataGridTextColumn Header="Artist" Binding="{Binding Artist}" Width="200"/>
                 <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="*"/>

@@ -11,19 +11,53 @@
     <Grid Background="{StaticResource BackgroundBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <Border Grid.Row="0" Background="{StaticResource SecondaryBackgroundBrush}"
-                BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="16">
-            <TextBlock Text="Download History" Style="{StaticResource ModernLabelStyle}"
-                       FontSize="{StaticResource FontSizeMedium}" FontWeight="Bold"/>
+            BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="16">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <Label Content="Download History &amp; Imported Queries" Style="{StaticResource ModernLabelStyle}"
+                   FontSize="{StaticResource FontSizeMedium}" FontWeight="Bold"/>
+                <ui:Button x:Name="ToggleImportedBtn" Content="Show Imported" Icon="{ui:SymbolIcon ChevronDown24}" 
+                           Style="{StaticResource SimpleButtonStyle}" Margin="8,0,0,0" Click="ToggleImportedBtn_Click"/>
+            </StackPanel>
         </Border>
 
-        <DataGrid Grid.Row="1" Name="LibraryGrid" ItemsSource="{Binding LibraryEntries}"
-                  Style="{StaticResource ModernDataGridStyle}" Margin="0"
-                  AutoGenerateColumns="False" CanUserAddRows="False" SelectionMode="Extended">
+        <!-- Imported Queries Section (collapsible) -->
+        <Expander Grid.Row="1" x:Name="ImportedExpander" Header="Imported Queries" 
+                  Background="{StaticResource SecondaryBackgroundBrush}"
+                  BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1"
+                  IsExpanded="False" Padding="16">
+            <StackPanel>
+                <DataGrid ItemsSource="{Binding ImportedQueries}"
+                      Style="{StaticResource ModernDataGridStyle}"
+                      ColumnHeaderStyle="{StaticResource ModernColumnHeaderStyle}"
+                      CellStyle="{StaticResource ModernCellStyle}"
+                      RowStyle="{StaticResource ModernRowStyle}"
+                      Margin="0,0,0,12"
+                      Height="150"
+                      AutoGenerateColumns="False" CanUserAddRows="False" SelectionMode="Extended">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Artist" Binding="{Binding Artist}" Width="150"/>
+                        <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="*"/>
+                        <DataGridTextColumn Header="Album" Binding="{Binding Album}" Width="150"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+                <ui:Button Content="Search All Imported" Icon="{ui:SymbolIcon Search24}" Appearance="Primary"
+                           Command="{Binding SearchAllImportedCommand}"/>
+            </StackPanel>
+        </Expander>
+
+        <DataGrid Grid.Row="2" Name="LibraryGrid" ItemsSource="{Binding LibraryEntries}"
+              Style="{StaticResource ModernDataGridStyle}"
+              ColumnHeaderStyle="{StaticResource ModernColumnHeaderStyle}"
+              CellStyle="{StaticResource ModernCellStyle}"
+              RowStyle="{StaticResource ModernRowStyle}"
+              Margin="0"
+              AutoGenerateColumns="False" CanUserAddRows="False" SelectionMode="Extended">
             <DataGrid.Columns>
                 <DataGridTextColumn Header="Artist" Binding="{Binding Artist}" Width="150"/>
                 <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="*"/>
@@ -34,13 +68,14 @@
             </DataGrid.Columns>
         </DataGrid>
 
-        <Border Grid.Row="2" Background="{StaticResource SecondaryBackgroundBrush}"
+        <Border Grid.Row="3" Background="{StaticResource SecondaryBackgroundBrush}"
                 BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Padding="16">
             <StackPanel Orientation="Horizontal">
                 <ui:Button Content="Remove Selected" Icon="{ui:SymbolIcon Delete24}" Appearance="Danger"
                            Command="{Binding RemoveFromLibraryCommand}"
                            CommandParameter="{Binding ElementName=LibraryGrid, Path=SelectedItems}"/>
-                <!-- A button to add manually could be added here in the future -->
+                <ui:Button Content="Rescan Folder" Icon="{ui:SymbolIcon ArrowClockwise24}" Margin="8,0,0,0"
+                           Command="{Binding RescanLibraryCommand}"/>
             </StackPanel>
         </Border>
     </Grid>

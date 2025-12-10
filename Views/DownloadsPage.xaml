@@ -16,31 +16,67 @@
 
         <Border Grid.Row="0" Background="{StaticResource SecondaryBackgroundBrush}"
                 BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="16">
-            <StackPanel Orientation="Horizontal">
-                <ui:Button Content="Start Downloads" Icon="{ui:SymbolIcon Play24}" Appearance="Primary"
-                           Command="{Binding StartDownloadsCommand}"/>
-                <ui:Button Content="Cancel All" Icon="{ui:SymbolIcon Dismiss24}" Margin="8,0,0,0"
-                           Command="{Binding CancelDownloadsCommand}"/>
-            </StackPanel>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Orientation="Horizontal" Grid.Column="0">
+                    <ui:Button Content="Start Downloads" Icon="{ui:SymbolIcon Play24}" Appearance="Primary"
+                               Command="{Binding StartDownloadsCommand}"/>
+                    <ui:Button Content="Cancel All" Icon="{ui:SymbolIcon Dismiss24}" Margin="8,0,0,0"
+                               Command="{Binding CancelDownloadsCommand}"/>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Grid.Column="1" HorizontalAlignment="Right">
+                    <TextBlock Text="✔ Done:" Foreground="{StaticResource AccentBrush}"/>
+                    <TextBlock Text="{Binding SuccessfulCount}" FontWeight="Bold" Margin="4,0,12,0"/>
+                    <TextBlock Text="⚠ Failed:" Foreground="{StaticResource ErrorBrush}"/>
+                    <TextBlock Text="{Binding FailedCount}" FontWeight="Bold" Margin="4,0,12,0"/>
+                    <TextBlock Text="⬇ In Progress:" Foreground="{StaticResource TextSecondaryBrush}"/>
+                    <TextBlock Text="{Binding TodoCount}" FontWeight="Bold" Margin="4,0,0,0"/>
+                </StackPanel>
+            </Grid>
         </Border>
 
         <DataGrid Grid.Row="1" ItemsSource="{Binding Downloads}"
-                  Style="{StaticResource ModernDataGridStyle}" Margin="0"
-                  AutoGenerateColumns="False" CanUserAddRows="False" SelectionMode="Extended">
+              Style="{StaticResource ModernDataGridStyle}"
+              ColumnHeaderStyle="{StaticResource ModernColumnHeaderStyle}"
+              CellStyle="{StaticResource ModernCellStyle}"
+              RowStyle="{StaticResource ModernRowStyle}"
+              Margin="0"
+              AutoGenerateColumns="False" CanUserAddRows="False" SelectionMode="Extended">
             <DataGrid.Columns>
-                <DataGridTextColumn Header="Artist" Binding="{Binding Track.Artist}" Width="150"/>
+                <DataGridTextColumn Header="#" Binding="{Binding Id}" Width="140"/>
+                <DataGridTextColumn Header="Source" Binding="{Binding SourceTitle}" Width="150"/>
+                <DataGridTextColumn Header="Artist" Binding="{Binding Track.Artist}" Width="140"/>
                 <DataGridTextColumn Header="Title" Binding="{Binding Track.Title}" Width="*"/>
                 <DataGridTextColumn Header="User" Binding="{Binding Track.Username}" Width="120"/>
-                <DataGridTextColumn Header="Status" Binding="{Binding State}" Width="100"/>
-                <DataGridTemplateColumn Header="Progress" Width="120">
+                <DataGridTextColumn Header="Dest" Binding="{Binding DestinationPath}" Width="220"/>
+                <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="100"/>
+                <DataGridTemplateColumn Header="Progress" Width="170">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
-                            <ProgressBar Value="{Binding Progress}" Maximum="1.0" Height="18"/>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <ProgressBar Value="{Binding Progress}" Maximum="1.0" Height="18" Width="110"/>
+                                <TextBlock Text="{Binding Progress, StringFormat={}{0:P0}}" Width="40" HorizontalAlignment="Right" Margin="8,0,0,0"/>
+                            </StackPanel>
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
-                <DataGridTextColumn Header="Size (MB)" Binding="{Binding SizeInMb, StringFormat={}{0:F2}}" Width="100"/>
-                <DataGridTextColumn Header="Elapsed" Binding="{Binding ElapsedTime, StringFormat='hh\\:mm\\:ss'}" Width="100"/>
+                <DataGridTextColumn Header="Size (MB)" Binding="{Binding SizeInMb, StringFormat={}{0:F2}}" Width="90"/>
+                <DataGridTextColumn Header="Elapsed" Binding="{Binding ElapsedTime, StringFormat='hh\\:mm\\:ss'}" Width="90"/>
+                <DataGridTemplateColumn Header="Actions" Width="160">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal">
+                                <Button Content="Open" Command="{Binding OpenFolderCommand}"/>
+                                <Button Content="Cancel" Command="{Binding CancelCommand}" Margin="8,0,0,0"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
             </DataGrid.Columns>
         </DataGrid>
     </Grid>

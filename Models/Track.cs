@@ -17,6 +17,10 @@ public class Track
     public int? Length { get; set; } // in seconds
     public int Bitrate { get; set; } // in kbps
     public Dictionary<string, object>? Metadata { get; set; }
+    /// <summary>
+    /// Local filesystem path where the track was stored (if known).
+    /// </summary>
+    public string? LocalPath { get; set; }
     public bool IsSelected { get; set; } = false;
     public Soulseek.File? SoulseekFile { get; set; }
     

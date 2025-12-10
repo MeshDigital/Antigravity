@@ -26,8 +26,6 @@
                 <StackPanel Margin="0,20,0,0">
                     <Button Content="🔍 Search" Command="{Binding NavigateSearchCommand}" 
                             Style="{StaticResource NavButtonStyle}" Margin="10,5"/>
-                    <Button Content="📋 Imported" Command="{Binding NavigateImportedCommand}" 
-                            Style="{StaticResource NavButtonStyle}" Margin="10,5"/>
                     <Button Content="📚 Library" Command="{Binding NavigateLibraryCommand}" 
                             Style="{StaticResource NavButtonStyle}" Margin="10,5"/>
                     <Button Content="⬇️ Downloads" Command="{Binding NavigateDownloadsCommand}" 

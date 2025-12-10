@@ -16,6 +16,7 @@ using SLSKDONET.Services.InputParsers;
 using SLSKDONET.Views;
 using Wpf.Ui.Controls;
 using System.Collections.Concurrent;
+using System.IO;
 
 namespace SLSKDONET.Views;
 
@@ -47,12 +48,29 @@ public class MainViewModel : INotifyPropertyChanged
     public ObservableCollection<SearchQuery> ImportedQueries { get; } = new();
     public ObservableCollection<Track> LibraryEntries { get; } = new();
 
+    // Surface download manager counters for binding in the Downloads view.
+    public int SuccessfulCount => _downloadManager.SuccessfulCount;
+    public int FailedCount => _downloadManager.FailedCount;
+    public int TodoCount => _downloadManager.TodoCount;
+
+    private void DownloadManagerOnPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(DownloadManager.SuccessfulCount)
+            || e.PropertyName == nameof(DownloadManager.FailedCount)
+            || e.PropertyName == nameof(DownloadManager.TodoCount))
+        {
+            OnPropertyChanged(nameof(SuccessfulCount));
+            OnPropertyChanged(nameof(FailedCount));
+            OnPropertyChanged(nameof(TodoCount));
+        }
+    }
     public ICommand LoginCommand { get; }
     public ICommand SearchCommand { get; }
     public ICommand AddToDownloadsCommand { get; }
     public ICommand ImportCsvCommand { get; }
     public ICommand StartDownloadsCommand { get; }
     public ICommand RemoveFromLibraryCommand { get; }
+    public ICommand RescanLibraryCommand { get; }
     public ICommand CancelDownloadsCommand { get; }
     public ICommand ToggleFiltersPanelCommand { get; }
     public ICommand ImportFromSpotifyCommand { get; }
@@ -60,7 +78,6 @@ public class MainViewModel : INotifyPropertyChanged
     public ICommand SearchAllImportedCommand { get; }
     public ICommand SaveSettingsCommand { get; }
     public ICommand NavigateSearchCommand { get; }
-    public ICommand NavigateImportedCommand { get; }
     public ICommand NavigateLibraryCommand { get; }
     public ICommand NavigateDownloadsCommand { get; }
     public ICommand NavigateSettingsCommand { get; }
@@ -128,6 +145,7 @@ public class MainViewModel : INotifyPropertyChanged
         AddToDownloadsCommand = new RelayCommand<IList<object>?>(AddToDownloads, items => items is { Count: > 0 });
         ImportCsvCommand = new AsyncRelayCommand<string>(ImportCsvAsync, filePath => !string.IsNullOrEmpty(filePath));
         RemoveFromLibraryCommand = new RelayCommand<IList<object>?>(RemoveFromLibrary, items => items is { Count: > 0 });
+        RescanLibraryCommand = new AsyncRelayCommand(RescanLibraryAsync);
         StartDownloadsCommand = new AsyncRelayCommand(StartDownloadsAsync, () => Downloads.Any(j => j.State == DownloadState.Pending));
         CancelDownloadsCommand = new RelayCommand(CancelDownloads);
         ToggleFiltersPanelCommand = new RelayCommand(ToggleFiltersPanel);
@@ -143,7 +161,6 @@ public class MainViewModel : INotifyPropertyChanged
 
         // Initialize navigation commands
         NavigateSearchCommand = new RelayCommand(() => _navigationService.NavigateTo("Search"));
-        NavigateImportedCommand = new RelayCommand(() => _navigationService.NavigateTo("Imported"));
         NavigateLibraryCommand = new RelayCommand(() => _navigationService.NavigateTo("Library"));
         NavigateDownloadsCommand = new RelayCommand(() => _navigationService.NavigateTo("Downloads"));
         NavigateSettingsCommand = new RelayCommand(() => _navigationService.NavigateTo("Settings"));
@@ -160,6 +177,7 @@ public class MainViewModel : INotifyPropertyChanged
                 System.Windows.Application.Current.Dispatcher.Invoke(() => LibraryEntries.Add(job.Track));
             }
         };
+        _downloadManager.PropertyChanged += DownloadManagerOnPropertyChanged;
         
         _logger.LogInformation($"MainViewModel initialized. IsConnected={_isConnected}, IsSearching={_isSearching}, StatusText={_statusText}");
         _logger.LogInformation("=== MainViewModel Constructor Completed ===");
@@ -461,7 +479,13 @@ public class MainViewModel : INotifyPropertyChanged
 
             var actualCount = await _soulseek.SearchAsync(normalizedQuery, formatFilter, (MinBitrate, MaxBitrate), DownloadMode.Normal, tracks =>
             {
-                foreach(var track in tracks) resultsBuffer.Add(track);
+                foreach(var track in tracks)
+                {
+                    // Keep streaming UI updates
+                    resultsBuffer.Add(track);
+                    // Collect for final ranking to ensure all results are ranked
+                    allResults.Add(track);
+                }
             }, _searchCts.Token);
             
             // Rank results before displaying
@@ -764,6 +788,41 @@ public class MainViewModel : INotifyPropertyChanged
             LibraryEntries.Remove(track);
         }
         StatusText = $"Removed {tracksToRemove.Count} entries from the library.";
+    }
+
+    private async Task RescanLibraryAsync()
+    {
+        var folder = string.IsNullOrWhiteSpace(DownloadPath) ? _config.DownloadDirectory : DownloadPath;
+        if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder))
+        {
+            _notificationService.Show("Rescan skipped", "Download folder is not set or missing.", NotificationType.Warning, TimeSpan.FromSeconds(4));
+            return;
+        }
+
+        var result = System.Windows.MessageBox.Show(
+            $"Rescan '{folder}'?\nThis will add new files and remove missing ones from history.",
+            "Rescan Library",
+            System.Windows.MessageBoxButton.OKCancel,
+            System.Windows.MessageBoxImage.Warning);
+
+        if (result != System.Windows.MessageBoxResult.OK)
+            return;
+
+        StatusText = "Rescanning download folder...";
+
+        var (added, removed) = await Task.Run(() => _downloadLogService.SyncWithFolder(folder));
+
+        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        {
+            LibraryEntries.Clear();
+            foreach (var entry in _downloadLogService.GetEntries())
+            {
+                LibraryEntries.Add(entry);
+            }
+        });
+
+        StatusText = $"Rescan complete. Added {added}, removed {removed}.";
+        _notificationService.Show("Rescan complete", $"Added {added}, removed {removed} entries.", NotificationType.Information, TimeSpan.FromSeconds(5));
     }
 
     private void UpdateJobUI(DownloadJob job)
