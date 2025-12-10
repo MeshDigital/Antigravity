@@ -12,21 +12,23 @@ namespace SLSKDONET.Services;
 
 /// <summary>
 /// Exports a PlaylistJob to Rekordbox-compatible XML format.
-/// Uses the full list of original tracks (both downloaded and missing).
-/// Missing tracks use their expected file paths for consistency.
+/// Uses PlaylistTrack entries to include both downloaded and missing tracks.
+/// Each track's ResolvedFilePath is used (either actual or expected path).
 /// </summary>
 public class RekordboxXmlExporter
 {
     private readonly ILogger<RekordboxXmlExporter> _logger;
+    private readonly ILibraryService _libraryService;
 
-    public RekordboxXmlExporter(ILogger<RekordboxXmlExporter> logger)
+    public RekordboxXmlExporter(ILogger<RekordboxXmlExporter> logger, ILibraryService libraryService)
     {
         _logger = logger;
+        _libraryService = libraryService;
     }
 
     /// <summary>
     /// Exports a PlaylistJob to Rekordbox XML format.
-    /// Includes all tracks (downloaded and missing) with their file paths (actual or expected).
+    /// Loads PlaylistTrack entries from persistent storage and uses their ResolvedFilePath.
     /// </summary>
     public async Task ExportAsync(PlaylistJob job, string exportPath)
     {
@@ -34,6 +36,15 @@ public class RekordboxXmlExporter
         {
             _logger.LogInformation("Exporting playlist '{PlaylistName}' to Rekordbox XML: {ExportPath}", 
                 job.SourceTitle, exportPath);
+
+            // Load PlaylistTrack entries for this playlist
+            var playlistTracks = await _libraryService.LoadPlaylistTracksAsync(job.Id);
+            
+            if (!playlistTracks.Any())
+            {
+                _logger.LogWarning("No tracks found for playlist {PlaylistId}", job.Id);
+                return;
+            }
 
             // Create root XML structure
             var doc = new XDocument(
@@ -52,19 +63,19 @@ public class RekordboxXmlExporter
 
             var trackIdCounter = 1;
 
-            // Add each track from the original list (includes missing tracks)
-            foreach (var track in job.OriginalTracks)
+            // Add each PlaylistTrack to the collection
+            foreach (var track in playlistTracks)
             {
-                // Skip tracks without a FilePath (shouldn't happen, but be safe)
-                if (string.IsNullOrEmpty(track.FilePath))
+                // Skip tracks without a ResolvedFilePath (shouldn't happen, but be safe)
+                if (string.IsNullOrEmpty(track.ResolvedFilePath))
                 {
-                    _logger.LogDebug("Skipping track without FilePath: {Artist} - {Title}", 
+                    _logger.LogDebug("Skipping track without ResolvedFilePath: {Artist} - {Title}", 
                         track.Artist, track.Title);
                     continue;
                 }
 
                 // Convert file path to Rekordbox URL format
-                var locationUrl = FileFormattingUtils.ToRekordboxUrl(track.FilePath);
+                var locationUrl = FileFormattingUtils.ToRekordboxUrl(track.ResolvedFilePath);
 
                 var trackEntry = new XElement("TRACK",
                     new XAttribute("TrackID", trackIdCounter++),
@@ -76,12 +87,9 @@ public class RekordboxXmlExporter
                 );
 
                 // Add optional metadata if available
-                if (track.Length.HasValue)
-                    trackEntry.Add(new XAttribute("TotalTime", track.Length.Value));
-                if (track.Bitrate > 0)
-                    trackEntry.Add(new XAttribute("Bitrate", track.Bitrate));
-                if (!string.IsNullOrEmpty(track.Format))
-                    trackEntry.Add(new XAttribute("Kind", track.Format));
+                if (track.TrackNumber > 0)
+                    trackEntry.Add(new XAttribute("TrackNumber", track.TrackNumber));
+                trackEntry.Add(new XAttribute("Status", track.Status.ToString()));
 
                 collection.Add(trackEntry);
             }
@@ -94,8 +102,8 @@ public class RekordboxXmlExporter
                     new XElement("NODE",
                         new XAttribute("Name", job.SourceTitle),
                         new XAttribute("Type", "playlist"),
-                        job.OriginalTracks
-                            .Where(t => !string.IsNullOrEmpty(t.FilePath))
+                        playlistTracks
+                            .Where(t => !string.IsNullOrEmpty(t.ResolvedFilePath))
                             .Select((t, idx) => new XElement("TRACK", 
                                 new XAttribute("Key", idx + 1)))
                     )
@@ -107,7 +115,7 @@ public class RekordboxXmlExporter
             await File.WriteAllTextAsync(exportPath, doc.ToString());
 
             _logger.LogInformation("Successfully exported {Count} tracks to {ExportPath}", 
-                job.OriginalTracks.Count, exportPath);
+                playlistTracks.Count, exportPath);
         }
         catch (Exception ex)
         {

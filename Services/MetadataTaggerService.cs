@@ -1,0 +1,259 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Net.Http;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
+using SLSKDONET.Models;
+using TagLib;
+using File = System.IO.File;
+
+namespace SLSKDONET.Services;
+
+/// <summary>
+/// Concrete implementation of ITaggerService.
+/// Writes metadata tags to audio files using TagLibSharp.
+/// Supports ID3v2 (MP3), Vorbis (OGG/FLAC), APEv2, and other formats.
+/// </summary>
+public class MetadataTaggerService : ITaggerService
+{
+    private readonly ILogger<MetadataTaggerService> _logger;
+    private readonly HttpClient _httpClient;
+
+    // Supported audio formats
+    private static readonly HashSet<string> SupportedFormats = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".mp3", ".flac", ".ogg", ".m4a", ".aac", ".wma", ".wav", ".ape", ".opus"
+    };
+
+    public MetadataTaggerService(ILogger<MetadataTaggerService> logger)
+    {
+        _logger = logger;
+        _httpClient = new HttpClient();
+        _httpClient.Timeout = TimeSpan.FromSeconds(10);
+    }
+
+    /// <summary>
+    /// Tags a single audio file with metadata from a Track model.
+    /// </summary>
+    public async Task<bool> TagFileAsync(Track track, string filePath)
+    {
+        try
+        {
+            // Validate file exists
+            if (!File.Exists(filePath))
+            {
+                _logger.LogWarning("File not found for tagging: {FilePath}", filePath);
+                return false;
+            }
+
+            // Check if format is supported
+            var extension = Path.GetExtension(filePath);
+            if (!SupportedFormats.Contains(extension))
+            {
+                _logger.LogWarning("Unsupported audio format for tagging: {Format}", extension);
+                return false;
+            }
+
+            _logger.LogDebug("Tagging file: {FilePath}", filePath);
+
+            using (var file = TagLib.File.Create(filePath))
+            {
+                if (file == null)
+                {
+                    _logger.LogWarning("Failed to open file for tagging: {FilePath}", filePath);
+                    return false;
+                }
+
+                // Write basic metadata tags
+                if (!string.IsNullOrWhiteSpace(track.Title))
+                    file.Tag.Title = track.Title;
+
+                if (!string.IsNullOrWhiteSpace(track.Artist))
+                {
+                    file.Tag.Performers = new[] { track.Artist };
+                }
+
+                if (!string.IsNullOrWhiteSpace(track.Album))
+                    file.Tag.Album = track.Album;
+
+                // Write track number if available
+                if (track.Metadata != null && track.Metadata.TryGetValue("TrackNumber", out var trackNumObj))
+                {
+                    if (uint.TryParse(trackNumObj.ToString(), out var trackNum))
+                        file.Tag.Track = trackNum;
+                }
+
+                // Write year if available
+                if (track.Metadata != null && track.Metadata.TryGetValue("ReleaseDate", out var releaseObj))
+                {
+                    if (DateTime.TryParse(releaseObj.ToString(), out var releaseDate))
+                        file.Tag.Year = (uint)releaseDate.Year;
+                }
+                else if (track.Metadata != null && track.Metadata.TryGetValue("Year", out var yearObj))
+                {
+                    if (uint.TryParse(yearObj.ToString(), out var year))
+                        file.Tag.Year = year;
+                }
+
+                // Add genre if available
+                if (track.Metadata != null && track.Metadata.TryGetValue("Genre", out var genreObj))
+                {
+                    if (genreObj is string genreStr && !string.IsNullOrWhiteSpace(genreStr))
+                    {
+                        file.Tag.Genres = new[] { genreStr };
+                    }
+                }
+
+                // Download and embed album art if URL is available
+                if (track.Metadata != null && track.Metadata.TryGetValue("AlbumArtUrl", out var artUrlObj))
+                {
+                    if (artUrlObj is string artUrl && !string.IsNullOrWhiteSpace(artUrl))
+                    {
+                        await TryAddAlbumArtAsync(file, artUrl);
+                    }
+                }
+
+                // Save the file
+                file.Save();
+                _logger.LogInformation("Successfully tagged file: {FilePath} ({Artist} - {Title})",
+                    filePath, track.Artist ?? "Unknown", track.Title ?? "Unknown");
+
+                return true;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error while tagging {FilePath}", filePath);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Tags multiple audio files concurrently.
+    /// </summary>
+    public async Task<int> TagFilesAsync(IEnumerable<Track> tracks, IEnumerable<string> filePaths)
+    {
+        var trackList = tracks.ToList();
+        var fileList = filePaths.ToList();
+
+        if (trackList.Count != fileList.Count)
+        {
+            _logger.LogWarning("Track count ({TrackCount}) does not match file path count ({FileCount})",
+                trackList.Count, fileList.Count);
+            return 0;
+        }
+
+        _logger.LogInformation("Tagging {Count} files", trackList.Count);
+
+        var tasks = trackList.Zip(fileList, (track, path) => TagFileAsync(track, path));
+        var results = await Task.WhenAll(tasks);
+
+        var successCount = results.Count(r => r);
+        _logger.LogInformation("Successfully tagged {SuccessCount}/{TotalCount} files",
+            successCount, trackList.Count);
+
+        return successCount;
+    }
+
+    /// <summary>
+    /// Attempts to download and embed album art from a URL.
+    /// Gracefully handles failures without aborting the entire tagging operation.
+    /// </summary>
+    private async Task TryAddAlbumArtAsync(TagLib.File file, string artUrl)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(artUrl))
+                return;
+
+            _logger.LogDebug("Downloading album art from: {Url}", artUrl);
+
+            var imageData = await _httpClient.GetByteArrayAsync(artUrl);
+            if (imageData == null || imageData.Length == 0)
+            {
+                _logger.LogDebug("No image data received from {Url}", artUrl);
+                return;
+            }
+
+            // Determine MIME type based on URL or content
+            var mimeType = DetermineMimeType(artUrl, imageData);
+
+            var picture = new Picture()
+            {
+                Type = PictureType.FrontCover,
+                MimeType = mimeType,
+                Data = new ByteVector(imageData),
+                Description = "Front Cover"
+            };
+
+            // Create new pictures list without existing front covers
+            var newPictures = file.Tag.Pictures
+                .Where(p => p.Type != PictureType.FrontCover)
+                .ToList();
+            
+            newPictures.Add(picture);
+
+            // Update the pictures array
+            file.Tag.Pictures = newPictures.ToArray();
+            
+            _logger.LogDebug("Successfully embedded album art ({SizeKB} KB)", imageData.Length / 1024.0);
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogDebug(ex, "Failed to download album art from {Url}", artUrl);
+            // Don't abort tagging if art download fails
+        }
+        catch (ArgumentException ex)
+        {
+            _logger.LogDebug(ex, "Invalid MIME type for album art");
+            // Don't abort tagging if art embedding fails
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Unexpected error embedding album art");
+            // Don't abort tagging if art embedding fails
+        }
+    }
+
+    /// <summary>
+    /// Determines the MIME type of image data based on magic bytes or URL extension.
+    /// </summary>
+    private string DetermineMimeType(string url, byte[] imageData)
+    {
+        // Check magic bytes first (most reliable)
+        if (imageData.Length >= 4)
+        {
+            // JPEG: FF D8 FF
+            if (imageData[0] == 0xFF && imageData[1] == 0xD8 && imageData[2] == 0xFF)
+                return "image/jpeg";
+
+            // PNG: 89 50 4E 47
+            if (imageData[0] == 0x89 && imageData[1] == 0x50 &&
+                imageData[2] == 0x4E && imageData[3] == 0x47)
+                return "image/png";
+
+            // WebP: RIFF ... WEBP
+            if (imageData[0] == 0x52 && imageData[1] == 0x49 &&
+                imageData[2] == 0x46 && imageData[3] == 0x46)
+            {
+                if (imageData.Length >= 12 &&
+                    imageData[8] == 0x57 && imageData[9] == 0x45 &&
+                    imageData[10] == 0x42 && imageData[11] == 0x50)
+                    return "image/webp";
+            }
+        }
+
+        // Fall back to URL extension
+        var extension = Path.GetExtension(url).ToLowerInvariant();
+        return extension switch
+        {
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".png" => "image/png",
+            ".gif" => "image/gif",
+            ".webp" => "image/webp",
+            _ => "image/jpeg" // Default to JPEG if uncertain
+        };
+    }
+}

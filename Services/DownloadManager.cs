@@ -23,6 +23,8 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
     private readonly SoulseekAdapter _soulseek;
     private readonly FileNameFormatter _fileNameFormatter;
     private readonly ILibraryService _libraryService;
+    private readonly ITaggerService _taggerService;
+    private readonly SpotifyScraperInputSource _spotifyScraperInputSource;
     private readonly SpotifyInputSource _spotifyInputSource;
     private readonly CsvInputSource _csvInputSource;
     private readonly ConcurrentDictionary<string, DownloadJob> _jobs = new();
@@ -47,6 +49,8 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
         SoulseekAdapter soulseek,
         FileNameFormatter fileNameFormatter,
         ILibraryService libraryService,
+        ITaggerService taggerService,
+        SpotifyScraperInputSource spotifyScraperInputSource,
         SpotifyInputSource spotifyInputSource,
         CsvInputSource csvInputSource)
     {
@@ -55,6 +59,8 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
         _soulseek = soulseek;
         _fileNameFormatter = fileNameFormatter;
         _libraryService = libraryService;
+        _taggerService = taggerService;
+        _spotifyScraperInputSource = spotifyScraperInputSource;
         _spotifyInputSource = spotifyInputSource;
         _csvInputSource = csvInputSource;
         _concurrencySemaphore = new SemaphoreSlim(_config.MaxConcurrentDownloads);
@@ -80,10 +86,36 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
                 try
                 {
                     _logger.LogInformation("Fetching tracks from Spotify: {Url}", inputUrl);
-                    var queries = await _spotifyInputSource.ParseAsync(inputUrl);
+                    
+                    List<SearchQuery> queries = new();
+                    
+                    // Tiered approach: Try web scraping first (no API keys needed)
+                    try
+                    {
+                        _logger.LogDebug("Attempting to scrape Spotify content (public access)");
+                        queries = await _spotifyScraperInputSource.ParseAsync(inputUrl);
+                        
+                        if (queries.Any())
+                        {
+                            _logger.LogInformation("Successfully scraped {Count} tracks from Spotify without API keys", queries.Count);
+                        }
+                    }
+                    catch (Exception scrapEx)
+                    {
+                        _logger.LogDebug(scrapEx, "Web scraping failed, falling back to Spotify API");
+                        // Fall through to API call below
+                    }
+                    
+                    // Fallback: Use Spotify Web API if scraping didn't work
+                    if (!queries.Any())
+                    {
+                        _logger.LogDebug("Attempting to fetch via Spotify Web API");
+                        queries = await _spotifyInputSource.ParseAsync(inputUrl);
+                        _logger.LogInformation("Successfully fetched {Count} tracks from Spotify API", queries.Count);
+                    }
                     
                     if (!queries.Any())
-                        throw new InvalidOperationException("No tracks found in Spotify source");
+                        throw new InvalidOperationException("No tracks found in Spotify source (both scraping and API failed)");
                     
                     sourceTracks = queries.Select(q => new Track
                     {
@@ -94,11 +126,11 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
                     }).ToList();
                     playlistName = queries.FirstOrDefault()?.SourceTitle ?? "Spotify Playlist";
                     
-                    _logger.LogInformation("Successfully fetched {Count} tracks from Spotify", sourceTracks.Count);
+                    _logger.LogInformation("Successfully imported {Count} tracks from Spotify", sourceTracks.Count);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Failed to fetch Spotify tracks");
+                    _logger.LogError(ex, "Failed to fetch Spotify tracks via both scraping and API");
                     throw new InvalidOperationException($"Spotify error: {ex.Message}");
                 }
             }
@@ -322,6 +354,32 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
 
             if (!success)
                 job.ErrorMessage = "Download failed";
+            else
+            {
+                // Automatically tag the downloaded file with metadata
+                try
+                {
+                    if (!string.IsNullOrEmpty(job.OutputPath))
+                    {
+                        _logger.LogDebug("Tagging downloaded file: {Path}", job.OutputPath);
+                        var taggingSuccess = await _taggerService.TagFileAsync(job.Track, job.OutputPath);
+                        if (taggingSuccess)
+                        {
+                            _logger.LogInformation("File tagged successfully: {Artist} - {Title}",
+                                job.Track.Artist ?? "Unknown", job.Track.Title ?? "Unknown");
+                        }
+                        else
+                        {
+                            _logger.LogWarning("Failed to tag file: {Path}", job.OutputPath);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Error while tagging file: {Path}", job.OutputPath);
+                    // Don't fail the entire job if tagging fails - it's a post-processing step
+                }
+            }
 
             _logger.LogInformation("Job completed: {JobId} - {State}", job.Id, job.State);
         }

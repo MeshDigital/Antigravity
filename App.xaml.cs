@@ -155,6 +155,7 @@ public partial class App : System.Windows.Application
         });
 #pragma warning restore CS8634, CS8600, CS8604, CS8621
         services.AddSingleton<SpotifyInputSource>();
+        services.AddSingleton<SpotifyScraperInputSource>();
 
         // Input parsers
         services.AddSingleton<CsvInputSource>();
@@ -163,6 +164,9 @@ public partial class App : System.Windows.Application
         services.AddSingleton<DownloadLogService>();
         services.AddSingleton<LibraryService>();
         services.AddSingleton<ILibraryService>(provider => provider.GetRequiredService<LibraryService>());
+        
+        // Metadata and tagging service
+        services.AddSingleton<ITaggerService, MetadataTaggerService>();
         
         // Rekordbox export service
         services.AddSingleton<RekordboxXmlExporter>();
