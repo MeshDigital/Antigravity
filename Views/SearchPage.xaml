@@ -109,6 +109,8 @@
                   IsReadOnly="True"
                   SelectionChanged="ResultsGrid_SelectionChanged">
             <DataGrid.Columns>
+                <DataGridTextColumn Header="#" Binding="{Binding OriginalIndex, StringFormat={}{0}}" Width="40"/>
+                <DataGridTextColumn Header="Rank" Binding="{Binding CurrentRank, StringFormat={}{0:F1}}" Width="50"/>
                 <DataGridTextColumn Header="Artist" Binding="{Binding Artist}" Width="150"/>
                 <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="*" MinWidth="200"/>
                 <DataGridTextColumn Header="Album" Binding="{Binding Album}" Width="150"/>

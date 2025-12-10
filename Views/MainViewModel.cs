@@ -427,6 +427,7 @@ public class MainViewModel : INotifyPropertyChanged
 
             SearchResults.Clear();
             var resultsBuffer = new ConcurrentBag<Track>();
+            var allResults = new List<Track>(); // Collect all results for ranking
             
             // Use a timer to batch UI updates
             using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(250));
@@ -440,6 +441,7 @@ public class MainViewModel : INotifyPropertyChanged
                         while(resultsBuffer.TryTake(out var track))
                         {
                             batch.Add(track);
+                            allResults.Add(track); // Accumulate for ranking
                         }
 
                         if (batch.Any())
@@ -462,7 +464,55 @@ public class MainViewModel : INotifyPropertyChanged
                 foreach(var track in tracks) resultsBuffer.Add(track);
             }, _searchCts.Token);
             
-            StatusText = $"Found {actualCount} results";
+            // Rank results before displaying
+            if (allResults.Count > 0)
+            {
+                _logger.LogInformation("Ranking {Count} search results", allResults.Count);
+                
+                // Create search track from query for ranking
+                var searchTrack = new Track { Title = normalizedQuery };
+                
+                // Create evaluator based on current filter settings
+                var evaluator = new FileConditionEvaluator();
+                if (!string.IsNullOrWhiteSpace(PreferredFormats))
+                {
+                    var formats = formatFilter.ToList();
+                    if (formats.Count > 0)
+                    {
+                        evaluator.AddRequired(new FormatCondition { AllowedFormats = formats });
+                    }
+                }
+                
+                if (MinBitrate.HasValue || MaxBitrate.HasValue)
+                {
+                    evaluator.AddPreferred(new BitrateCondition 
+                    { 
+                        MinBitrate = MinBitrate, 
+                        MaxBitrate = MaxBitrate 
+                    });
+                }
+                
+                // Rank the results
+                var rankedResults = ResultSorter.OrderResults(allResults, searchTrack, evaluator);
+                
+                // Update UI with ranked results
+                System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                {
+                    SearchResults.Clear();
+                    foreach (var track in rankedResults)
+                    {
+                        SearchResults.Add(track);
+                    }
+                    StatusText = $"Found {actualCount} results (ranked)";
+                });
+                
+                _logger.LogInformation("Results ranked and displayed");
+            }
+            else
+            {
+                StatusText = $"Found {actualCount} results";
+            }
+            
             _logger.LogInformation("Search completed with {Count} results", actualCount);
             await batchUpdateTask; // Allow any final batch to complete
         }

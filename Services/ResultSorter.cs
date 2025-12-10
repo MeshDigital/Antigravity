@@ -38,12 +38,20 @@ public static class ResultSorter
 
         var random = new Random();
 
-        return results
-            .Select((track, index) => (track, index, criteria: GetSortingCriteria(track, searchTrack, fileConditionEvaluator, random)))
+        // First, assign original indices before sorting
+        var withOriginalIndices = results
+            .Select((track, index) =>
+            {
+                track.OriginalIndex = index;
+                return track;
+            })
+            .ToList();
+
+        return withOriginalIndices
+            .Select((track) => (track, criteria: GetSortingCriteria(track, searchTrack, fileConditionEvaluator, random)))
             .OrderByDescending(x => x.criteria)
             .Select(x =>
             {
-                x.track.OriginalIndex = x.index;
                 x.track.CurrentRank = x.criteria.OverallScore;
                 return x.track;
             })

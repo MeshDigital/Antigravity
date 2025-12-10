@@ -46,6 +46,27 @@ public class LengthCondition : FileCondition
     }
 }
 
+/// <summary>
+/// Bitrate condition (min/max bitrate range).
+/// </summary>
+public class BitrateCondition : FileCondition
+{
+    public int? MinBitrate { get; set; }
+    public int? MaxBitrate { get; set; }
+    public override int Priority => 2;
+
+    public override bool Evaluate(Track file)
+    {
+        if (MinBitrate.HasValue && file.Bitrate < MinBitrate.Value)
+            return false;
+
+        if (MaxBitrate.HasValue && file.Bitrate > MaxBitrate.Value)
+            return false;
+
+        return true;
+    }
+}
+
 //public class SampleRateCondition : FileCondition
 //{
 //    public int? MinSampleRate { get; set; }
