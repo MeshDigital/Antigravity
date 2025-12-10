@@ -13,6 +13,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
@@ -101,7 +102,7 @@
         </Border>
 
         <!-- Inline Filter Panel -->
-        <Border Grid.Row="1" Background="{StaticResource SurfaceBrush}" Padding="16"
+        <Border Grid.Row="2" Background="{StaticResource SurfaceBrush}" Padding="16"
                 Visibility="{Binding IsFiltersPanelVisible, Converter={StaticResource BooleanToVisibilityConverter}}"
                 BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
             <StackPanel>
@@ -136,8 +137,84 @@
             </StackPanel>
         </Border>
 
+        <!-- Orchestration Progress Panel -->
+        <Border Grid.Row="2" Background="{StaticResource SurfaceBrush}" Padding="16"
+                Visibility="{Binding OrchestratedQueries.Count, Converter={StaticResource BooleanToVisibilityConverter}, FallbackValue=Collapsed}"
+                BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
+            <StackPanel>
+                <Label Content="🎵 Orchestrating Batch Import" Style="{StaticResource ModernLabelStyle}" Margin="0,0,0,12" FontWeight="Bold"/>
+                <ScrollViewer MaxHeight="200" VerticalScrollBarVisibility="Auto" Margin="0,0,0,12">
+                    <ItemsControl ItemsSource="{Binding OrchestratedQueries}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="0,0,0,8" Height="32">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="40"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="150"/>
+                                        <ColumnDefinition Width="120"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <!-- Status Emoji -->
+                                    <TextBlock Grid.Column="0" 
+                                               Text="{Binding State, Converter={StaticResource StateToEmojiConverter}}"
+                                               FontSize="20"
+                                               VerticalAlignment="Center"
+                                               HorizontalAlignment="Center"
+                                               Foreground="{StaticResource AccentBrush}"/>
+
+                                    <!-- Query Name -->
+                                    <TextBlock Grid.Column="1" 
+                                               Text="{Binding Query}"
+                                               FontSize="12"
+                                               VerticalAlignment="Center"
+                                               Margin="12,0,0,0"
+                                               Foreground="{StaticResource TextPrimaryBrush}"
+                                               TextTrimming="CharacterEllipsis"/>
+
+                                    <!-- Result Count (when searching/ranking) -->
+                                    <TextBlock Grid.Column="2" 
+                                               Text="{Binding TotalResults, StringFormat='Results: {0}'}"
+                                               FontSize="11"
+                                               VerticalAlignment="Center"
+                                               Foreground="{StaticResource TextSecondaryBrush}"
+                                               Visibility="{Binding IsProcessing, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                               Margin="8,0,0,0"/>
+
+                                    <!-- Matched Track (when complete) -->
+                                    <TextBlock Grid.Column="2" 
+                                               Text="{Binding MatchedTrack}"
+                                               FontSize="11"
+                                               VerticalAlignment="Center"
+                                               Foreground="{StaticResource AccentBrush}"
+                                               Visibility="{Binding IsComplete, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                               Margin="8,0,0,0"
+                                               TextTrimming="CharacterEllipsis"/>
+
+                                    <!-- Match Score -->
+                                    <ProgressBar Grid.Column="3" 
+                                                 Value="{Binding MatchScore}"
+                                                 Maximum="100"
+                                                 Height="6"
+                                                 VerticalAlignment="Center"
+                                                 Margin="8,0,0,0"
+                                                 Background="{StaticResource BackgroundBrush}"
+                                                 Visibility="{Binding IsComplete, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+                <TextBlock Text="{Binding StatusText}" 
+                           Foreground="{StaticResource TextSecondaryBrush}"
+                           FontSize="{StaticResource FontSizeSmall}"
+                           FontStyle="Italic"
+                           FontWeight="SemiBold"/>
+            </StackPanel>
+        </Border>
+
         <!-- Results DataGrid -->
-        <DataGrid Grid.Row="2" Name="ResultsGrid" 
+        <DataGrid Grid.Row="3" Name="ResultsGrid" 
                   ItemsSource="{Binding SearchResults}"
                   Style="{StaticResource ModernDataGridStyle}" 
                   ColumnHeaderStyle="{StaticResource ModernColumnHeaderStyle}"
@@ -159,7 +236,7 @@
         </DataGrid>
 
         <!-- Action Buttons -->
-        <Border Grid.Row="3" Background="{StaticResource SecondaryBackgroundBrush}"
+        <Border Grid.Row="4" Background="{StaticResource SecondaryBackgroundBrush}"
                 BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Padding="16">
             <Grid>
                 <Grid.ColumnDefinitions>

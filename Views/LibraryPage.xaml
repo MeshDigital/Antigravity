@@ -24,7 +24,7 @@
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Grid.Column="0" Orientation="Horizontal" Margin="0,0,12,0">
-                    <Button Content="💿 Albums" 
+                    <Button Content="📋 Imports" 
                             Command="{Binding ChangeViewModeCommand}" 
                             CommandParameter="Albums"
                             Style="{StaticResource ModernButtonStyle}"
@@ -57,41 +57,215 @@
 
         <!-- Content Area -->
         <Grid Grid.Row="1">
-            <!-- Albums View -->
-            <ItemsControl ItemsSource="{Binding LibraryEntries}"
-                          Visibility="{Binding CurrentViewMode, Converter={StaticResource StringToVisibilityConverter}, ConverterParameter=Albums, FallbackValue=Visible}"
-                          Padding="20">
-                <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate>
-                        <WrapPanel ItemWidth="180" ItemHeight="220"/>
-                    </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                        <Border Background="{StaticResource SurfaceBrush}"
-                                BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
-                                CornerRadius="8" Margin="8" Padding="12">
-                            <StackPanel>
-                                <TextBlock Text="🎵" FontSize="48" 
-                                           Foreground="{StaticResource AccentBrush}"
-                                           HorizontalAlignment="Center" Margin="0,0,0,8"/>
-                                <TextBlock Text="{Binding Album, FallbackValue='Unknown Album'}"
-                                           FontWeight="Bold" Foreground="{StaticResource TextBrush}"
-                                           TextTrimming="CharacterEllipsis" Height="40"/>
-                                <TextBlock Text="{Binding Artist, FallbackValue='Unknown Artist'}"
-                                           Foreground="{StaticResource TextSecondaryBrush}"
-                                           FontSize="11" Margin="0,4,0,0" TextTrimming="CharacterEllipsis"/>
-                                <TextBlock Text="{Binding Format, FallbackValue='mp3'}"
-                                           Foreground="{StaticResource TextSecondaryBrush}"
-                                           FontSize="10" Margin="0,8,0,0"/>
-                            </StackPanel>
-                        </Border>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="0.3*" MinWidth="220"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
 
-            <!-- Tracks View -->
-            <DataGrid ItemsSource="{Binding LibraryEntries}"
+            <!-- Imports/Playlists Sidebar -->
+            <Border Grid.Column="0" Background="{StaticResource SurfaceBrush}"
+                    BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,1,0"
+                    Visibility="{Binding CurrentViewMode, Converter={StaticResource StringToVisibilityConverter}, ConverterParameter=Albums, FallbackValue=Visible}">
+                <StackPanel>
+                    <TextBlock Text="🎵 Your Imports" Foreground="{StaticResource TextBrush}"
+                               FontWeight="Bold" Padding="16,16,16,12" FontSize="14"/>
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <ItemsControl ItemsSource="{Binding UniqueImports}" Padding="8">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Button Style="{StaticResource {x:Type Button}}"
+                                            Command="{Binding DataContext.SelectImportCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                            CommandParameter="{Binding .}"
+                                            Background="{StaticResource BackgroundBrush}"
+                                            BorderBrush="{StaticResource BorderBrush}"
+                                            BorderThickness="1"
+                                            Foreground="{StaticResource TextBrush}"
+                                            Padding="12,8" Margin="0,0,0,8"
+                                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding SourceTitle, FallbackValue='Playlist'}"
+                                                       FontWeight="SemiBold" TextTrimming="CharacterEllipsis" FontSize="12"/>
+                                            <TextBlock Text="{Binding TotalTracks, StringFormat={}{0} tracks}"
+                                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                                       FontSize="10" Margin="0,4,0,0"/>
+                                        </StackPanel>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </StackPanel>
+            </Border>
+
+            <!-- Splitter -->
+            <GridSplitter Grid.Column="1" Width="4" Background="{StaticResource BorderBrush}"
+                          Visibility="{Binding CurrentViewMode, Converter={StaticResource StringToVisibilityConverter}, ConverterParameter=Albums, FallbackValue=Visible}"/>
+
+            <!-- Right Panel: Details View (Tracks or Status) -->
+            <Grid Grid.Column="2" Visibility="{Binding CurrentViewMode, Converter={StaticResource StringToVisibilityConverter}, ConverterParameter=Albums, FallbackValue=Visible}">
+                <!-- Tracks List (when no selection) - shown when SelectedImport is NULL -->
+                <DataGrid ItemsSource="{Binding FilteredLibraryEntries}"
+                          Visibility="{Binding SelectedImport, Converter={StaticResource InverseNullToVisibilityConverter}, FallbackValue=Visible}"
+                          AutoGenerateColumns="False"
+                          IsReadOnly="True"
+                          Background="{StaticResource BackgroundBrush}"
+                          Foreground="{StaticResource TextBrush}"
+                          RowBackground="{StaticResource SecondaryBackgroundBrush}">
+                    <DataGrid.ColumnHeaderStyle>
+                        <Style TargetType="DataGridColumnHeader">
+                            <Setter Property="Background" Value="{StaticResource SurfaceBrush}"/>
+                            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                            <Setter Property="Padding" Value="12,8"/>
+                        </Style>
+                    </DataGrid.ColumnHeaderStyle>
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Artist" 
+                                            Binding="{Binding Artist}" 
+                                            Width="150"/>
+                        <DataGridTextColumn Header="Title" 
+                                            Binding="{Binding Title}" 
+                                            Width="*" MinWidth="250"/>
+                        <DataGridTextColumn Header="Album" 
+                                            Binding="{Binding Album}" 
+                                            Width="150"/>
+                        <DataGridTextColumn Header="Format" 
+                                            Binding="{Binding Format}" 
+                                            Width="80"/>
+                        <DataGridTextColumn Header="Bitrate" 
+                                            Binding="{Binding Bitrate, StringFormat={}{0} kbps}" 
+                                            Width="100"/>
+                        <DataGridTextColumn Header="User" 
+                                            Binding="{Binding Username}" 
+                                            Width="120"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+
+                <!-- Status View (when import is selected) -->
+                <Border Background="{StaticResource BackgroundBrush}" 
+                        Visibility="{Binding SelectedImport, Converter={StaticResource BooleanToVisibilityConverter}}"
+                        Padding="20">
+                    <StackPanel>
+                        <!-- Header -->
+                        <Grid Margin="0,0,0,20">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="{Binding SelectedImport.SourceTitle, StringFormat='📊 {0} - Download Status'}"
+                                           FontSize="18" FontWeight="Bold" Foreground="{StaticResource TextBrush}"
+                                           Margin="0,0,0,8"/>
+                                <TextBlock FontSize="12" Foreground="{StaticResource TextSecondaryBrush}">
+                                    <TextBlock.Text>
+                                        <MultiBinding StringFormat="{}{0} total tracks">
+                                            <Binding Path="SelectedImport.TotalTracks"/>
+                                        </MultiBinding>
+                                    </TextBlock.Text>
+                                </TextBlock>
+                            </StackPanel>
+                            <Button Grid.Column="1" Content="✕ Close" 
+                                    Command="{Binding SelectImportCommand}" 
+                                    CommandParameter="{x:Null}"
+                                    Style="{StaticResource ModernButtonStyle}"
+                                    Height="32" Padding="16,0"/>
+                        </Grid>
+
+                        <!-- Status Summary -->
+                        <Border Background="{StaticResource SurfaceBrush}" 
+                                BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                                CornerRadius="4" Padding="16" Margin="0,0,0,20">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                
+                                <!-- Completed -->
+                                <StackPanel Grid.Column="0" HorizontalAlignment="Center">
+                                    <TextBlock Text="✅ Completed" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11"/>
+                                    <TextBlock Text="{Binding ImportDownloadStats.Completed, Mode=OneWay, StringFormat={}{0}}"
+                                               FontSize="20" FontWeight="Bold" Foreground="#4CAF50" Margin="0,4,0,0"/>
+                                </StackPanel>
+
+                                <!-- In Progress -->
+                                <StackPanel Grid.Column="1" HorizontalAlignment="Center">
+                                    <TextBlock Text="⏳ In Progress" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11"/>
+                                    <TextBlock Text="{Binding ImportDownloadStats.InProgress, Mode=OneWay, StringFormat={}{0}}"
+                                               FontSize="20" FontWeight="Bold" Foreground="#FF9800" Margin="0,4,0,0"/>
+                                </StackPanel>
+
+                                <!-- Queued -->
+                                <StackPanel Grid.Column="2" HorizontalAlignment="Center">
+                                    <TextBlock Text="⏸ Queued" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11"/>
+                                    <TextBlock Text="{Binding ImportDownloadStats.Queued, Mode=OneWay, StringFormat={}{0}}"
+                                               FontSize="20" FontWeight="Bold" Foreground="#2196F3" Margin="0,4,0,0"/>
+                                </StackPanel>
+
+                                <!-- Failed -->
+                                <StackPanel Grid.Column="3" HorizontalAlignment="Center">
+                                    <TextBlock Text="❌ Failed" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11"/>
+                                    <TextBlock Text="{Binding ImportDownloadStats.Failed, Mode=OneWay, StringFormat={}{0}}"
+                                               FontSize="20" FontWeight="Bold" Foreground="#F44336" Margin="0,4,0,0"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <!-- Progress Bar -->
+                        <StackPanel Margin="0,0,0,20">
+                            <TextBlock Text="Overall Progress" FontSize="12" Foreground="{StaticResource TextBrush}"
+                                       FontWeight="SemiBold" Margin="0,0,0,8"/>
+                            <ProgressBar Value="{Binding ImportDownloadStats.ProgressPercentage, Mode=OneWay}"
+                                         Maximum="100" Height="20" Background="{StaticResource BackgroundBrush}"
+                                         Foreground="{StaticResource AccentBrush}"/>
+                            <TextBlock Text="{Binding ImportDownloadStats.ProgressPercentage, StringFormat={}{0:F1}%}"
+                                       FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"
+                                       TextAlignment="Right" Margin="0,4,0,0"/>
+                        </StackPanel>
+
+                        <!-- Track List Header -->
+                        <TextBlock Text="📋 Imported Tracks" FontSize="14" FontWeight="Bold" 
+                                   Foreground="{StaticResource TextBrush}" Margin="0,0,0,12"/>
+
+                        <!-- Track List with Status -->
+                        <ListBox ItemsSource="{Binding FilteredLibraryEntries}"
+                                 Background="{StaticResource SurfaceBrush}"
+                                 BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                                 MaxHeight="300" ScrollViewer.VerticalScrollBarVisibility="Auto">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Padding="12,8" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            
+                                            <TextBlock Grid.Column="0" Text="🎵" Margin="0,0,8,0"
+                                                       FontSize="14" VerticalAlignment="Center"/>
+                                            
+                                            <StackPanel Grid.Column="1">
+                                                <TextBlock Text="{Binding Title, StringFormat='Title: {0}'}"
+                                                           Foreground="{StaticResource TextBrush}"
+                                                           FontSize="11" TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock Text="{Binding Artist, StringFormat='Artist: {0}'}"
+                                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                                           FontSize="10" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!-- Tracks View (full width, no sidebar) -->
+            <DataGrid Grid.Column="0" Grid.ColumnSpan="3"
+                      ItemsSource="{Binding LibraryEntries}"
                       Visibility="{Binding CurrentViewMode, Converter={StaticResource StringToVisibilityConverter}, ConverterParameter=Tracks, FallbackValue=Collapsed}"
                       AutoGenerateColumns="False"
                       IsReadOnly="True"

@@ -48,6 +48,7 @@ public class MainViewModel : INotifyPropertyChanged
     public ObservableCollection<DownloadJob> Downloads { get; } = new();
     public ObservableCollection<SearchQuery> ImportedQueries { get; } = new();
     public ObservableCollection<Track> LibraryEntries { get; } = new();
+    public ObservableCollection<OrchestratedQueryProgress> OrchestratedQueries { get; } = new();
 
     // Surface download manager counters for binding in the Downloads view.
     public int SuccessfulCount => _downloadManager.SuccessfulCount;
@@ -174,6 +175,7 @@ public class MainViewModel : INotifyPropertyChanged
         ShowPauseComingSoonCommand = new RelayCommand(() => StatusText = "Pause functionality is planned for a future update!");
         CancelSearchCommand = new RelayCommand(CancelSearch, () => IsSearching);
         ChangeViewModeCommand = new RelayCommand<string?>(mode => { if (!string.IsNullOrEmpty(mode)) CurrentViewMode = mode; });
+        SelectImportCommand = new RelayCommand<SearchQuery?>(import => SelectedImport = import);
         ClearSearchHistoryCommand = new RelayCommand(ClearSearchHistory);
         SaveSettingsCommand = new RelayCommand(() =>
         {
@@ -201,6 +203,9 @@ public class MainViewModel : INotifyPropertyChanged
             }
         };
         _downloadManager.PropertyChanged += DownloadManagerOnPropertyChanged;
+        
+        // Update import stats when download collection or states change
+        Downloads.CollectionChanged += (s, e) => UpdateImportDownloadStats();
         
         _logger.LogInformation($"MainViewModel initialized. IsConnected={_isConnected}, IsSearching={_isSearching}, StatusText={_statusText}");
         _logger.LogInformation("=== MainViewModel Constructor Completed ===");
@@ -383,7 +388,32 @@ public class MainViewModel : INotifyPropertyChanged
         set => SetProperty(ref _currentViewMode, value);
     }
 
+    private SearchQuery? _selectedImport;
+    public SearchQuery? SelectedImport
+    {
+        get => _selectedImport;
+        set
+        {
+            if (SetProperty(ref _selectedImport, value))
+            {
+                UpdateFilteredTracks();
+                UpdateImportDownloadStats();
+            }
+        }
+    }
+
+    public ObservableCollection<Track> FilteredLibraryEntries { get; } = new();
+    public ObservableCollection<SearchQuery> UniqueImports { get; } = new();
+
+    private ImportDownloadStats _importDownloadStats = new();
+    public ImportDownloadStats ImportDownloadStats
+    {
+        get => _importDownloadStats;
+        set => SetProperty(ref _importDownloadStats, value);
+    }
+
     public ICommand ChangeViewModeCommand { get; }
+    public ICommand SelectImportCommand { get; }
 
     /// <summary>
     /// Input source type selector (Spotify URL, Plain Text, CSV, Auto-Detect)
@@ -807,6 +837,7 @@ public class MainViewModel : INotifyPropertyChanged
                 {
                     ImportedQueries.Add(query);
                 }
+                RebuildUniqueImports();
             });
 
             StatusText = $"Imported {queries.Count} queries from CSV.";
@@ -853,6 +884,7 @@ public class MainViewModel : INotifyPropertyChanged
                 {
                     ImportedQueries.Add(query);
                 }
+                RebuildUniqueImports();
             });
             
             StatusText = $"Imported {queries.Count} tracks from Spotify. Starting batch search and download...";
@@ -901,76 +933,184 @@ public class MainViewModel : INotifyPropertyChanged
     private async Task SearchAllImportedAsync()
     {
         IsSearching = true;
-        StatusText = $"Searching for {ImportedQueries.Count} imported items...";
+        StatusText = $"Orchestrating batch search for {ImportedQueries.Count} imported items...";
         System.Windows.Application.Current.Dispatcher.Invoke(() =>
         {
             SearchResults.Clear();
+            OrchestratedQueries.Clear();
         });
 
         var formatFilter = PreferredFormats.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var resultsBuffer = new ConcurrentBag<Track>();
+        var bestMatchesPerQuery = new ConcurrentBag<Track>(); // Only the best match per query
+        var orchestrationProgress = new ConcurrentDictionary<string, OrchestratedQueryProgress>();
+        int processedQueries = 0;
 
         try
         {
-            // Use a timer to batch UI updates
-            using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(250));
-            var batchUpdateTask = Task.Run(async () =>
+            // Initialize progress tracking UI with all queries in "Queued" state
+            System.Windows.Application.Current.Dispatcher.Invoke(() =>
             {
-                while (await timer.WaitForNextTickAsync(_searchCts.Token))
+                int idx = 0;
+                foreach (var query in ImportedQueries)
                 {
-                    if (!resultsBuffer.IsEmpty)
-                    {
-                        var batch = new List<Track>();
-                        while (resultsBuffer.TryTake(out var track))
-                        {
-                            batch.Add(track);
-                        }
+                    var progress = new OrchestratedQueryProgress(idx.ToString(), query.ToString());
+                    OrchestratedQueries.Add(progress);
+                    orchestrationProgress.TryAdd(query.ToString(), progress);
+                    idx++;
+                }
+            });
 
-                        if (batch.Any())
+            // Create file condition evaluator with current filter settings
+            var evaluator = new FileConditionEvaluator();
+            if (formatFilter.Length > 0)
+            {
+                evaluator.AddRequired(new FormatCondition { AllowedFormats = formatFilter.ToList() });
+            }
+            if (MinBitrate.HasValue || MaxBitrate.HasValue)
+            {
+                evaluator.AddPreferred(new BitrateCondition 
+                { 
+                    MinBitrate = MinBitrate, 
+                    MaxBitrate = MaxBitrate 
+                });
+            }
+
+            // Orchestrate: Search each query, rank, and select best match
+            await Parallel.ForEachAsync(ImportedQueries, new ParallelOptions { MaxDegreeOfParallelism = 4 }, async (query, ct) =>
+            {
+                var queryStr = query.ToString();
+                var progress = orchestrationProgress[queryStr];
+
+                try
+                {
+                    _logger.LogInformation("Orchestrating search for: {Query}", queryStr);
+                    
+                    // Update UI: Searching state
+                    System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        progress.State = "Searching";
+                        progress.IsProcessing = true;
+                    });
+
+                    // 1. SEARCH: Collect all results for this query
+                    var allResultsForQuery = new List<Track>();
+                    var resultCount = await _soulseek.SearchAsync(
+                        queryStr, 
+                        formatFilter, 
+                        (MinBitrate, MaxBitrate), 
+                        DownloadMode.Normal, 
+                        tracks =>
                         {
+                            foreach (var track in tracks)
+                            {
+                                allResultsForQuery.Add(track);
+                            }
+                        }, 
+                        ct);
+
+                    // Update UI: Ranking state
+                    System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        progress.TotalResults = allResultsForQuery.Count;
+                        progress.State = "Ranking";
+                    });
+
+                    // 2. RANK & SELECT: Find the single best match
+                    if (allResultsForQuery.Count > 0)
+                    {
+                        _logger.LogInformation("Ranking {Count} results for query: {Query}", allResultsForQuery.Count, queryStr);
+                        
+                        // Create a search track from the query for ranking comparison
+                        var searchTrack = new Track 
+                        { 
+                            Title = query.Title,
+                            Artist = query.Artist,
+                            Album = query.Album,
+                            Length = query.Length
+                        };
+
+                        // Rank all results and get the best one
+                        var rankedResults = ResultSorter.OrderResults(allResultsForQuery, searchTrack, evaluator);
+                        var bestMatch = rankedResults.FirstOrDefault();
+
+                        if (bestMatch != null)
+                        {
+                            _logger.LogInformation(
+                                "Best match selected: {Artist} - {Title} (bitrate: {Bitrate}, rank: {Rank})",
+                                bestMatch.Artist, bestMatch.Title, bestMatch.Bitrate, bestMatch.CurrentRank);
+                            
+                            bestMatchesPerQuery.Add(bestMatch);
+
+                            // Update UI: Matched state with result info
                             System.Windows.Application.Current.Dispatcher.Invoke(() =>
                             {
-                                foreach (var track in batch)
-                                {
-                                    SearchResults.Add(track);
-                                }
-                                StatusText = $"Searching... {SearchResults.Count} found.";
+                                progress.State = "Matched";
+                                progress.MatchedTrack = $"{bestMatch.Artist} - {bestMatch.Title}";
+                                progress.MatchScore = bestMatch.CurrentRank;
+                                progress.IsProcessing = false;
+                                progress.IsComplete = true;
                             });
                         }
                     }
-                }
-            }, _searchCts.Token);
-
-            var totalFound = 0;
-            await Parallel.ForEachAsync(ImportedQueries, new ParallelOptions { MaxDegreeOfParallelism = 4 }, async (query, ct) =>
-            {
-                var resultCount = await _soulseek.SearchAsync(query.ToString(), formatFilter, (MinBitrate, MaxBitrate), DownloadMode.Normal, tracks =>
-                {
-                    // Add batches of tracks to the buffer
-                    foreach (var track in tracks)
+                    else
                     {
-                        resultsBuffer.Add(track);
+                        _logger.LogWarning("No results found for query: {Query}", queryStr);
+                        
+                        // Update UI: Failed state
+                        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                        {
+                            progress.State = "Failed";
+                            progress.ErrorMessage = "No results found";
+                            progress.IsProcessing = false;
+                            progress.IsComplete = true;
+                        });
                     }
-                }, ct);
-                Interlocked.Add(ref totalFound, resultCount);
+
+                    Interlocked.Increment(ref processedQueries);
+                    System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        StatusText = $"Processed {processedQueries}/{ImportedQueries.Count} queries. Found {bestMatchesPerQuery.Count} best matches.";
+                    });
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error processing query: {Query}", queryStr);
+                    
+                    // Update UI: Failed state with error
+                    System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        progress.State = "Failed";
+                        progress.ErrorMessage = ex.Message;
+                        progress.IsProcessing = false;
+                        progress.IsComplete = true;
+                    });
+                }
             });
 
-            StatusText = $"Found {totalFound} total results from {ImportedQueries.Count} imported queries.";
-            await batchUpdateTask; // Allow any final batch to complete
+            StatusText = $"✓ Orchestration complete: {bestMatchesPerQuery.Count} best matches selected from {ImportedQueries.Count} queries.";
+            
+            // Display ranked results in UI
+            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            {
+                SearchResults.Clear();
+                foreach (var track in bestMatchesPerQuery.OrderByDescending(t => t.CurrentRank))
+                {
+                    SearchResults.Add(track);
+                }
+            });
 
-            // Auto-add all found results to downloads
-            if (SearchResults.Count > 0)
+            // 3. DOWNLOAD: Auto-enqueue all selected best matches
+            if (bestMatchesPerQuery.Count > 0)
             {
                 System.Windows.Application.Current.Dispatcher.Invoke(() =>
                 {
-                    var tracksToAdd = SearchResults.ToList();
-                    foreach (var track in tracksToAdd)
+                    foreach (var track in bestMatchesPerQuery)
                     {
                         var job = _downloadManager.EnqueueDownload(track);
                         Downloads.Add(job);
                     }
-                    StatusText = $"Added {tracksToAdd.Count} tracks to downloads. Starting batch download...";
-                    _logger.LogInformation("Auto-queued {Count} tracks for download from Spotify import", tracksToAdd.Count);
+                    StatusText = $"Auto-queued {bestMatchesPerQuery.Count} best matches for batch download...";
+                    _logger.LogInformation("Orchestration: queued {Count} best matches for download", bestMatchesPerQuery.Count);
                 });
 
                 // Auto-start downloads
@@ -979,8 +1119,8 @@ public class MainViewModel : INotifyPropertyChanged
         }
         catch (Exception ex)
         {
-            StatusText = $"Searching imported queries failed: {ex.Message}";
-            _logger.LogError(ex, "Searching imported queries failed");
+            StatusText = $"Batch orchestration failed: {ex.Message}";
+            _logger.LogError(ex, "Batch orchestration failed");
         }
         finally
         {
@@ -1174,6 +1314,117 @@ public class MainViewModel : INotifyPropertyChanged
     protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
+
+    /// <summary>
+    /// Rebuilds the UniqueImports collection from ImportedQueries, grouping by SourceTitle.
+    /// Each unique import appears once with a track count.
+    /// </summary>
+    private void RebuildUniqueImports()
+    {
+        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        {
+            UniqueImports.Clear();
+            
+            // Group by SourceTitle and get the first item from each group
+            var uniquesBySource = ImportedQueries
+                .GroupBy(q => q.SourceTitle)
+                .Select(g => new { Source = g.Key, Count = g.Count(), FirstItem = g.First() })
+                .ToList();
+            
+            // Add one entry per unique source
+            foreach (var group in uniquesBySource)
+            {
+                // Create a representative query for this import group
+                var importItem = group.FirstItem;
+                // Update TotalTracks to reflect all tracks in this import
+                importItem.TotalTracks = group.Count;
+                UniqueImports.Add(importItem);
+            }
+        });
+    }
+
+    /// <summary>
+    /// Updates FilteredLibraryEntries based on the selected import.
+    /// Shows all imported queries (search entries) from the same source playlist/CSV.
+    /// </summary>
+    private void UpdateFilteredTracks()
+    {
+        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        {
+            FilteredLibraryEntries.Clear();
+            
+            if (SelectedImport == null)
+            {
+                // No import selected - show nothing or show all library entries from downloaded files
+                foreach (var track in LibraryEntries)
+                {
+                    FilteredLibraryEntries.Add(track);
+                }
+            }
+            else
+            {
+                // Get the source title of the selected import
+                var selectedSourceTitle = SelectedImport.SourceTitle;
+                
+                // Show all imported queries from the same source
+                foreach (var query in ImportedQueries.Where(q => q.SourceTitle == selectedSourceTitle))
+                {
+                    // Convert SearchQuery to Track for display
+                    var track = new Track
+                    {
+                        Artist = query.Artist,
+                        Title = query.Title,
+                        Album = query.Album,
+                        Length = query.Length,
+                        SourceTitle = query.SourceTitle
+                    };
+                    FilteredLibraryEntries.Add(track);
+                }
+            }
+        });
+    }
+
+    /// <summary>
+    /// Updates download stats for the selected import based on download jobs.
+    /// </summary>
+    private void UpdateImportDownloadStats()
+    {
+        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        {
+            if (SelectedImport == null)
+            {
+                ImportDownloadStats = new ImportDownloadStats { Total = 0 };
+                return;
+            }
+
+            var selectedSourceTitle = SelectedImport.SourceTitle;
+            var stats = new ImportDownloadStats { Total = SelectedImport.TotalTracks };
+
+            // Count download statuses for tracks matching this import
+            foreach (var job in Downloads.Where(j => j.Track?.SourceTitle == selectedSourceTitle))
+            {
+                switch (job.State)
+                {
+                    case DownloadState.Completed:
+                        stats.Completed++;
+                        break;
+                    case DownloadState.Downloading:
+                    case DownloadState.Searching:
+                        stats.InProgress++;
+                        break;
+                    case DownloadState.Pending:
+                        stats.Queued++;
+                        break;
+                    case DownloadState.Failed:
+                    case DownloadState.Cancelled:
+                        stats.Failed++;
+                        break;
+                }
+            }
+
+            ImportDownloadStats = stats;
+        });
     }
 
     /// <summary>

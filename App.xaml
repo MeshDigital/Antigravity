@@ -26,12 +26,17 @@
             <converters:ViewModeToVisibilityConverter x:Key="ViewModeToVisibilityConverter"/>
             <converters:StringToVisibilityConverter x:Key="StringToVisibilityConverter"/>
             
+            <!-- Add orchestration converters -->
+            <converters:StateToEmojiConverter x:Key="StateToEmojiConverter"/>
+            
             <!-- Add connection status converters -->
             <converters:ConnectionStatusColorConverter x:Key="ConnectionStatusColorConverter"/>
             <converters:ConnectionStatusTextConverter x:Key="ConnectionStatusTextConverter"/>
 
             <!-- Add utility converters -->
             <converters:CountToVisibilityConverter x:Key="CountToVisibilityConverter"/>
+            <converters:InverseNullToVisibilityConverter x:Key="InverseNullToVisibilityConverter"/>
+            <converters:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
         </ResourceDictionary>
     </Application.Resources>
 </Application>
