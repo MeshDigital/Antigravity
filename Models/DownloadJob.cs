@@ -187,7 +187,7 @@ public class DownloadJob : INotifyPropertyChanged
     private Task ResumeDownloadAsync()
     {
         // Directly ask the DownloadManager to requeue this job.
-        DownloadManager?.RequeueJob(this);
+        // DownloadManager?.RequeueJob(this); // Deprecated
         return Task.CompletedTask;
     }
 

@@ -25,6 +25,7 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
     private readonly SoulseekAdapter _soulseek;
     private readonly FileNameFormatter _fileNameFormatter;
     private readonly ITaggerService _taggerService;
+    private readonly DatabaseService _databaseService;
 
     // Concurrency control
     private readonly SemaphoreSlim _concurrencySemaphore;
@@ -41,18 +42,63 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
         AppConfig config,
         SoulseekAdapter soulseek,
         FileNameFormatter fileNameFormatter,
-        ITaggerService taggerService)
+        ITaggerService taggerService,
+        DatabaseService databaseService)
     {
         _logger = logger;
         _config = config;
         _soulseek = soulseek;
         _fileNameFormatter = fileNameFormatter;
         _taggerService = taggerService;
+        _databaseService = databaseService;
 
         _concurrencySemaphore = new SemaphoreSlim(_config.MaxConcurrentDownloads);
 
         // Enable cross-thread collection access
         System.Windows.Data.BindingOperations.EnableCollectionSynchronization(AllGlobalTracks, _collectionLock);
+    }
+    
+    public async Task InitAsync()
+    {
+        try
+        {
+            await _databaseService.InitAsync();
+            var tracks = await _databaseService.LoadTracksAsync();
+            
+            lock (_collectionLock)
+            {
+                foreach (var t in tracks)
+                {
+                    // Map Entity -> ViewModel
+                    var vm = new PlaylistTrackViewModel(new PlaylistTrack 
+                    { 
+                        Artist = t.Artist, 
+                        Title = t.Title, 
+                        TrackUniqueHash = t.GlobalId,
+                        Status = t.State == "Completed" ? TrackStatus.Downloaded : TrackStatus.Missing,
+                        ResolvedFilePath = t.Filename
+                    });
+                    
+                    vm.State = Enum.TryParse<PlaylistTrackState>(t.State, out var s) ? s : PlaylistTrackState.Pending;
+                    vm.GlobalId = t.GlobalId;
+                    vm.ErrorMessage = t.ErrorMessage;
+                    
+                    // Reset transient states that don't make sense on restart
+                    if (vm.State == PlaylistTrackState.Downloading || vm.State == PlaylistTrackState.Searching)
+                    {
+                        vm.State = PlaylistTrackState.Pending;
+                    }
+
+                    vm.PropertyChanged += OnTrackPropertyChanged;
+                    AllGlobalTracks.Add(vm);
+                }
+            }
+            _logger.LogInformation("Hydrated {Count} tracks from database.", tracks.Count);
+        }
+        catch (Exception ex)
+        {
+             _logger.LogError(ex, "Failed to init persistence layer");
+        }
     }
 
     // Event for external listeners (UI, Notifications)
@@ -71,17 +117,49 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
                 var vm = new PlaylistTrackViewModel(track);
                 vm.PropertyChanged += OnTrackPropertyChanged;
                 AllGlobalTracks.Add(vm);
+                
+                // Persist new track
+                _ = SaveTrackToDb(vm);
             }
         }
         // Processing loop picks this up automatically
     }
 
-    private void OnTrackPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    private async void OnTrackPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (sender is PlaylistTrackViewModel vm)
         {
             // Re-fire as a global event
             TrackUpdated?.Invoke(this, vm);
+            
+            // Persist state changes
+            if (e.PropertyName == nameof(PlaylistTrackViewModel.State) || 
+                e.PropertyName == nameof(PlaylistTrackViewModel.ErrorMessage))
+            {
+                await SaveTrackToDb(vm);
+            }
+        }
+    }
+    
+    private async Task SaveTrackToDb(PlaylistTrackViewModel vm)
+    {
+        try 
+        {
+            await _databaseService.SaveTrackAsync(new Data.TrackEntity 
+            {
+                GlobalId = vm.GlobalId,
+                Artist = vm.Artist,
+                Title = vm.Title,
+                State = vm.State.ToString(),
+                Filename = vm.Model.ResolvedFilePath,
+                Size = 0, // Should populate if we have it
+                AddedAt = vm.AddedAt,
+                ErrorMessage = vm.ErrorMessage
+            });
+        } 
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "DB Save Failed");
         }
     }
 
@@ -133,6 +211,9 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
         }
 
         vm.Reset(); // Sets to Pending, effectively re-queueing
+        
+        // Force DB deletion or update? 
+        // Reset sets state to Pending, so OnTrackPropertyChanged will fire and update DB to Pending. Correct.
     }
 
     /// <summary>
@@ -160,6 +241,9 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
         if (_processingTask != null) return;
 
         _logger.LogInformation("DownloadManager Orchestrator started.");
+        
+        // Load persistence
+        await InitAsync();
         
         // We link the passed CT with our global CT to allow stopping from either source
         _processingTask = ProcessQueueLoop(_globalCts.Token); // Use global token for the long-running task
@@ -286,7 +370,7 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
 
             // Select Best Match
             var preferredFormat = _config.PreferredFormats?.FirstOrDefault() ?? "mp3";
-            var minBitrate = _config.MinBitrate ?? 128;
+            var minBitrate = _config.PreferredMinBitrate; // Fixed: already int
             
             var bestMatch = results
                 .Where(t => t.Bitrate >= minBitrate)
@@ -322,8 +406,8 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
                     $"{track.Artist} - {track.Title}.{bestMatch.GetExtension()}");
             }
              // Ensure directory exists
-            var dir = Path.GetDirectoryName(finalPath);
-            if (dir != null) Directory.CreateDirectory(dir);
+            var dir = System.IO.Path.GetDirectoryName(finalPath); // Fixed: Path, not Directory
+            if (dir != null) System.IO.Directory.CreateDirectory(dir);
 
             var progress = new Progress<double>(p => track.Progress = p * 100);
             

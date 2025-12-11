@@ -20,17 +20,24 @@ namespace SLSKDONET.Views
                 // Only allow dragging if pending (Warehouse view)
                 if (vm.State == PlaylistTrackState.Pending)
                 {
-                    DragDrop.DoDragDrop(row, vm, DragDropEffects.Move);
+                    System.Windows.DragDrop.DoDragDrop(row, vm, System.Windows.DragDropEffects.Move);
                     e.Handled = true;
                 }
             }
         }
 
-        private void DataGridRow_Drop(object sender, DragEventArgs e)
+        private void OnPreviewDragOver(object sender, System.Windows.DragEventArgs e)
+        {
+            e.Effects = System.Windows.DragDropEffects.Move;
+            e.Handled = true;
+        }
+
+        private void DataGridRow_Drop(object sender, System.Windows.DragEventArgs e)
         {
             if (sender is DataGridRow row && row.DataContext is PlaylistTrackViewModel targetVm)
             {
-                if (e.Data.GetData(typeof(PlaylistTrackViewModel)) is PlaylistTrackViewModel sourceVm)
+                var sourceVm = e.Data.GetData("PlaylistTrackViewModel") as PlaylistTrackViewModel;
+                if (sourceVm != null)
                 {
                     if (DataContext is LibraryViewModel libraryVm)
                     {

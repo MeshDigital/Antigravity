@@ -203,7 +203,7 @@ public class SortingCriteria : IComparable<SortingCriteria>
             
             // 0. Availability (The most critical factor for speed)
             if (HasFreeUploadSlot) score += 2000;
-            score -= QueueLength; // Penalize long queues
+            score -= QueueLength * 10; // Penalize long queues (User requested * 10 weighting)
             if (QueueLength == 0) score += 10; // Bonus for empty queue even if no slot explicitly advertised (rare)
 
             // 1. Required conditions 

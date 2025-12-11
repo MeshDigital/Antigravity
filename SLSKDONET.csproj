@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <!-- Soulseek.NET library -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.0" />
     <PackageReference Include="Soulseek" Version="8.5.0" />
     
     <!-- Logging -->

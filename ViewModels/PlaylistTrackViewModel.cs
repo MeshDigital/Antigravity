@@ -81,10 +81,10 @@ public class PlaylistTrackViewModel : INotifyPropertyChanged
             Progress = 1.0;
         }
 
-        PauseCommand = new RelayCommand(_ => Pause(), _ => CanPause);
-        ResumeCommand = new RelayCommand(_ => Resume(), _ => CanResume);
-        CancelCommand = new RelayCommand(_ => Cancel(), _ => CanCancel);
-        FindNewVersionCommand = new RelayCommand(_ => FindNewVersion(), _ => CanHardRetry);
+        PauseCommand = new RelayCommand(Pause, () => CanPause);
+        ResumeCommand = new RelayCommand(Resume, () => CanResume);
+        CancelCommand = new RelayCommand(Cancel, () => CanCancel);
+        FindNewVersionCommand = new RelayCommand(FindNewVersion, () => CanHardRetry);
     }
 
     public PlaylistTrackState State
@@ -99,11 +99,7 @@ public class PlaylistTrackViewModel : INotifyPropertyChanged
                 OnPropertyChanged(nameof(IsActive));
                 OnPropertyChanged(nameof(StatusColor));
                 
-                // Refresh command usability
-                (PauseCommand as RelayCommand)?.RaiseCanExecuteChanged();
-                (ResumeCommand as RelayCommand)?.RaiseCanExecuteChanged();
-                (CancelCommand as RelayCommand)?.RaiseCanExecuteChanged();
-                (FindNewVersionCommand as RelayCommand)?.RaiseCanExecuteChanged();
+                // CommandManager.InvalidateRequerySuggested() happens automatically or via interaction
             }
         }
     }
@@ -174,14 +170,6 @@ public class PlaylistTrackViewModel : INotifyPropertyChanged
                 _ => System.Windows.Media.Brushes.LightGray
             };
         }
-    }
-
-    public void CheckCommands()
-    {
-         (PauseCommand as RelayCommand)?.RaiseCanExecuteChanged();
-         (ResumeCommand as RelayCommand)?.RaiseCanExecuteChanged();
-         (CancelCommand as RelayCommand)?.RaiseCanExecuteChanged();
-         (FindNewVersionCommand as RelayCommand)?.RaiseCanExecuteChanged();
     }
 
     // Actions

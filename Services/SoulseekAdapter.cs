@@ -391,7 +391,7 @@ public class SoulseekAdapter : IDisposable
 
             var directory = Path.GetDirectoryName(outputPath);
             if (directory != null)
-                Directory.CreateDirectory(directory);
+                System.IO.Directory.CreateDirectory(directory);
 
             // Track state for timeout logic
             DateTime lastActivity = DateTime.UtcNow;

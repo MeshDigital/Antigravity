@@ -12,6 +12,7 @@ using SLSKDONET.Configuration;
 using SLSKDONET.Models;
 using SLSKDONET.Services.InputParsers;
 using SLSKDONET.Services;
+using SLSKDONET.ViewModels;
 using SLSKDONET.Views;
 using Wpf.Ui.Controls;
 using System.Collections.Concurrent;
@@ -69,17 +70,15 @@ public class MainViewModel : INotifyPropertyChanged
         }
     }
 
-    private void DownloadManagerOnPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    private void OnTrackUpdated(object? sender, PlaylistTrackViewModel e)
     {
-        if (e.PropertyName == nameof(DownloadManager.SuccessfulCount)
-            || e.PropertyName == nameof(DownloadManager.FailedCount)
-            || e.PropertyName == nameof(DownloadManager.TodoCount))
+        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
         {
             OnPropertyChanged(nameof(SuccessfulCount));
             OnPropertyChanged(nameof(FailedCount));
             OnPropertyChanged(nameof(TodoCount));
             OnPropertyChanged(nameof(DownloadProgressPercentage));
-        }
+        });
     }
     public ICommand LoginCommand { get; }
     public ICommand SearchCommand { get; }
@@ -193,7 +192,15 @@ public class MainViewModel : INotifyPropertyChanged
         
         // Subscribe to download events
         // REMOVED: DownloadManager events are deprecated in Bundle 1 refactor.
-        _downloadManager.PropertyChanged += DownloadManagerOnPropertyChanged;
+        // Subscribe to download events
+        _downloadManager.TrackUpdated += OnTrackUpdated;
+        _downloadManager.AllGlobalTracks.CollectionChanged += (s, e) => 
+        {
+             OnPropertyChanged(nameof(SuccessfulCount));
+             OnPropertyChanged(nameof(FailedCount));
+             OnPropertyChanged(nameof(TodoCount));
+             OnPropertyChanged(nameof(DownloadProgressPercentage));
+        };
         
         _logger.LogInformation($"MainViewModel initialized. IsConnected={_isConnected}, IsSearching={_isSearching}, StatusText={_statusText}");
         _logger.LogInformation("=== MainViewModel Constructor Completed ===");
@@ -799,8 +806,7 @@ public class MainViewModel : INotifyPropertyChanged
             }
         }
 
-        var job = _downloadManager.EnqueueDownload(track);
-        Downloads.Add(job);
+        _downloadManager.EnqueueTrack(track);
         _notificationService.Show("Download Started", $"📥 {track.Artist} - {track.Title}", NotificationType.Success, TimeSpan.FromSeconds(3));
         _logger.LogInformation("Quick download initiated for: {Artist} - {Title}", track.Artist, track.Title);
     }
@@ -1094,8 +1100,7 @@ public class MainViewModel : INotifyPropertyChanged
                 {
                     foreach (var track in bestMatchesPerQuery)
                     {
-                        var job = _downloadManager.EnqueueDownload(track);
-                        Downloads.Add(job);
+                        _downloadManager.EnqueueTrack(track);
                     }
                     StatusText = $"Auto-queued {bestMatchesPerQuery.Count} best matches for batch download...";
                     _logger.LogInformation("Orchestration: queued {Count} best matches for download", bestMatchesPerQuery.Count);
@@ -1140,7 +1145,10 @@ public class MainViewModel : INotifyPropertyChanged
 
     private void CancelDownloads()
     {
-        _downloadManager.CancelAll();
+        foreach(var t in _downloadManager.AllGlobalTracks)
+        {
+             t.CancelCommand?.Execute(null);
+        }
         StatusText = "Downloads cancelled";
     }
 
