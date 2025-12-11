@@ -8,6 +8,7 @@ namespace SLSKDONET.Models;
 public class Track
 {
     public string? Filename { get; set; }
+    public string? Directory { get; set; } // Added for Album Grouping
     public string? Artist { get; set; }
     public string? Title { get; set; }
     public string? Album { get; set; }

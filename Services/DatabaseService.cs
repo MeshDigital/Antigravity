@@ -44,6 +44,7 @@ public class DatabaseService
             // Update fields
             existing.State = track.State;
             existing.ErrorMessage = track.ErrorMessage;
+            existing.CoverArtUrl = track.CoverArtUrl; // Persist album art
             // Should we update others? Usually just state changes.
         }
         

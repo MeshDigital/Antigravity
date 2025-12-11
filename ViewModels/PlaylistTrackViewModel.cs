@@ -31,6 +31,7 @@ public class PlaylistTrackViewModel : INotifyPropertyChanged
     private double _progress;
     private string _currentSpeed = string.Empty;
     private string? _errorMessage;
+    private string? _coverArtUrl;
 
     private int _sortOrder;
     public DateTime AddedAt { get; } = DateTime.Now;
@@ -138,6 +139,19 @@ public class PlaylistTrackViewModel : INotifyPropertyChanged
             if (_errorMessage != value)
             {
                 _errorMessage = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    public string? CoverArtUrl
+    {
+        get => _coverArtUrl;
+        set
+        {
+            if (_coverArtUrl != value)
+            {
+                _coverArtUrl = value;
                 OnPropertyChanged();
             }
         }

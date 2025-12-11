@@ -154,6 +154,7 @@ public partial class App : System.Windows.Application
         // Views (add logger for MainWindow)
         services.AddSingleton<MainWindow>();
         services.AddSingleton<DatabaseService>();
+        services.AddSingleton<IMetadataService, MetadataService>();
         services.AddSingleton<MainViewModel>(); // MainViewModel can be a singleton as it represents the app's main state.
 
         // Pages for navigation

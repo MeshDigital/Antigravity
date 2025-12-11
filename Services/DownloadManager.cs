@@ -26,6 +26,7 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
     private readonly FileNameFormatter _fileNameFormatter;
     private readonly ITaggerService _taggerService;
     private readonly DatabaseService _databaseService;
+    private readonly IMetadataService _metadataService;
 
     // Concurrency control
     private readonly SemaphoreSlim _concurrencySemaphore;
@@ -43,7 +44,8 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
         SoulseekAdapter soulseek,
         FileNameFormatter fileNameFormatter,
         ITaggerService taggerService,
-        DatabaseService databaseService)
+        DatabaseService databaseService,
+        IMetadataService metadataService)
     {
         _logger = logger;
         _config = config;
@@ -51,6 +53,7 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
         _fileNameFormatter = fileNameFormatter;
         _taggerService = taggerService;
         _databaseService = databaseService;
+        _metadataService = metadataService;
 
         _concurrencySemaphore = new SemaphoreSlim(_config.MaxConcurrentDownloads);
 
@@ -82,6 +85,7 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
                     vm.State = Enum.TryParse<PlaylistTrackState>(t.State, out var s) ? s : PlaylistTrackState.Pending;
                     vm.GlobalId = t.GlobalId;
                     vm.ErrorMessage = t.ErrorMessage;
+                    vm.CoverArtUrl = t.CoverArtUrl; // Hydrate Art
                     
                     // Reset transient states that don't make sense on restart
                     if (vm.State == PlaylistTrackState.Downloading || vm.State == PlaylistTrackState.Searching)
@@ -120,6 +124,24 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
                 
                 // Persist new track
                 _ = SaveTrackToDb(vm);
+
+                // Fetch Cover Art (Fire & Forget)
+                _ = Task.Run(async () => 
+                {
+                    try 
+                    {
+                        var url = await _metadataService.GetAlbumArtUrlAsync(vm.Artist, vm.Model.Album);
+                        if (!string.IsNullOrEmpty(url))
+                        {
+                            vm.CoverArtUrl = url;
+                            await SaveTrackToDb(vm); // Persist URL
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                         _logger.LogWarning("Failed to fetch art for {Artist} - {Title}: {Msg}", vm.Artist, vm.Title, ex.Message);
+                    }
+                });
             }
         }
         // Processing loop picks this up automatically
@@ -134,7 +156,8 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
             
             // Persist state changes
             if (e.PropertyName == nameof(PlaylistTrackViewModel.State) || 
-                e.PropertyName == nameof(PlaylistTrackViewModel.ErrorMessage))
+                e.PropertyName == nameof(PlaylistTrackViewModel.ErrorMessage) ||
+                e.PropertyName == nameof(PlaylistTrackViewModel.CoverArtUrl))
             {
                 await SaveTrackToDb(vm);
             }
@@ -154,7 +177,8 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
                 Filename = vm.Model.ResolvedFilePath,
                 Size = 0, // Should populate if we have it
                 AddedAt = vm.AddedAt,
-                ErrorMessage = vm.ErrorMessage
+                ErrorMessage = vm.ErrorMessage,
+                CoverArtUrl = vm.CoverArtUrl
             });
         } 
         catch (Exception ex)

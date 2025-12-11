@@ -356,6 +356,7 @@ public class SoulseekAdapter : IDisposable
             Title = title,
             Album = album,
             Filename = file.Filename,
+            Directory = Path.GetDirectoryName(file.Filename), // Added for Album Grouping
             Username = response.Username,
             Bitrate = bitrate,
             Size = file.Size,

@@ -45,7 +45,17 @@ public class MainViewModel : INotifyPropertyChanged
     private int? _maxBitrate;
     private CancellationTokenSource _searchCts = new();
 
+
+
+    private bool _isAlbumSearch;
+    public bool IsAlbumSearch
+    {
+        get => _isAlbumSearch;
+        set => SetProperty(ref _isAlbumSearch, value);
+    }
+
     public ObservableCollection<Track> SearchResults { get; } = new();
+    public ObservableCollection<AlbumResultViewModel> AlbumResults { get; } = new();
     public ObservableCollection<DownloadJob> Downloads { get; } = new();
     public ObservableCollection<SearchQuery> ImportedQueries { get; } = new();
     public ObservableCollection<Track> LibraryEntries { get; } = new();
@@ -631,7 +641,7 @@ public class MainViewModel : INotifyPropertyChanged
                             allResults.Add(track); // Accumulate for ranking
                         }
 
-                        if (batch.Any())
+                        if (batch.Any() && !IsAlbumSearch)
                         {
                             System.Windows.Application.Current.Dispatcher.Invoke(() =>
                             {
@@ -661,43 +671,59 @@ public class MainViewModel : INotifyPropertyChanged
             if (allResults.Count > 0)
             {
                 _logger.LogInformation("Ranking {Count} search results", allResults.Count);
-                
-                // Create search track from query for ranking
-                var searchTrack = new Track { Title = normalizedQuery };
-                
-                // Create evaluator based on current filter settings
-                var evaluator = new FileConditionEvaluator();
-                if (!string.IsNullOrWhiteSpace(PreferredFormats))
+
+                if (IsAlbumSearch)
                 {
-                    var formats = formatFilter.ToList();
-                    if (formats.Count > 0)
+                    var albums = GroupResultsByAlbum(allResults);
+                     System.Windows.Application.Current.Dispatcher.Invoke(() =>
                     {
-                        evaluator.AddRequired(new FormatCondition { AllowedFormats = formats });
-                    }
-                }
-                
-                if (MinBitrate.HasValue || MaxBitrate.HasValue)
-                {
-                    evaluator.AddPreferred(new BitrateCondition 
-                    { 
-                        MinBitrate = MinBitrate, 
-                        MaxBitrate = MaxBitrate 
+                        AlbumResults.Clear();
+                        foreach (var album in albums)
+                        {
+                            AlbumResults.Add(album);
+                        }
+                        StatusText = $"Found {actualCount} tracks (grouped into {AlbumResults.Count} albums)";
                     });
                 }
-                
-                // Rank the results
-                var rankedResults = ResultSorter.OrderResults(allResults, searchTrack, evaluator);
-                
-                // Update UI with ranked results
-                System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                else 
                 {
-                    SearchResults.Clear();
-                    foreach (var track in rankedResults)
+                    // Create search track from query for ranking
+                    var searchTrack = new Track { Title = normalizedQuery };
+                    
+                    // Create evaluator based on current filter settings
+                    var evaluator = new FileConditionEvaluator();
+                    if (!string.IsNullOrWhiteSpace(PreferredFormats))
                     {
-                        SearchResults.Add(track);
+                        var formats = formatFilter.ToList();
+                        if (formats.Count > 0)
+                        {
+                            evaluator.AddRequired(new FormatCondition { AllowedFormats = formats });
+                        }
                     }
-                    StatusText = $"Found {actualCount} results (ranked)";
-                });
+                    
+                    if (MinBitrate.HasValue || MaxBitrate.HasValue)
+                    {
+                        evaluator.AddPreferred(new BitrateCondition 
+                        { 
+                            MinBitrate = MinBitrate, 
+                            MaxBitrate = MaxBitrate 
+                        });
+                    }
+                    
+                    // Rank the results
+                    var rankedResults = ResultSorter.OrderResults(allResults, searchTrack, evaluator);
+                    
+                    // Update UI with ranked results
+                    System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        SearchResults.Clear();
+                        foreach (var track in rankedResults)
+                        {
+                            SearchResults.Add(track);
+                        }
+                        StatusText = $"Found {actualCount} results (ranked)";
+                    });
+                }
                 
                 _logger.LogInformation("Results ranked and displayed");
             }
@@ -1121,6 +1147,19 @@ public class MainViewModel : INotifyPropertyChanged
         }
     }
 
+    private IEnumerable<AlbumResultViewModel> GroupResultsByAlbum(IEnumerable<Track> tracks)
+    {
+        // Group by User + Directory
+        var groups = tracks
+            .GroupBy(t => new { t.Username, t.Directory })
+            .Where(g => !string.IsNullOrEmpty(g.Key.Directory)) // Must have a directory
+            .Select(g => new AlbumResultViewModel(g.ToList(), _downloadManager))
+            .OrderByDescending(a => a.HasFreeSlot) // Prioritize free slots
+            .ThenByDescending(a => a.TrackCount)   // Then completeness
+            .ToList();
+
+        return groups;
+    }
 
     private async Task StartDownloadsAsync()
     {

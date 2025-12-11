@@ -21,4 +21,5 @@ public class TrackEntity
     // Metadata for re-hydration
     public DateTime AddedAt { get; set; }
     public string? ErrorMessage { get; set; }
+    public string? CoverArtUrl { get; set; } // Added for Album Art
 }

@@ -22,6 +22,20 @@ public class LibraryViewModel : INotifyPropertyChanged
 
     public ICommand HardRetryCommand { get; }
 
+    private bool _isGridView;
+    public bool IsGridView
+    {
+        get => _isGridView;
+        set
+        {
+            if (_isGridView != value)
+            {
+                _isGridView = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
     public LibraryViewModel(ILogger<LibraryViewModel> logger, DownloadManager downloadManager)
     {
         _logger = logger;
