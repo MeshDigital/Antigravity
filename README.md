@@ -4,13 +4,20 @@ A modern WPF desktop application for batch downloading music from Soulseek using
 
 ## Features
 
-- **Soulseek Integration**: Uses Soulseek.NET for network communication
-- **Modern UI**: WPF-based graphical interface with search and download management
-- **Batch Downloads**: Queue multiple files for concurrent downloading
-- **Smart Filtering**: Filter search results by bitrate, format, and other metadata
-- **Configuration Management**: Save and load user preferences
-- **Progress Tracking**: Real-time download progress for all active transfers
-- **Error Handling**: Robust error handling with detailed logging
+- **Soulseek Integration**: Robust Soulseek.NET implementation.
+- **Smart Queue Management**: 
+    - **State Machine**: Tracks manage their own state (Pending, Downloading, Paused, etc.).
+    - **Drag & Drop**: Reorder your pending downloads effortlessly.
+    - **Global Control**: Pause, Resume, and Cancel tracks from a central dashboard.
+- **Intelligent Search**: 
+    - **Ranking**: Prioritizes users with **free upload slots** (+2000 score).
+    - **Metrics**: Displays Queue Length and Upload Speed.
+- **Dual-View UI**:
+    - **Library**: "Conveyor Belt" view for active projects.
+    - **Global Monitor**: "Air Traffic Control" view for all network activity.
+- **Resilience**: 
+    - **Smart Timeouts**: Distinguishes between "Queued" and "Stalled".
+    - **Hard Retry**: One-click wipe and re-queue for failed downloads.
 
 ## Architecture
 
@@ -18,88 +25,35 @@ A modern WPF desktop application for batch downloading music from Soulseek using
 
 ```
 SLSKDONET/
-├── Models/                 # Data models
-│   ├── Track.cs           # Track information
-│   └── DownloadJob.cs     # Download job state
-├── Services/              # Business logic
-│   ├── SoulseekAdapter.cs # Soulseek.NET wrapper
-│   └── DownloadManager.cs # Download orchestration
-├── Configuration/         # Config management
-│   ├── AppConfig.cs       # Configuration model
-│   └── ConfigManager.cs   # Config file handling
-├── Views/                 # UI (WPF)
-│   ├── MainWindow.xaml    # Main window UI
-│   ├── MainWindow.xaml.cs # Code-behind
-│   └── MainViewModel.cs   # View model (MVVM)
-├── App.xaml              # Application resources
-├── App.xaml.cs           # Application startup
-└── Program.cs            # Entry point
-```
-
-### Design Patterns
-
-- **MVVM**: Model-View-ViewModel pattern for UI separation
-- **Dependency Injection**: Microsoft.Extensions.DependencyInjection for service management
-- **Reactive**: System.Reactive for event-driven updates
-- **Async/Await**: Full async support for non-blocking operations
-
-## Requirements
-
-- .NET 8.0 or higher
-- Windows (WPF requirement)
-- Soulseek account
-
-## Setup
-
-### 1. Build
-
-```bash
-dotnet build
-```
-
-### 2. Run
-
-```bash
-dotnet run
-```
-
-### 3. Configuration
-
-The app stores configuration in:
-- `%AppData%\SLSKDONET\config.ini`
-
-First run will create a default configuration. Edit the file to add your Soulseek credentials:
-
-```ini
-[Soulseek]
-Username = your-username
-Password = your-password
-ListenPort = 49998
-UseUPnP = false
-ConnectTimeout = 20000
-SearchTimeout = 6000
-
-[Download]
-Directory = C:\Users\YourName\Downloads
-MaxConcurrent = 2
-NameFormat = {artist} - {title}
+├── Models/                 # Data entities (Track, PlaylistTrack)
+├── Services/              
+│   ├── SoulseekAdapter.cs  # Network communication
+│   ├── DownloadManager.cs  # Singleton Orchestrator
+│   └── ResultSorter.cs     # Intelligence & Ranking
+├── ViewModels/            
+│   ├── MainViewModel.cs    
+│   ├── LibraryViewModel.cs # Project/Conveyor View
+│   └── PlaylistTrackViewModel.cs # Core State Machine
+├── Views/                 
+│   ├── LibraryPage.xaml    # Split Active/Warehouse UI
+│   └── DownloadsPage.xaml  # Global Dashboard
+└── Configuration/          # App settings
 ```
 
 ## Usage
 
-### Basic Workflow
+### 1. Search & Queue
+Enter a query. Results are auto-ranked by availability (Free Slots first). Click "Download" to add to the **Library Warehouse**.
 
-1. **Login**: Enter your Soulseek credentials and click "Login"
-2. **Search**: Enter a search query and click "Search"
-3. **Select**: Click on results to add them to your download queue
-4. **Download**: Click "Start Downloads" to begin
+### 2. Manage in Library
+- **Top Row (Active)**: Watch files currently downloading.
+- **Bottom Row (Warehouse)**: Drag & Drop pending items to reorder.
+- **Context Actions**: Right-click or use buttons to Cancel/Retry.
 
-### Advanced Options
-
-- **Max Concurrent Downloads**: Limit simultaneous transfers (default: 2)
-- **Name Format**: Customize file naming (supports {artist}, {title}, {album})
-- **Preferred Formats**: Choose preferred audio formats (mp3, flac, etc.)
-- **Bitrate Filtering**: Set minimum/maximum bitrate preferences
+### 3. Global Dashboard
+Switch to the **Downloads** tab to see *everything* happening across the network.
+- **Pause/Resume**: Control bandwidth usage globally.
+- **Find New Version**: One-click "Orange Button" to find a better source for failed tracks.
 
 ## Development
 

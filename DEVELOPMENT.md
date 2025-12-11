@@ -33,28 +33,32 @@
 
 ### Models (`Models/`)
 - **Track.cs**: Represents a searchable music track
-- **DownloadJob.cs**: Represents a queued download with state
+- **PlaylistTrackViewModel.cs**: The core "Active" track model (State Machine)
 
 ### Services (`Services/`)
 - **SoulseekAdapter.cs**: Wrapper around Soulseek.NET client
   - Handles connection, authentication, search, and download
   - Exposes events via reactive EventBus
   
-- **DownloadManager.cs**: Orchestrates download jobs
-  - Manages concurrent downloads
-  - Tracks job state and progress
-  - Emits events for UI updates
+- **DownloadManager.cs**: [Singleton] Orchestrator
+  - Manages `AllGlobalTracks` collection
+  - Controls concurrency via SemaphoreSlim
+  - Runs background `ProcessQueueLoop`
+
+- **ResultSorter.cs**: Intelligent Ranking
+  - Scoring logic for search results (Free Slots priority)
 
 ### Configuration (`Configuration/`)
 - **AppConfig.cs**: Configuration model with all settings
 - **ConfigManager.cs**: Loads/saves configuration from INI files
 
 ### Views (`Views/`)
-- **MainWindow.xaml**: Main UI layout
-- **MainWindow.xaml.cs**: Code-behind (minimal)
-- **MainViewModel.cs**: MVVM view model
-  - Binds UI to services
-  - Handles user interactions
+- **MainWindow.xaml**: Shell layout (Navigation)
+- **LibraryPage.xaml**: Project View (Split Active/Warehouse)
+- **DownloadsPage.xaml**: Global Monitor (All tracks)
+- **MainViewModel.cs**: Shell VM
+- **LibraryViewModel.cs**: Manages Project filters
+- **PlaylistTrackViewModel.cs**: Individual Track Logic
 
 ### Utilities (`Utils/`)
 - **FileFormattingUtils.cs**: File formatting and display helpers

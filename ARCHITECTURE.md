@@ -3,47 +3,36 @@
 ## System Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        WPF GUI Layer                            │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │  MainWindow (XAML)                                       │  │
-│  │  - Login Tab, Search Tab, Downloads Tab                 │  │
-│  └────────────────────────┬─────────────────────────────────┘  │
-│                           │                                      │
-│  ┌────────────────────────▼─────────────────────────────────┐  │
-│  │  MainViewModel (MVVM)                                    │  │
-│  │  - Binding layer between UI & Services                  │  │
-│  │  - SearchResults, Downloads (ObservableCollection)      │  │
-│  └────────────────────────┬─────────────────────────────────┘  │
-└────────────────────────────┼──────────────────────────────────────┘
-                             │
-     ┌───────────────────────┼───────────────────────┐
-     │                       │                       │
-     ▼                       ▼                       ▼
-┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐
-│ SoulseekAdapter  │  │ DownloadManager  │  │ FileNameFormatter│
-│ - Connect()      │  │ - Enqueue()      │  │ - Format()       │
-│ - Search()       │  │ - Start()        │  │ (Template-based) │
-│ - Download()     │  │ - Cancel()       │  │                  │
-│ - EventBus       │  │ - Track jobs     │  └──────────────────┘
-└────────┬─────────┘  └────────┬─────────┘
-         │                     │
-         │  EventBus:          │  JobUpdated/
-         │  - connection       │  Completed
-         │  - search_results   │  events
-         │  - transfer_*       │
-         │                     │
-         └──────────────────────┘
-                  ▲
-                  │
-         ┌────────┴──────────┐
-         │                   │
-    ┌────▼─────┐      ┌──────▼───────┐
-    │  Soulseek│      │ Search Query │
-    │  .NET    │      │ Normalizer   │
-    │  Library │      │ - Remove "ft"│
-    │          │      │ - Regex      │
-    └──────────┘      └──────────────┘
+┌───────────────────────────────────────────────────────────────┐
+│                        WPF GUI Layer                          │
+│  ┌────────────────────────┐    ┌───────────────────────────┐  │
+│  │ LibraryPage (Project)  │    │ DownloadsPage (Global)    │  │
+│  │ - "Conveyor Belt" View │    │ - "Air Traffic Control"   │  │
+│  │ - Local Project Filter │    │ - Global Actions & Monitor│  │
+│  └───────────┬────────────┘    └─────────────┬─────────────┘  │
+│              │                               │                │
+│              ▼                               ▼                │
+│  ┌─────────────────────────────────────────────────────────┐  │
+│  │               PlaylistTrackViewModel (State Machine)    │  │
+│  │ - States: Pending, Searching, Downloading, Paused, etc. │  │
+│  │ - Commands: Pause, Resume, Cancel, HardRetry            │  │
+│  └──────────────────────────┬──────────────────────────────┘  │
+└─────────────────────────────┼─────────────────────────────────┘
+                              │
+                    ┌─────────▼────────┐
+                    │ DownloadManager  │ (Singleton)
+                    │ - Concurrency (4)│
+                    │ - Background Loop│
+                    │ - Global List    │
+                    └─────────┬────────┘
+                              │
+           ┌──────────────────┼─────────────────────┐
+           ▼                  ▼                     ▼
+    ┌──────────────┐   ┌──────────────┐    ┌────────────────┐
+    │ ResultSorter │   │ Soulseek     │    │ FileSystem     │
+    │ - Ranking    │   │ Adapter      │    │ - Write Files  │
+    │ - Intelligence│  │ - Network    │    │ - Delete .part │
+    └──────────────┘   └──────────────┘    └────────────────┘
 ```
 
 ## Input Processing Flow
@@ -152,65 +141,41 @@ Soulseek Network
 └────────────────────┘
 ```
 
-## Download Flow
+## Download Flow (The Engine)
 
-```
-User Clicks "Add to Downloads"
-    │
-    ▼
-┌──────────────────────────┐
-│ DownloadManager          │
-│ .EnqueueDownload()       │
-├──────────────────────────┤
-│ Create DownloadJob:      │
-│ - Track                  │
-│ - State: Pending         │
-│ - OutputPath             │
-└──────┬───────────────────┘
-       │
-       ▼
-┌──────────────────────┐
-│ Jobs in Queue        │
-│ (ObservableCollection)
-└──────┬───────────────┘
-       │
-       ▼ (User clicks "Start Downloads")
-┌──────────────────────────────────┐
-│ DownloadManager.StartAsync()     │
-├──────────────────────────────────┤
-│ Semaphore: Max 2 concurrent      │
-│                                  │
-│ For Each Job:                    │
-│ ├─ Acquire semaphore slot        │
-│ ├─ Job.State = Downloading       │
-│ ├─ Call SoulseekAdapter          │
-│ │  .DownloadAsync()              │
-│ │                                │
-│ ▼                                │
-└────────┬─────────────────────────┘
-         │
-    ┌────┴─────────────────────┐
-    │                          │
-    ▼                          ▼
-┌──────────────────┐    ┌──────────────────┐
-│ Download Success │    │ Download Failed  │
-├──────────────────┤    ├──────────────────┤
-│ - Save file      │    │ - Error message  │
-│ - State: Done    │    │ - State: Failed  │
-│ - Progress: 100% │    │ - Retry option   │
-│ - Emit event     │    │ - Emit event     │
-└──────┬───────────┘    └──────┬───────────┘
-       │                       │
-       └───────────┬───────────┘
-                   │
-                   ▼
-          ┌────────────────────┐
-          │ UI Updates         │
-          │ - Progress bar     │
-          │ - Status message   │
-          │ - Color change     │
-          └────────────────────┘
-```
+### 1. Queue Phase
+- User adds track -> `DownloadManager.QueueProject`
+- Creates `PlaylistTrackViewModel` (State: `Pending`)
+- Added to `AllGlobalTracks` collection
+
+### 2. Processing Loop
+- `ProcessQueueLoop` runs continuously in background
+- Finds next `Pending` track
+- Acquires `SemaphoreSlim` slot (Max 4 active)
+
+### 3. Execution Phase
+- **Search**: `SoulseekAdapter.SearchAsync`
+    - `ResultSorter` ranks results (Priority: Free Slot > Queue Length > Quality)
+- **Select**: Best match chosen automatically
+- **Download**: `SoulseekAdapter.DownloadAsync`
+    - Monitors for "Stalled" vs "Queued" timeout
+    - Updates Progress/Speed on ViewModel
+- **Completion**: 
+    - Success -> State: `Completed` -> Release Slot
+    - Failure -> State: `Failed` -> Release Slot
+
+## Smart Search Ranking
+
+The `ResultSorter` uses a weighted scoring system to select the best source:
+
+| Criteria | Score Impact | Reason |
+|----------|--------------|--------|
+| **Has Free Slot** | **+2000** | Immediate download start. Essential. |
+| **Queue Length** | -1 per user | Penalize wait times. |
+| Required Conditions | +1000 | Format/Bitrate match. |
+| Preferred Conditions | +500 | Perfect metadata match. |
+| String Similarity | 0-350 | Fuzzy match on Artist/Title. |
+
 
 ## Configuration & State Flow
 
