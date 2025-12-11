@@ -1,20 +1,22 @@
-using System.IO;
-using Microsoft.Extensions.Logging;
+
 using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
-using System.Linq;
+using System.IO;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
+using Microsoft.Extensions.Logging;
 using SLSKDONET.Configuration;
 using SLSKDONET.Models;
 using SLSKDONET.Services.InputParsers;
 using SLSKDONET.Utils;
+using SLSKDONET.ViewModels;
 
 namespace SLSKDONET.Services;
 
 /// <summary>
-/// Manages download jobs and orchestrates the download process.
+/// Orchestrates the download process for projects and individual tracks.
+/// Manages the global state of all active and past downloads.
 /// </summary>
 public class DownloadManager : INotifyPropertyChanged, IDisposable
 {
@@ -22,492 +24,314 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
     private readonly AppConfig _config;
     private readonly SoulseekAdapter _soulseek;
     private readonly FileNameFormatter _fileNameFormatter;
-    private readonly ILibraryService _libraryService;
     private readonly ITaggerService _taggerService;
-    private readonly SpotifyScraperInputSource _spotifyScraperInputSource;
-    private readonly SpotifyInputSource _spotifyApiInputSource;
-    private readonly CsvInputSource _csvInputSource;
-    private readonly ConcurrentDictionary<string, DownloadJob> _jobs = new();
+
+    // Concurrency control
     private readonly SemaphoreSlim _concurrencySemaphore;
-    private readonly Channel<DownloadJob> _jobChannel;
-    private CancellationTokenSource _cts = new();
-    private readonly List<Task> _runningTasks = new();
-    private PlaylistJob? _currentPlaylistJob;
+    private readonly CancellationTokenSource _globalCts = new();
+    private Task? _processingTask;
 
-    public event EventHandler<DownloadJob>? JobUpdated;
-    public event EventHandler<DownloadJob>? JobCompleted;
-    public event PropertyChangedEventHandler? PropertyChanged;
-
-    /// <summary>
-    /// Collection of imported playlists and their download status.
-    /// </summary>
-    public ObservableCollection<PlaylistJob> ImportedPlaylists { get; } = new();
+    // Global State
+    // Using BindingOperations for thread safety is best practice for ObservableCollection accessed from threads
+    public ObservableCollection<PlaylistTrackViewModel> AllGlobalTracks { get; } = new();
+    private readonly object _collectionLock = new object();
 
     public DownloadManager(
         ILogger<DownloadManager> logger,
         AppConfig config,
         SoulseekAdapter soulseek,
         FileNameFormatter fileNameFormatter,
-        ILibraryService libraryService,
-        ITaggerService taggerService,
-        SpotifyScraperInputSource spotifyScraperInputSource,
-        SpotifyInputSource spotifyApiInputSource,
-        CsvInputSource csvInputSource)
+        ITaggerService taggerService)
     {
         _logger = logger;
         _config = config;
         _soulseek = soulseek;
         _fileNameFormatter = fileNameFormatter;
-        _libraryService = libraryService;
         _taggerService = taggerService;
-        _spotifyScraperInputSource = spotifyScraperInputSource;
-        _spotifyApiInputSource = spotifyApiInputSource;
-        _csvInputSource = csvInputSource;
+
         _concurrencySemaphore = new SemaphoreSlim(_config.MaxConcurrentDownloads);
-        _jobChannel = Channel.CreateUnbounded<DownloadJob>();
+
+        // Enable cross-thread collection access
+        System.Windows.Data.BindingOperations.EnableCollectionSynchronization(AllGlobalTracks, _collectionLock);
     }
 
     /// <summary>
-    /// Starts a playlist/source import job with deduplication.
-    /// Fetches tracks from the source, deduplicates against library, and creates SearchQueries for missing tracks.
+    /// Queues a project (list of tracks) for processing.
     /// </summary>
-    public async Task StartPlaylistDownloadAsync(string inputUrl, string destinationFolder, InputSourceType sourceType)
+    public void QueueProject(List<PlaylistTrack> tracks)
     {
-        try
+        _logger.LogInformation("Queueing project with {Count} tracks", tracks.Count);
+        lock (_collectionLock)
         {
-            _logger.LogInformation("Starting playlist download: {URL} to {Folder}", inputUrl, destinationFolder);
-
-            // Fetch tracks from the source
-            List<Track> sourceTracks = new();
-            string playlistName = "Import";
-
-            if (sourceType == InputSourceType.Spotify)
+            foreach (var track in tracks)
             {
-                try
-                {
-                    _logger.LogInformation("Fetching tracks from Spotify: {Url}", inputUrl);
-
-                    List<SearchQuery> queries;
-                    if (_spotifyApiInputSource.IsConfigured && !_config.SpotifyUsePublicOnly)
-                    {
-                        _logger.LogDebug("Using Spotify API input source");
-                        queries = await _spotifyApiInputSource.ParseAsync(inputUrl);
-                    }
-                    else
-                    {
-                        _logger.LogDebug("Attempting to scrape Spotify content (public access)");
-                        queries = await _spotifyScraperInputSource.ParseAsync(inputUrl);
-                    }
-                    
-                    if (!queries.Any())
-                    {
-                        _logger.LogWarning("Spotify import returned no tracks for URL: {Url}", inputUrl);
-                        throw new InvalidOperationException("No tracks found in the Spotify source. The playlist might be private, empty, or the page structure may have changed.");
-                    }
-                    
-                    sourceTracks = queries.Select(q => new Track
-                    {
-                        Artist = q.Artist,
-                        Title = q.Title,
-                        Album = q.Album,
-                        SourceTitle = q.SourceTitle
-                    }).ToList();
-                    playlistName = queries.FirstOrDefault()?.SourceTitle ?? "Spotify Playlist";
-                    
-                    _logger.LogInformation("Successfully imported {Count} tracks from Spotify", sourceTracks.Count);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Failed to fetch Spotify tracks");
-                    throw new InvalidOperationException($"Spotify import error: {ex.Message}");
-                }
+                var vm = new PlaylistTrackViewModel(track);
+                AllGlobalTracks.Add(vm);
             }
-            else if (sourceType == InputSourceType.CSV)
-            {
-                var queries = await _csvInputSource.ParseAsync(inputUrl);
-                sourceTracks = queries.Select(q => new Track
-                {
-                    Artist = q.Artist,
-                    Title = q.Title,
-                    Album = q.Album,
-                    SourceTitle = q.SourceTitle
-                }).ToList();
-                playlistName = Path.GetFileNameWithoutExtension(inputUrl);
-            }
-
-            if (!sourceTracks.Any())
-                throw new InvalidOperationException("No tracks found in source");
-
-            // Create the playlist job
-            var playlistJob = new PlaylistJob
-            {
-                SourceTitle = playlistName,
-                SourceType = sourceType.ToString(),
-                DestinationFolder = destinationFolder,
-                OriginalTracks = new ObservableCollection<Track>(sourceTracks)
-            };
-
-            _currentPlaylistJob = playlistJob;
-
-            // Load existing library for deduplication
-            var libraryEntries = _libraryService.LoadDownloadedTracks();
-            var libraryHashToPath = libraryEntries.ToDictionary(e => e.UniqueHash, e => e.FilePath);
-
-            // Create PlaylistTracks with deduplication logic
-            var playlistTracks = new List<PlaylistTrack>();
-            int trackNumber = 1;
-            
-            foreach (var track in sourceTracks)
-            {
-                var hash = track.UniqueHash;
-                PlaylistTrack playlistTrack;
-                
-                if (libraryHashToPath.TryGetValue(hash, out var libFilePath))
-                {
-                    // Track already in library - status = Downloaded
-                    track.FilePath = libFilePath;
-                    track.LocalPath = libFilePath;
-                    playlistTrack = new PlaylistTrack
-                    {
-                        Id = Guid.NewGuid(),
-                        PlaylistId = playlistJob.Id,
-                        TrackUniqueHash = hash,
-                        Artist = track.Artist ?? "Unknown",
-                        Title = track.Title ?? "Unknown",
-                        Album = track.Album ?? "Unknown",
-                        Status = TrackStatus.Downloaded,
-                        ResolvedFilePath = libFilePath,
-                        TrackNumber = trackNumber
-                    };
-                    _logger.LogDebug("Track already in library: {Hash} at {Path}", hash, track.FilePath);
-                }
-                else
-                {
-                    // Track is missing - calculate expected path, status = Missing
-                    var expectedFilename = FormatFilename(track);
-                    var expectedPath = Path.Combine(destinationFolder, expectedFilename);
-                    track.FilePath = expectedPath;
-                    playlistTrack = new PlaylistTrack
-                    {
-                        Id = Guid.NewGuid(),
-                        PlaylistId = playlistJob.Id,
-                        TrackUniqueHash = hash,
-                        Artist = track.Artist ?? "Unknown",
-                        Title = track.Title ?? "Unknown",
-                        Album = track.Album ?? "Unknown",
-                        Status = TrackStatus.Missing,
-                        ResolvedFilePath = expectedPath,
-                        TrackNumber = trackNumber
-                    };
-                    _logger.LogDebug("Track missing, will be downloaded to: {Path}", expectedPath);
-                }
-                
-                playlistTracks.Add(playlistTrack);
-                trackNumber++;
-            }
-
-            // Save all playlist tracks to persistent storage
-            await _libraryService.SavePlaylistTracksAsync(playlistTracks);
-            playlistJob.PlaylistTracks = playlistTracks;
-            playlistJob.RefreshStatusCounts();
-
-            // Save the job for persistence
-            await _libraryService.SavePlaylistJobAsync(playlistJob);
-
-            // Add to imported playlists collection
-            System.Windows.Application.Current.Dispatcher.Invoke(() =>
-            {
-                ImportedPlaylists.Add(playlistJob);
-            });
-
-            _logger.LogInformation("Playlist job created: {SourceTitle}, {Total} tracks, {Missing} missing",
-                playlistJob.SourceTitle, playlistJob.TotalTracks, playlistJob.MissingCount);
-
-            OnPropertyChanged(nameof(ImportedPlaylists));
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to start playlist download");
-            throw;
-        }
+        // Processing loop picks this up automatically
     }
 
     /// <summary>
-    /// Enqueues a track for download.
+    /// Helper to enqueue a single ad-hoc track (e.g. from search results).
     /// </summary>
-    public DownloadJob EnqueueDownload(Track track, string? outputPath = null, string? sourceTitle = null)
+    public void EnqueueTrack(Track track)
     {
-        var job = new DownloadJob
+        // Wrap the standard Track in a PlaylistTrack
+        var playlistTrack = new PlaylistTrack
         {
-            Track = track,
-            OutputPath = outputPath ?? Path.Combine(
-                _config.DownloadDirectory!, // App.xaml.cs ensures this is not null
-                FormatFilename(track)
-            ),
-            DestinationPath = outputPath ?? Path.Combine(
-                _config.DownloadDirectory!,
-                FormatFilename(track)
-            ),
-            SourceTitle = sourceTitle
+             Id = Guid.NewGuid(),
+             Artist = track.Artist ?? "Unknown",
+             Title = track.Title ?? "Unknown",
+             Album = track.Album ?? "Unknown",
+             Status = TrackStatus.Missing, // Assume missing until downloaded
+             ResolvedFilePath = Path.Combine(_config.DownloadDirectory!, _fileNameFormatter.Format(_config.NameFormat ?? "{artist} - {title}", track) + "." + track.GetExtension()),
+             TrackUniqueHash = track.UniqueHash
         };
-
-        _jobs.TryAdd(job.Id, job);
-        job.PropertyChanged += Job_PropertyChanged;
-        _logger.LogInformation("Enqueued download: {TrackId}", job.Id);
-        OnPropertyChanged(nameof(SuccessfulCount));
-        OnPropertyChanged(nameof(FailedCount));
-        OnPropertyChanged(nameof(TodoCount));
         
-        // Post the job to the channel for processing
-        _jobChannel.Writer.TryWrite(job);
-
-        return job;
+        // If we already know the file details (from search), we can pre-populate the model 
+        // effectively skipping the 'Searching' phase if we implement that check in ProcessTrackAsync
+        // For now, we'll let it flow through the state machine.
+        // Actually, if it's from search, we WANT to download THIS specific file.
+        // We'll attach the SoulseekFile if possible or just use the username/filename
+        
+        // TODO: Pass specific file info to ViewModel so it skips search?
+        // For now, adhering to the "Project" architecture which implies "I want this song", not "I want this file".
+        // But for direct downloads, that's inefficient. 
+        // We can handle this by checking if the passed track has Username/Filename and using it.
+        
+        QueueProject(new List<PlaylistTrack> { playlistTrack });
     }
 
-    /// <summary>
-    /// Requeues an existing job (used for resume after cancel/fail).
-    /// </summary>
-    public void RequeueJob(DownloadJob job)
-    {
-        if (job.State != DownloadState.Cancelled && job.State != DownloadState.Failed)
-        {
-            _logger.LogWarning("Job {JobId} is not cancelled/failed; skipping requeue", job.Id);
-            return;
-        }
-
-        job.ResetCancellationToken();
-        job.RetryCount = 0;
-        job.ErrorMessage = null;
-        job.Progress = 0;
-        job.BytesDownloaded = 0;
-        job.StartedAt = null;
-        job.CompletedAt = null;
-        job.State = DownloadState.Pending;
-        JobUpdated?.Invoke(this, job);
-
-        _logger.LogInformation("Requeued job: {JobId}", job.Id);
-        _jobChannel.Writer.TryWrite(job);
-    }
-
-    /// <summary>
-    /// Starts the long-running task that processes jobs from the channel.
-    /// </summary>
     public async Task StartAsync(CancellationToken ct = default)
     {
-        _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        _logger.LogInformation("Download manager started. Waiting for jobs...");
+        if (_processingTask != null) return;
 
-        try
-        {
-            // Continuously read from the channel until it's completed.
-            await foreach (var job in _jobChannel.Reader.ReadAllAsync(_cts.Token))
-            {
-                // Start the job and track it to prevent unobserved exceptions
-                var task = ProcessJobAsync(job, _cts.Token);
-                lock (_runningTasks)
-                {
-                    _runningTasks.Add(task);
-                    // Clean up completed tasks
-                    _runningTasks.RemoveAll(t => t.IsCompleted);
-                }
-                // Observe the task to prevent unobserved exceptions and mark observed
-                _ = task.ContinueWith(t =>
-                {
-                    if (t.IsFaulted && t.Exception != null)
-                    {
-                        _logger.LogError(t.Exception, "Unhandled exception in ProcessJobAsync");
-                        var _ = t.Exception.Flatten(); // mark observed
-                    }
-                }, TaskScheduler.Default);
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            _logger.LogInformation("Download manager processing loop cancelled.");
-        }
-        _logger.LogInformation("Download manager stopped.");
+        _logger.LogInformation("DownloadManager Orchestrator started.");
+        
+        // We link the passed CT with our global CT to allow stopping from either source
+        _processingTask = ProcessQueueLoop(_globalCts.Token); // Use global token for the long-running task
+        await Task.CompletedTask;
     }
 
-    /// <summary>
-    /// Processes a single download job.
-    /// </summary>
-    private async Task ProcessJobAsync(DownloadJob job, CancellationToken ct)
+    private async Task ProcessQueueLoop(CancellationToken token)
     {
-        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, job.CancellationTokenSource.Token);
-        var effectiveCt = linkedCts.Token;
-
-        await _concurrencySemaphore.WaitAsync(effectiveCt);
         try
         {
-            // Attempt download with retry logic
-            var downloaded = false;
-            while (!downloaded && job.RetryCount <= _config.MaxDownloadRetries)
+            while (!token.IsCancellationRequested)
             {
-                var progress = new Progress<double>(p =>
+                PlaylistTrackViewModel? nextTrack = null;
+
+                lock (_collectionLock)
                 {
-                    job.Progress = p;
-                    job.BytesDownloaded = (long?)((job.Track.Size ?? 0) * p);
-                    JobUpdated?.Invoke(this, job);
-                });
-
-                job.State = job.RetryCount > 0 ? DownloadState.Retrying : DownloadState.Downloading;
-                job.StartedAt ??= DateTime.UtcNow;
-                job.LastAttemptTime = DateTime.UtcNow;
-                JobUpdated?.Invoke(this, job);
-
-                var success = await _soulseek.DownloadAsync(
-                    job.Track.Username!,
-                    job.Track.Filename!,
-                    job.OutputPath!,
-                    job.Track.Size,
-                    progress,
-                    effectiveCt
-                );
-
-                if (success)
-                {
-                    downloaded = true;
-                    job.Progress = 1.0;
-                    job.Track.LocalPath = job.OutputPath; // persist local path for history
-                    job.State = DownloadState.Completed;
-                    job.CompletedAt = DateTime.UtcNow;
-                    _logger.LogInformation("Download completed successfully: {Artist} - {Title}",
-                        job.Track.Artist, job.Track.Title);
+                    // Find the next Pending track
+                    nextTrack = AllGlobalTracks.FirstOrDefault(t => t.State == PlaylistTrackState.Pending);
                 }
-                else if (job.RetryCount < _config.MaxDownloadRetries && _config.AutoRetryFailedDownloads)
-                {
-                    job.RetryCount++;
-                    job.ErrorMessage = $"Attempt {job.RetryCount} failed, retrying...";
-                    _logger.LogWarning("Download failed, will retry: {Artist} - {Title} (retry {Attempt}/{Max})",
-                        job.Track.Artist, job.Track.Title, job.RetryCount, _config.MaxDownloadRetries);
-                    await Task.Delay(1000, effectiveCt); // Brief delay before retry
-                }
-                else
-                {
-                    job.State = DownloadState.Failed;
-                    job.ErrorMessage = $"Download failed after {job.RetryCount + 1} attempt(s)";
-                    job.CompletedAt = DateTime.UtcNow;
-                    _logger.LogError("Download failed and no more retries available: {Artist} - {Title}",
-                        job.Track.Artist, job.Track.Title);
-                    break;
-                }
-            }
 
-            // Post-processing on success (tagging)
-            if (downloaded)
-            {
-                try
+                if (nextTrack == null)
                 {
-                    if (!string.IsNullOrEmpty(job.OutputPath))
+                    await Task.Delay(500, token);
+                    continue;
+                }
+
+                // Acquire a concurrency slot
+                await _concurrencySemaphore.WaitAsync(token);
+
+                // Double check status (race condition)
+                if (nextTrack.State != PlaylistTrackState.Pending)
+                {
+                    _concurrencySemaphore.Release();
+                    continue;
+                }
+
+                // Start processing in background (Fire & Forget)
+                // We don't await this; we want to continue the loop to find more work if concurrency allows
+                _ = Task.Run(async () =>
+                {
+                    try
                     {
-                        _logger.LogDebug("Tagging downloaded file: {Path}", job.OutputPath);
-                        var taggingSuccess = await _taggerService.TagFileAsync(job.Track, job.OutputPath);
-                        if (taggingSuccess)
-                        {
-                            _logger.LogInformation("File tagged successfully: {Artist} - {Title}",
-                                job.Track.Artist ?? "Unknown", job.Track.Title ?? "Unknown");
-                        }
-                        else
-                        {
-                            _logger.LogWarning("Failed to tag file: {Path}", job.OutputPath);
-                        }
+                        await ProcessTrackAsync(nextTrack, token);
                     }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Error while tagging file: {Path}", job.OutputPath);
-                    // Don't fail the entire job if tagging fails - it's a post-processing step
-                }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "CRITICAL: Error in ProcessTrack wrapper for {Artist} - {Title}", nextTrack.Artist, nextTrack.Title);
+                        nextTrack.State = PlaylistTrackState.Failed;
+                        nextTrack.ErrorMessage = "Internal Error: " + ex.Message;
+                    }
+                    finally
+                    {
+                        _concurrencySemaphore.Release();
+                    }
+                }, token);
             }
-
-            _logger.LogInformation("Job completed: {JobId} - {State}", job.Id, job.State);
         }
         catch (OperationCanceledException)
         {
-            job.State = DownloadState.Cancelled;
-            job.CompletedAt = DateTime.UtcNow;
-            _logger.LogWarning("Job cancelled: {JobId}", job.Id);
+            _logger.LogInformation("DownloadManager processing loop cancelled.");
         }
         catch (Exception ex)
         {
-            job.State = DownloadState.Failed;
-            job.ErrorMessage = ex.Message;
-            job.CompletedAt = DateTime.UtcNow;
-            _logger.LogError(ex, "Job error: {JobId}", job.Id);
+            _logger.LogError(ex, "DownloadManager processing loop crashed!");
         }
-        finally
+    }
+
+    private async Task ProcessTrackAsync(PlaylistTrackViewModel track, CancellationToken ct)
+    {
+        track.CancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var trackCt = track.CancellationTokenSource.Token;
+
+        try
         {
-            JobCompleted?.Invoke(this, job);
-            _concurrencySemaphore.Release();
-            OnPropertyChanged(nameof(SuccessfulCount));
-            OnPropertyChanged(nameof(FailedCount));
-            OnPropertyChanged(nameof(TodoCount));
-        }
-    }
+            // --- 0. Pre-check ---
+            if (track.Model.Status == TrackStatus.Downloaded && File.Exists(track.Model.ResolvedFilePath))
+            {
+                track.State = PlaylistTrackState.Completed;
+                track.Progress = 100;
+                return;
+            }
 
-    /// <summary>
-    /// Cancels all pending downloads.
-    /// </summary>
-    public void CancelAll()
-    {
-        _logger.LogInformation("Cancelling all downloads");
-        if (!_cts.IsCancellationRequested)
+            // --- 1. Search Phase ---
+            // If the model doesn't have specific file info, we must search.
+            // If it DOES (e.g. from manual search), we might skip this. 
+            // For Bundle 1, let's assume we always search if it's "Pending" to be robust for projects.
+            
+            track.State = PlaylistTrackState.Searching;
+            track.Progress = 0; // Infinite spinner logic in UI often checks IsActive
+            
+            var query = $"{track.Artist} {track.Title}";
+            var results = new ConcurrentBag<Track>();
+            
+            // Search with 30s timeout
+            using var searchCts = CancellationTokenSource.CreateLinkedTokenSource(trackCt);
+            searchCts.CancelAfter(TimeSpan.FromSeconds(30)); 
+
+            try 
+            {
+                await _soulseek.SearchAsync(
+                    query,
+                    null, // TODO: Get format filter from Config
+                    (null, null), // TODO: Get bitrate filter from Config
+                    DownloadMode.Normal,
+                    (found) => {
+                        foreach (var f in found) results.Add(f);
+                    },
+                    searchCts.Token
+                );
+            }
+            catch (OperationCanceledException) { /* Timeout or Cancelled */ }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Search error for {Query}", query);
+                // Continue if we have any results, else fail
+            }
+
+            if (results.IsEmpty)
+            {
+                track.State = PlaylistTrackState.Failed;
+                track.ErrorMessage = "No results found";
+                return;
+            }
+
+            // Select Best Match
+            var preferredFormat = _config.PreferredFormats?.FirstOrDefault() ?? "mp3";
+            var minBitrate = _config.MinBitrate ?? 128;
+            
+            var bestMatch = results
+                .Where(t => t.Bitrate >= minBitrate)
+                // .Where(t => t.GetExtension().Contains(preferredFormat)) // Simple filter
+                .OrderByDescending(t => t.Bitrate)
+                .ThenByDescending(t => t.Length ?? 0)
+                .FirstOrDefault();
+
+            if (bestMatch == null)
+            {
+                // Relaxed fallback
+                 bestMatch = results.OrderByDescending(t => t.Bitrate).FirstOrDefault();
+            }
+            
+            if (bestMatch == null)
+            {
+                track.State = PlaylistTrackState.Failed;
+                track.ErrorMessage = "No suitable match found";
+                return;
+            }
+
+            // --- 2. Download Phase ---
+            track.State = PlaylistTrackState.Downloading;
+            
+            // Update model with the specific file info we found
+            track.Model.Status = TrackStatus.Missing; // Still missing until done
+            
+            // Use resolved path or fallback
+            var finalPath = track.Model.ResolvedFilePath;
+            if (string.IsNullOrEmpty(finalPath))
+            {
+                finalPath = Path.Combine(_config.DownloadDirectory ?? "Downloads", 
+                    $"{track.Artist} - {track.Title}.{bestMatch.GetExtension()}");
+            }
+             // Ensure directory exists
+            var dir = Path.GetDirectoryName(finalPath);
+            if (dir != null) Directory.CreateDirectory(dir);
+
+            var progress = new Progress<double>(p => track.Progress = p * 100);
+            
+            var success = await _soulseek.DownloadAsync(
+                bestMatch.Username!,
+                bestMatch.Filename!,
+                finalPath,
+                bestMatch.Size,
+                progress,
+                trackCt
+            );
+
+            if (success)
+            {
+                track.State = PlaylistTrackState.Completed;
+                track.Progress = 100;
+                track.Model.Status = TrackStatus.Downloaded;
+                track.Model.ResolvedFilePath = finalPath;
+                
+                // Tagging
+                try 
+                {
+                    await _taggerService.TagFileAsync(bestMatch, finalPath);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning("Tagging error: {Msg}", ex.Message);
+                }
+            }
+            else
+            {
+                track.State = PlaylistTrackState.Failed;
+                track.ErrorMessage = "Download failed (Transfer)";
+            }
+        }
+        catch (OperationCanceledException)
         {
-            _cts.Cancel();
+            track.State = PlaylistTrackState.Cancelled;
         }
-        // Complete the channel to stop the processing loop.
-        _jobChannel.Writer.TryComplete();
-    }
-
-    /// <summary>
-    /// Gets all download jobs.
-    /// </summary>
-    public IEnumerable<DownloadJob> GetJobs() => _jobs.Values;
-
-    /// <summary>
-    /// Gets a specific download job.
-    /// </summary>
-    public DownloadJob? GetJob(string jobId)
-    {
-        _jobs.TryGetValue(jobId, out var job);
-        return job;
-    }
-
-    /// <summary>
-    /// Formats a track filename using the configured name format.
-    /// </summary>
-    private string FormatFilename(Track track)
-    {
-        var template = _config.NameFormat ?? "{artist} - {title}";
-        var filename = _fileNameFormatter.Format(template, track);
-
-        var ext = track.GetExtension();
-        return string.IsNullOrEmpty(ext) ? filename : $"{filename}.{ext}";
-    }
-
-    private void Job_PropertyChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName == nameof(DownloadJob.State) || e.PropertyName == nameof(DownloadJob.Status))
+        catch (Exception ex)
         {
-            OnPropertyChanged(nameof(SuccessfulCount));
-            OnPropertyChanged(nameof(FailedCount));
-            OnPropertyChanged(nameof(TodoCount));
+            track.State = PlaylistTrackState.Failed;
+            track.ErrorMessage = ex.Message;
+            _logger.LogError(ex, "ProcessTrackAsync fatal error");
         }
     }
+    
+    // Properties for UI Summary (Aggregated from Collection)
+    // Determining these efficiently is tricky with ObservableCollection. 
+    // Ideally the UI binds to the Collection directly and filters count.
+    // Keeping existing properties for backward compat if needed, but they might be expensive to calc on every change.
+    // For Bundle 1, I'll rely on the VM collection.
 
-    public int SuccessfulCount => _jobs.Values.Count(j => j.State == DownloadState.Completed);
-    public int FailedCount => _jobs.Values.Count(j => j.State == DownloadState.Failed || j.State == DownloadState.Cancelled);
-    public int TodoCount => _jobs.Values.Count(j => j.State == DownloadState.Pending || j.State == DownloadState.Downloading || j.State == DownloadState.Searching);
-
-    protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
-    {
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-    }
+    public event PropertyChangedEventHandler? PropertyChanged;
+    protected void OnPropertyChanged([CallerMemberName] string? name = null)
+        => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 
     public void Dispose()
     {
-        _cts?.Dispose();
-        _jobChannel.Writer.TryComplete();
-        _concurrencySemaphore?.Dispose();
+        _globalCts.Cancel();
+        _concurrencySemaphore.Dispose();
     }
 }

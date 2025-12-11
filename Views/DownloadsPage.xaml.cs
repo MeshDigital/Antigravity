@@ -4,11 +4,9 @@ namespace SLSKDONET.Views;
 
 public partial class DownloadsPage : Page
 {
-    private MainViewModel? _viewModel;
-
-    public DownloadsPage()
+    public DownloadsPage(MainViewModel viewModel)
     {
         InitializeComponent();
-        DataContextChanged += (s, e) => _viewModel = DataContext as MainViewModel;
+        DataContext = viewModel;
     }
 }

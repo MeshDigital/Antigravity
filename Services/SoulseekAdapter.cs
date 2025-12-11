@@ -386,14 +386,32 @@ public class SoulseekAdapter : IDisposable
 
             var directory = Path.GetDirectoryName(outputPath);
             if (directory != null)
-                System.IO.Directory.CreateDirectory(directory);
+                Directory.CreateDirectory(directory);
 
-            // Use Soulseek.NET's DownloadAsync with stream factory
+            // Track state for timeout logic
+            DateTime lastActivity = DateTime.UtcNow;
+            long lastBytes = 0;
+            bool isQueued = false;
+
             var downloadOptions = new TransferOptions(
                 stateChanged: (args) =>
                 {
-                    if (args.Transfer.State.HasFlag(TransferStates.InProgress))
+                    // Update queued status
+                    if (args.Transfer.State.HasFlag(TransferStates.Queued))
                     {
+                        isQueued = true;
+                    }
+                    else if (args.Transfer.State.HasFlag(TransferStates.InProgress))
+                    {
+                        isQueued = false;
+                        
+                        // Check for progress activity
+                        if (args.Transfer.BytesTransferred > lastBytes)
+                        {
+                            lastBytes = args.Transfer.BytesTransferred;
+                            lastActivity = DateTime.UtcNow;
+                        }
+
                         if (size.HasValue && size.Value > 0)
                         {
                             double percentage = (double)args.Transfer.BytesTransferred / size.Value;
@@ -404,8 +422,9 @@ public class SoulseekAdapter : IDisposable
 
             using var fileStream = new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.None, 8192, useAsync: true);
             
-            // DownloadAsync signature: (username, filename, streamFactory, size, startOffset, options, cancellationToken)
-            await this._client.DownloadAsync(
+            // We wrap the Soulseek DownloadAsync in our own task to enforce our custom timeout logic
+            // The underlying client has some timeout logic, but we want granular control over "Stalled vs Queued"
+            var downloadTask = this._client.DownloadAsync(
                 username,
                 filename,
                 () => Task.FromResult((Stream)fileStream),
@@ -413,6 +432,24 @@ public class SoulseekAdapter : IDisposable
                 startOffset: 0,
                 options: downloadOptions,
                 cancellationToken: ct);
+
+            // Monitoring Loop
+            while (!downloadTask.IsCompleted)
+            {
+                // Check if we should time out
+                if (!isQueued && (DateTime.UtcNow - lastActivity).TotalSeconds > 60)
+                {
+                    // STALLED: Not queued, but no bytes moved for 60s
+                    throw new TimeoutException("Transfer stalled for 60 seconds (0 bytes received).");
+                }
+                
+                // If we are queued, we WAIT INDEFINITELY (or until user cancels)
+                // This is the key fix: Don't timeout if we are just waiting in line.
+
+                await Task.WhenAny(downloadTask, Task.Delay(1000, ct));
+            }
+
+            await downloadTask; // Propagate exceptions/completion
 
             this._logger.LogInformation("Download completed: {Filename}", filename);
             progress?.Report(1.0);
@@ -423,7 +460,7 @@ public class SoulseekAdapter : IDisposable
         {
             this._logger.LogWarning("Download cancelled: {Filename}", filename);
             this.EventBus.OnNext(("transfer_cancelled", new { filename, username }));
-            throw; // Re-throw to let caller know it was cancelled
+            throw; 
         }
         catch (TimeoutException ex)
         {
@@ -439,7 +476,6 @@ public class SoulseekAdapter : IDisposable
         }
         catch (Exception ex) when (ex.Message.Contains("refused") || ex.Message.Contains("aborted") || ex.Message.Contains("Unable to read"))
         {
-            // Network-related errors - log as warning, not error
             this._logger.LogWarning("Network error during download: {Filename} from {Username} - {Message}", filename, username, ex.Message);
             this.EventBus.OnNext(("transfer_failed", new { filename, username, error = "Connection failed" }));
             return false;

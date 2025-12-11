@@ -107,100 +107,39 @@
 
 ---
 
-## Phase 2: Enhancement ⏳ (Planned)
+## Phase 2: Project-Based Orchestration 🚧 (Current Focus)
 
-### Download Modes
-- [ ] Album download mode
-  - [ ] Folder detection
-  - [ ] File grouping
-  - [ ] Album-level state tracking
-- [ ] Aggregate mode (songs by artist)
-- [ ] Album aggregate mode
+### Bundle 1: Core State Machine (Backend)
+- [ ] **PlaylistTrackViewModel**
+  - [ ] Properties: SourceId, GlobalId, Artist, Title
+  - [ ] State Enum: Pending, Searching, Queued, Downloading, Completed, Failed, Cancelled
+  - [ ] Metrics: Progress, CurrentSpeed
+  - [ ] Logic: `IsActive` helper
+- [ ] **DownloadManager Refactor**
+  - [ ] Singleton implementation
+  - [ ] `SemaphoreSlim` (4 concurrent slots)
+  - [ ] `AllGlobalTracks` collection
+  - [ ] `QueueProject` method
+  - [ ] Background processing loop
 
-### Configuration System
-- [ ] Configuration profiles
-  - [ ] Parse profile sections
-  - [ ] Auto-select based on conditions
-  - [ ] Profile-specific overrides
-- [ ] Auto-profile feature
-  - [ ] Condition evaluation
-  - [ ] Dynamic profile switching
+### Bundle 2: Conveyor Belt UI (Library Page)
+- [ ] **LibraryViewModel**
+  - [ ] Split Views using `CollectionViewSource`
+    - [ ] `ActiveTracksView` (Searching/Downloading/Queued)
+    - [ ] `WarehouseTracksView` (Pending/Completed/Failed)
+  - [ ] **Critical**: LiveFiltering properties set to "State" only (Performance)
+- [ ] **LibraryPage.xaml**
+  - [ ] Top Grid: Active tracks with spinners/progress
+  - [ ] Bottom Grid: Warehouse tracks (static list)
+  - [ ] Animations for Searching state
 
-### Search Management
-- [ ] SearchRateLimiter service
-  - [ ] Token bucket algorithm
-  - [ ] Search quota tracking
-  - [ ] Queue pending searches
-- [ ] "Waiting" status feedback in UI
-- [ ] Configurable rate limits
+### Bundle 3: Resilience & Global Monitoring
+- [ ] **Resilience Logic**
+  - [ ] `HardRetryCommand`: Delete .part file -> Reset State -> Re-queue
+  - [ ] `Timeout Logic`: 60s timeout ONLY if State=Transferring (not Queued)
+- [ ] **Global Views**
+  - [ ] `DownloadsPage.xaml`: Read-only global monitoring list
 
-### Download Persistence
-- [ ] DownloadIndex model (JSON)
-- [ ] IndexManager service
-  - [ ] Save index on completion
-  - [ ] Load and skip existing
-  - [ ] Resume failed downloads
-- [ ] Index display in UI
-
-### Enhanced Error Handling
-- [ ] Retry logic for failed downloads
-- [ ] Detailed error messages
-- [ ] Connection recovery
-- [ ] Timeout handling
-
-### UI Enhancements
-- [ ] Progress bar styling
-- [ ] Color-coded status
-- [ ] Download speed display
-- [ ] Estimated time remaining
-- [ ] Cancel individual downloads
-
----
-
-## Phase 3: Advanced Features ⏳ (Planned)
-
-### Input Sources
-- [ ] Spotify integration
-  - [ ] OAuth flow
-  - [ ] Playlist parsing
-  - [ ] Liked songs support
-- [ ] YouTube integration
-  - [ ] Playlist extraction
-  - [ ] yt-dlp fallback
-  - [ ] Video title parsing
-- [ ] Bandcamp integration
-  - [ ] Artist/album parsing
-  - [ ] Wishlist support
-
-### Post-Download Actions
-- [ ] OnCompleteActionExecutor service
-  - [ ] Command parsing
-  - [ ] Prefix support (1:, 2:, a:, s:, h:)
-  - [ ] Variable substitution
-  - [ ] Output capture
-- [ ] Integration examples
-  - [ ] Album art fetching
-  - [ ] Format conversion
-  - [ ] Metadata tagging
-
-### Aggregate Modes
-- [ ] Song aggregation (distinct songs by artist)
-- [ ] Album aggregation (distinct albums by artist)
-- [ ] Result grouping and deduplication
-- [ ] Popularity sorting
-
-### Interactive Mode
-- [ ] InteractiveDownloadWindow (new WPF window)
-- [ ] Folder navigation with keyboard
-- [ ] Result filtering in real-time
-- [ ] File-level selection
-- [ ] Key bindings (up/down/enter/space)
-
-### Advanced Search
-- [ ] Desperate mode (slower search)
-- [ ] Artist-maybe-wrong fallback
-- [ ] Multi-language search support
-- [ ] Search history
 
 ---
 

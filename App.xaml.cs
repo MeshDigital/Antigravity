@@ -156,6 +156,7 @@ public partial class App : System.Windows.Application
         services.AddSingleton<MainViewModel>(); // MainViewModel can be a singleton as it represents the app's main state.
 
         // Pages for navigation
+        services.AddSingleton<SLSKDONET.ViewModels.LibraryViewModel>();
         services.AddTransient<SearchPage>();
         services.AddTransient<DownloadsPage>();
         services.AddTransient<LibraryPage>();

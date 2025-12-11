@@ -51,9 +51,10 @@ public class MainViewModel : INotifyPropertyChanged
     public ObservableCollection<OrchestratedQueryProgress> OrchestratedQueries { get; } = new();
 
     // Surface download manager counters for binding in the Downloads view.
-    public int SuccessfulCount => _downloadManager.SuccessfulCount;
-    public int FailedCount => _downloadManager.FailedCount;
-    public int TodoCount => _downloadManager.TodoCount;
+    // Surface download manager counters compatibility
+    public int SuccessfulCount => _downloadManager.AllGlobalTracks.Count(t => t.State == ViewModels.PlaylistTrackState.Completed);
+    public int FailedCount => _downloadManager.AllGlobalTracks.Count(t => t.State == ViewModels.PlaylistTrackState.Failed);
+    public int TodoCount => _downloadManager.AllGlobalTracks.Count(t => t.State == ViewModels.PlaylistTrackState.Pending || t.State == ViewModels.PlaylistTrackState.Downloading || t.State == ViewModels.PlaylistTrackState.Searching);
 
     /// <summary>
     /// Calculate overall download progress percentage for the global progress bar.
@@ -191,21 +192,8 @@ public class MainViewModel : INotifyPropertyChanged
         NavigateSettingsCommand = new RelayCommand(() => _navigationService.NavigateTo("Settings"));
         
         // Subscribe to download events
-        _downloadManager.JobUpdated += (s, job) => UpdateJobUI(job);
-        _downloadManager.JobCompleted += (s, job) =>
-        {
-            UpdateJobUI(job);
-            if (job.State == DownloadState.Completed)
-            {
-                _downloadLogService.AddEntry(job.Track);
-                // Add to UI collection on the correct thread
-                System.Windows.Application.Current.Dispatcher.Invoke(() => LibraryEntries.Add(job.Track));
-            }
-        };
+        // REMOVED: DownloadManager events are deprecated in Bundle 1 refactor.
         _downloadManager.PropertyChanged += DownloadManagerOnPropertyChanged;
-        
-        // Update import stats when download collection or states change
-        Downloads.CollectionChanged += (s, e) => UpdateImportDownloadStats();
         
         _logger.LogInformation($"MainViewModel initialized. IsConnected={_isConnected}, IsSearching={_isSearching}, StatusText={_statusText}");
         _logger.LogInformation("=== MainViewModel Constructor Completed ===");
@@ -784,11 +772,11 @@ public class MainViewModel : INotifyPropertyChanged
 
         foreach (var track in tracksToAdd)
         {
-            var job = _downloadManager.EnqueueDownload(track);
-            Downloads.Add(job);
+             _downloadManager.EnqueueTrack(track);
+             // Downloads.Add(job); // Old collection deprecated
         }
         
-        StatusText = $"Added {tracksToAdd.Count} item(s) to downloads. Skipped {skippedCount} duplicate(s).";
+        StatusText = $"Added {tracksToAdd.Count} item(s) to download queue. Skipped {skippedCount} duplicate(s).";
         _logger.LogInformation("Added {AddedCount} items to download queue, skipped {SkippedCount}", tracksToAdd.Count, skippedCount);
     }
 
