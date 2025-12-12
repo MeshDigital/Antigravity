@@ -17,26 +17,27 @@ public class LibraryViewModel : INotifyPropertyChanged
     private readonly ILogger<LibraryViewModel> _logger;
     private readonly DownloadManager _downloadManager;
     private readonly ILibraryService _libraryService;
-    
+
     // Master/Detail pattern properties
     private ObservableCollection<PlaylistJob> _allProjects = new();
     private PlaylistJob? _selectedProject;
     private ObservableCollection<PlaylistTrackViewModel> _currentProjectTracks = new();
     private string _noProjectSelectedMessage = "Select an import job to view its tracks";
-    
+
     public ICommand HardRetryCommand { get; }
     public ICommand PauseCommand { get; }
     public ICommand ResumeCommand { get; }
     public ICommand CancelCommand { get; }
     public ICommand OpenProjectCommand { get; }
-    
+    public ICommand DeleteProjectCommand { get; }
+
     // Master List: All import jobs/projects
     public ObservableCollection<PlaylistJob> AllProjects
     {
         get => _allProjects;
         set { _allProjects = value; OnPropertyChanged(); }
     }
-    
+
     // Selected project
     public PlaylistJob? SelectedProject
     {
@@ -48,11 +49,11 @@ public class LibraryViewModel : INotifyPropertyChanged
                 _selectedProject = value;
                 OnPropertyChanged();
                 if (value != null)
-                    LoadProjectTracks(value);
+                    _ = LoadProjectTracksAsync(value);
             }
         }
     }
-    
+
     // Detail List: Tracks for selected project (Project Manifest)
     public ObservableCollection<PlaylistTrackViewModel> CurrentProjectTracks
     {
@@ -83,31 +84,37 @@ public class LibraryViewModel : INotifyPropertyChanged
         }
     }
 
+    private bool _initialLoadCompleted = false;
+
     public LibraryViewModel(ILogger<LibraryViewModel> logger, DownloadManager downloadManager, ILibraryService libraryService)
     {
         _logger = logger;
         _downloadManager = downloadManager;
         _libraryService = libraryService;
-        
+
         // Commands
         HardRetryCommand = new RelayCommand<PlaylistTrackViewModel>(ExecuteHardRetry);
         PauseCommand = new RelayCommand<PlaylistTrackViewModel>(ExecutePause);
         ResumeCommand = new RelayCommand<PlaylistTrackViewModel>(ExecuteResume);
         CancelCommand = new RelayCommand<PlaylistTrackViewModel>(ExecuteCancel);
         OpenProjectCommand = new RelayCommand<PlaylistJob>(project => SelectedProject = project);
-        
+        DeleteProjectCommand = new AsyncRelayCommand<PlaylistJob>(ExecuteDeleteProjectAsync);
+
         // Subscribe to global track updates for live project track status
         _downloadManager.TrackUpdated += OnGlobalTrackUpdated;
-        
+
         // Subscribe to project added events for real-time Library updates
         _downloadManager.ProjectAdded += OnProjectAdded;
-        
+
         // Load projects asynchronously
         _ = LoadProjectsAsync();
     }
-    
+
     private async void OnProjectAdded(object? sender, ProjectEventArgs e)
     {
+        _logger.LogInformation("OnProjectAdded ENTRY for job {JobId}. Current project count: {ProjectCount}, Global track count: {TrackCount}", e.Job.Id, AllProjects.Count, _downloadManager.AllGlobalTracks.Count);
+        if (System.Windows.Application.Current is null) return;
+        
         await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
         {
             // Add the new project to the observable collection
@@ -115,9 +122,10 @@ public class LibraryViewModel : INotifyPropertyChanged
 
             // Auto-select the newly added project so it shows immediately
             SelectedProject = e.Job;
-            
-            _logger.LogInformation("Project added to Library: {Title}", e.Job.SourceTitle);
+
+            _logger.LogInformation("Project '{Title}' added to Library view.", e.Job.SourceTitle);
         });
+        _logger.LogInformation("OnProjectAdded EXIT for job {JobId}. New project count: {ProjectCount}", e.Job.Id, AllProjects.Count);
     }
 
     public void ReorderTrack(PlaylistTrackViewModel source, PlaylistTrackViewModel target)
@@ -127,23 +135,23 @@ public class LibraryViewModel : INotifyPropertyChanged
         // Simple implementation: Swap SortOrder
         // Better implementation: Insert
         // Renumbering everything is safest for consistency
-        
+
         // Find current indices in the underlying collection? 
         // We really want to change SortOrder values.
-        
+
         // Let's adopt a "dense rank" approach.
         // First, ensure everyone has a SortOrder. if 0, assign based on current index.
-        
+
         var allTracks = _downloadManager.AllGlobalTracks; // This is the source
         // But we are only reordering within "Warehouse" view ideally. 
         // Mixing active/warehouse reordering is tricky.
         // Assuming we drag pending items.
-        
+
         int oldIndex = source.SortOrder;
         int newIndex = target.SortOrder;
-        
+
         if (oldIndex == newIndex) return;
-        
+
         // Shift items
         foreach (var track in allTracks)
         {
@@ -164,7 +172,7 @@ public class LibraryViewModel : INotifyPropertyChanged
                 }
             }
         }
-        
+
         source.SortOrder = newIndex;
         // Verify uniqueness? If we started with unique 0..N, we end with unique 0..N
     }
@@ -172,7 +180,7 @@ public class LibraryViewModel : INotifyPropertyChanged
     private void ExecuteHardRetry(PlaylistTrackViewModel? vm)
     {
         if (vm == null) return;
-        
+
         _logger.LogInformation("Hard Retry requested for {Artist} - {Title}", vm.Artist, vm.Title);
         _downloadManager.HardRetryTrack(vm.GlobalId);
     }
@@ -180,7 +188,7 @@ public class LibraryViewModel : INotifyPropertyChanged
     private void ExecutePause(PlaylistTrackViewModel? vm)
     {
         if (vm == null) return;
-        
+
         _logger.LogInformation("Pause requested for {Artist} - {Title}", vm.Artist, vm.Title);
         _downloadManager.PauseTrack(vm.GlobalId);
     }
@@ -188,7 +196,7 @@ public class LibraryViewModel : INotifyPropertyChanged
     private void ExecuteResume(PlaylistTrackViewModel? vm)
     {
         if (vm == null) return;
-        
+
         _logger.LogInformation("Resume requested for {Artist} - {Title}", vm.Artist, vm.Title);
         _downloadManager.ResumeTrack(vm.GlobalId);
     }
@@ -196,30 +204,57 @@ public class LibraryViewModel : INotifyPropertyChanged
     private void ExecuteCancel(PlaylistTrackViewModel? vm)
     {
         if (vm == null) return;
-        
+
         _logger.LogInformation("Cancel requested for {Artist} - {Title}", vm.Artist, vm.Title);
         _downloadManager.CancelTrack(vm.GlobalId);
     }
 
-    private async void LoadProjectTracks(PlaylistJob job)
+    private async Task ExecuteDeleteProjectAsync(PlaylistJob? job)
+    {
+        if (job == null) return;
+
+        _logger.LogInformation("Soft-deleting project: {Title} ({Id})", job.SourceTitle, job.Id);
+
+        try
+        {
+            // Soft-delete via database service
+            await _libraryService.DeletePlaylistJobAsync(job.Id);
+
+            if (System.Windows.Application.Current is null) return;
+            // Remove from UI collection immediately for responsive UX
+            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            {
+                AllProjects.Remove(job);
+
+                // Auto-select next project if available
+                if (SelectedProject == job)
+                    SelectedProject = AllProjects.FirstOrDefault();
+
+                _logger.LogInformation("Project removed from Library UI: {Title}", job.SourceTitle);
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to delete project {Id}", job.Id);
+        }
+    }
+
+    private async Task LoadProjectTracksAsync(PlaylistJob job)
     {
         try
         {
             _logger.LogInformation("Loading tracks for project: {Name}", job.SourceTitle);
-            
-            // Load full track data from database
-            var playlistTracks = await _libraryService.LoadPlaylistTracksAsync(job.Id);
-            
             var tracks = new ObservableCollection<PlaylistTrackViewModel>();
-            
-            foreach (var track in playlistTracks)
+
+            // N+1 Query Fix: Use the eagerly loaded tracks from the job object itself.
+            foreach (var track in job.PlaylistTracks.OrderBy(t => t.TrackNumber))
             {
                 var vm = new PlaylistTrackViewModel(track);
-                
+
                 // Sync with live DownloadManager state for real-time progress
                 var liveTrack = _downloadManager.AllGlobalTracks
                     .FirstOrDefault(t => t.GlobalId == track.TrackUniqueHash);
-                
+
                 if (liveTrack != null)
                 {
                     vm.State = liveTrack.State;
@@ -227,15 +262,15 @@ public class LibraryViewModel : INotifyPropertyChanged
                     vm.CurrentSpeed = liveTrack.CurrentSpeed;
                     vm.ErrorMessage = liveTrack.ErrorMessage;
                 }
-                
+
                 tracks.Add(vm);
             }
-            
-            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+
+            if (System.Windows.Application.Current is null) return;
+            await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
             {
                 CurrentProjectTracks = tracks;
             });
-            
             _logger.LogInformation("Loaded {Count} tracks for project {Title}", tracks.Count, job.SourceTitle);
         }
         catch (Exception ex)
@@ -243,48 +278,91 @@ public class LibraryViewModel : INotifyPropertyChanged
             _logger.LogError(ex, "Failed to load tracks for project {Id}", job.Id);
         }
     }
-    
+
     private async Task LoadProjectsAsync()
     {
         try
         {
-            _logger.LogInformation("Loading all playlist jobs from database");
-            
+            _logger.LogInformation("Loading all playlist jobs from database...");
+
             var jobs = await _libraryService.LoadAllPlaylistJobsAsync();
-            
-            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+
+            if (System.Windows.Application.Current is null) return;
+            await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
             {
-                AllProjects.Clear();
-                
-                // Add jobs ordered by creation date (newest first)
-                foreach (var job in jobs.OrderByDescending(j => j.CreatedAt))
+                if (_initialLoadCompleted)
                 {
-                    AllProjects.Add(job);
+                    _logger.LogWarning("LoadProjectsAsync called after initial load, performing a safe sync.");
+                    // Safe sync: add missing, remove deleted, then re-sort
+                    var loadedJobIds = new HashSet<Guid>(jobs.Select(j => j.Id));
+                    var currentJobIds = new HashSet<Guid>(AllProjects.Select(j => j.Id));
+
+                    // Add new jobs not in the current collection
+                    foreach (var job in jobs)
+                    {
+                        if (!currentJobIds.Contains(job.Id))
+                        {
+                            AllProjects.Add(job);
+                        }
+                    }
+
+                    // Remove jobs from collection that are no longer in the database
+                    var jobsToRemove = AllProjects.Where(j => !loadedJobIds.Contains(j.Id)).ToList();
+                    foreach (var job in jobsToRemove)
+                    {
+                        AllProjects.Remove(job);
+                    }
                 }
-                
-                // Auto-select first project
-                if (AllProjects.Count > 0)
-                    SelectedProject = AllProjects[0];
+                else
+                {
+                    // Initial load: clear and add all
+                    AllProjects.Clear();
+                    foreach (var job in jobs)
+                    {
+                        AllProjects.Add(job);
+                    }
+                }
+
+                // Re-sort the entire collection to ensure order is correct
+                var sorted = AllProjects.OrderByDescending(j => j.CreatedAt).ToList();
+                for (int i = 0; i < sorted.Count; i++)
+                {
+                    var job = sorted[i];
+                    int currentIndex = AllProjects.IndexOf(job);
+                    if (currentIndex != i)
+                    {
+                        AllProjects.Move(currentIndex, i);
+                    }
+                }
+
+                if (SelectedProject == null && AllProjects.Any())
+                {
+                    SelectedProject = AllProjects.First();
+                }
+
+                if (!_initialLoadCompleted)
+                {
+                    _initialLoadCompleted = true;
+                    _logger.LogInformation("Initial load of {count} projects completed.", AllProjects.Count);
+                }
             });
-            
-            _logger.LogInformation("Loaded {Count} playlist jobs for Library", AllProjects.Count);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to load playlist jobs");
         }
     }
-    
-    private void OnGlobalTrackUpdated(object? sender, PlaylistTrackViewModel updatedTrack)
+    private void OnGlobalTrackUpdated(object? sender, PlaylistTrackViewModel? updatedTrack)
     {
-        if (CurrentProjectTracks == null) return;
-        
+        if (updatedTrack == null || CurrentProjectTracks == null) return;
+
+        if (System.Windows.Application.Current is null) return;
         // Use Dispatcher for UI thread safety
-        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+        System.Windows.Application.Current.Dispatcher.Invoke(() =>
         {
             var localTrack = CurrentProjectTracks
                 .FirstOrDefault(t => t.GlobalId == updatedTrack.GlobalId);
-            
+
             if (localTrack != null)
             {
                 localTrack.State = updatedTrack.State;

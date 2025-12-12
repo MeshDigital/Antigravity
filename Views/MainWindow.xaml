@@ -8,6 +8,10 @@
     Width="1200"
     WindowStartupLocation="CenterScreen"
     Background="#1E1E1E">
+
+    <Window.InputBindings>
+        <KeyBinding Key="R" Modifiers="Control" Command="{Binding RunDiagnosticsCommand}"/>
+    </Window.InputBindings>
     
     <Grid x:Name="MainGrid" Background="#1E1E1E">
         <Grid.RowDefinitions>

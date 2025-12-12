@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using SLSKDONET.Models;
 
 namespace SLSKDONET.Data;
 
@@ -43,6 +44,10 @@ public class PlaylistJobEntity
     public int TotalTracks { get; set; }
     public int SuccessfulCount { get; set; }
     public int FailedCount { get; set; }
+
+    // Phase 1C: Add Soft Delete Flag
+    public bool IsDeleted { get; set; } = false;
+    public DateTime? DeletedAt { get; set; }
     
     [InverseProperty(nameof(PlaylistTrackEntity.Job))]
     public ICollection<PlaylistTrackEntity> Tracks { get; set; } = new List<PlaylistTrackEntity>();
@@ -63,10 +68,34 @@ public class PlaylistTrackEntity
     public string Title { get; set; } = string.Empty;
     public string Album { get; set; } = string.Empty;
     public string TrackUniqueHash { get; set; } = string.Empty;
-    public string Status { get; set; } = "Missing"; // Downloaded, Missing, Failed, etc.
+    public TrackStatus Status { get; set; } = TrackStatus.Missing; // Changed to enum
     public string ResolvedFilePath { get; set; } = string.Empty;
     public int TrackNumber { get; set; }
     public DateTime AddedAt { get; set; }
     
     public PlaylistJobEntity? Job { get; set; }
+}
+
+/// <summary>
+/// Database entity for a unique, downloaded file in the global library.
+/// This replaces the old JSON-based LibraryEntry.
+/// </summary>
+public class LibraryEntryEntity
+{
+    [Key]
+    public string UniqueHash { get; set; } = string.Empty;
+
+    public string Artist { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string Album { get; set; } = string.Empty;
+    public string FilePath { get; set; } = string.Empty;
+
+    // Audio metadata
+    public int Bitrate { get; set; }
+    public int? DurationSeconds { get; set; }
+    public string Format { get; set; } = string.Empty;
+
+    // Timestamps
+    public DateTime AddedAt { get; set; }
+    public DateTime LastUsedAt { get; set; }
 }

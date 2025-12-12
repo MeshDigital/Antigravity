@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Collections.Generic;
 using System.Windows;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
@@ -35,6 +36,7 @@ public class MainViewModel : INotifyPropertyChanged
     private PlaylistJob? _currentPlaylistJob;
     private bool _isConnected = false;
     private bool _isSearching = false;
+    private bool _isDiagnosticsRunning;
     private string _statusText = "Disconnected";
     private string _downloadPath = "";
     private string _sharedFolderPath = "";
@@ -128,6 +130,7 @@ public class MainViewModel : INotifyPropertyChanged
     public ICommand BrowseSharedFolderCommand { get; }
     public ICommand ShowPauseComingSoonCommand { get; }
     public ICommand SearchAllImportedCommand { get; }
+    public ICommand RunDiagnosticsCommand { get; }
     public ICommand SaveSettingsCommand { get; }
     public ICommand CancelSearchCommand { get; }
     public ICommand NavigateSearchCommand { get; }
@@ -211,6 +214,7 @@ public class MainViewModel : INotifyPropertyChanged
         BrowseDownloadPathCommand = new RelayCommand(BrowseDownloadPath);
         BrowseSharedFolderCommand = new RelayCommand(BrowseSharedFolder);
         SearchAllImportedCommand = new AsyncRelayCommand(SearchAllImportedAsync, () => ImportedQueries.Any() && !IsSearching);
+        RunDiagnosticsCommand = new AsyncRelayCommand(RunDiagnosticsHarnessAsync);
         ShowPauseComingSoonCommand = new RelayCommand(() => StatusText = "Pause functionality is planned for a future update!");
         CancelSearchCommand = new RelayCommand(CancelSearch, () => IsSearching);
         ChangeViewModeCommand = new RelayCommand<string?>(mode => { if (!string.IsNullOrEmpty(mode)) CurrentViewMode = mode; });
@@ -992,11 +996,15 @@ public class MainViewModel : INotifyPropertyChanged
 
     private void CancelSearch()
     {
-        if (!_searchCts.IsCancellationRequested)
+        if (_searchCts != null && !_searchCts.IsCancellationRequested)
         {
+            _logger.LogInformation("CancelSearch called. Requesting cancellation.");
             _searchCts.Cancel();
             StatusText = "Cancelling search...";
-            _logger.LogInformation("Search cancellation requested by user");
+        }
+        else
+        {
+            _logger.LogWarning("CancelSearch called, but cancellation was already requested or CTS is null.");
         }
     }
 
@@ -1280,10 +1288,245 @@ public class MainViewModel : INotifyPropertyChanged
         }
     }
 
+    private async Task RunDiagnosticsHarnessAsync()
+    {
+        if (_isDiagnosticsRunning)
+        {
+            _logger.LogWarning("Diagnostics harness already running; ignoring new request.");
+            return;
+        }
+
+        _isDiagnosticsRunning = true;
+
+        var tempFiles = new List<string>();
+        var diagnosticTrackIds = new HashSet<string>();
+        PlaylistJob? diagnosticsJob = null;
+
+        T InvokeOnUi<T>(Func<T> func)
+        {
+            var dispatcher = System.Windows.Application.Current?.Dispatcher;
+            if (dispatcher == null || dispatcher.CheckAccess())
+            {
+                return func();
+            }
+
+            return dispatcher.Invoke(func);
+        }
+
+        void InvokeOnUiAction(Action action)
+        {
+            var dispatcher = System.Windows.Application.Current?.Dispatcher;
+            if (dispatcher == null || dispatcher.CheckAccess())
+            {
+                action();
+            }
+            else
+            {
+                dispatcher.Invoke(action);
+            }
+        }
+
+        var preservedQueries = InvokeOnUi(() => ImportedQueries.ToList());
+
+        try
+        {
+            StatusText = "Running diagnostics harness...";
+            _logger.LogInformation("Diagnostics harness started.");
+
+            diagnosticsJob = new PlaylistJob
+            {
+                Id = Guid.NewGuid(),
+                SourceTitle = $"Diagnostics Harness {DateTime.UtcNow:HHmmss}",
+                SourceType = "Diagnostics",
+                DestinationFolder = DownloadPath,
+                CreatedAt = DateTime.UtcNow,
+                OriginalTracks = new ObservableCollection<Track>(),
+                PlaylistTracks = new List<PlaylistTrack>()
+            };
+
+            for (int index = 0; index < 3; index++)
+            {
+                var sampleTrack = new Track
+                {
+                    Artist = $"Diagnostics Artist {index + 1}",
+                    Title = $"Diagnostics Track {index + 1}",
+                    Album = "Diagnostics Suite",
+                    Length = 180 + (index * 12),
+                    SourceTitle = diagnosticsJob.SourceTitle
+                };
+                diagnosticsJob.OriginalTracks.Add(sampleTrack);
+
+                var playlistTrack = new PlaylistTrack
+                {
+                    Id = Guid.NewGuid(),
+                    PlaylistId = diagnosticsJob.Id,
+                    Artist = sampleTrack.Artist ?? string.Empty,
+                    Title = sampleTrack.Title ?? string.Empty,
+                    Album = sampleTrack.Album ?? string.Empty,
+                    TrackUniqueHash = Guid.NewGuid().ToString("N"),
+                    Status = TrackStatus.Downloaded,
+                    TrackNumber = index + 1,
+                    AddedAt = DateTime.UtcNow
+                };
+
+                var tempFile = Path.Combine(Path.GetTempPath(), $"qmusic_diag_{playlistTrack.Id:N}.tmp");
+                await File.WriteAllTextAsync(tempFile, "diagnostics");
+                playlistTrack.ResolvedFilePath = tempFile;
+
+                diagnosticsJob.PlaylistTracks.Add(playlistTrack);
+                diagnosticTrackIds.Add(playlistTrack.TrackUniqueHash);
+                tempFiles.Add(tempFile);
+            }
+
+            diagnosticsJob.RefreshStatusCounts();
+
+            _logger.LogInformation("Diagnostics: queueing synthetic job {JobId} with {Count} tracks.", diagnosticsJob.Id, diagnosticsJob.PlaylistTracks.Count);
+            await _downloadManager.QueueProject(diagnosticsJob);
+
+            await Task.Delay(250);
+
+            var persistedJob = await _libraryService.FindPlaylistJobAsync(diagnosticsJob.Id);
+            if (persistedJob == null)
+            {
+                _logger.LogError("Diagnostics: job {JobId} not found after persistence.", diagnosticsJob.Id);
+            }
+            else
+            {
+                _logger.LogInformation(
+                    "Diagnostics: persisted job '{Title}' => Tracks={TrackCount}, Success={Success}, Missing={Missing}, Failed={Failed}.",
+                    persistedJob.SourceTitle,
+                    persistedJob.PlaylistTracks.Count,
+                    persistedJob.SuccessfulCount,
+                    persistedJob.MissingCount,
+                    persistedJob.FailedCount);
+
+                foreach (var track in persistedJob.PlaylistTracks.OrderBy(t => t.TrackNumber))
+                {
+                    _logger.LogInformation(
+                        "Diagnostics: Track #{Number}: {Artist} - {Title} [{Status}] ({Hash})",
+                        track.TrackNumber,
+                        track.Artist,
+                        track.Title,
+                        track.Status,
+                        track.TrackUniqueHash);
+                }
+            }
+
+            var registeredTracks = InvokeOnUi(() =>
+                _downloadManager.AllGlobalTracks
+                    .Where(vm => diagnosticTrackIds.Contains(vm.GlobalId))
+                    .Select(vm => vm.GlobalId)
+                    .ToList());
+
+            _logger.LogInformation("Diagnostics: DownloadManager registered {Count} global tracks for diagnostics job.", registeredTracks.Count);
+
+            if (IsConnected)
+            {
+                var diagnosticsSourceTitle = diagnosticsJob.SourceTitle;
+                InvokeOnUiAction(() =>
+                {
+                    ImportedQueries.Clear();
+                    for (int index = 0; index < 3; index++)
+                    {
+                        ImportedQueries.Add(new SearchQuery
+                        {
+                            Artist = $"Diagnostics Artist {index + 1}",
+                            Title = $"Diagnostics Track {index + 1}",
+                            Album = "Diagnostics Suite",
+                            Length = 200,
+                            SourceTitle = diagnosticsSourceTitle
+                        });
+                    }
+                });
+                RebuildUniqueImports();
+
+                var diagnosticQueryCount = InvokeOnUi(() => ImportedQueries.Count);
+                _logger.LogInformation("Diagnostics: starting cancellation smoke test with {Count} queries.", diagnosticQueryCount);
+
+                var searchTask = SearchAllImportedAsync();
+                await Task.Delay(TimeSpan.FromSeconds(1));
+                CancelSearch();
+                await searchTask;
+
+                _logger.LogInformation("Diagnostics: cancellation completed. IsSearching={IsSearching}, Status='{StatusText}'.", IsSearching, StatusText);
+            }
+            else
+            {
+                _logger.LogWarning("Diagnostics harness skipped cancellation test because Soulseek is disconnected.");
+            }
+
+            StatusText = "Diagnostics harness completed. Review logs for details.";
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Diagnostics harness failed: {ex.Message}";
+            _logger.LogError(ex, "Diagnostics harness failed.");
+        }
+        finally
+        {
+            InvokeOnUiAction(() =>
+            {
+                ImportedQueries.Clear();
+                foreach (var query in preservedQueries)
+                {
+                    ImportedQueries.Add(query);
+                }
+            });
+            RebuildUniqueImports();
+
+            if (diagnosticsJob != null)
+            {
+                try
+                {
+                    await _libraryService.DeletePlaylistJobAsync(diagnosticsJob.Id);
+                    _logger.LogInformation("Diagnostics: soft-deleted synthetic job {JobId}.", diagnosticsJob.Id);
+                }
+                catch (Exception cleanupEx)
+                {
+                    _logger.LogWarning(cleanupEx, "Diagnostics: failed to delete synthetic job {JobId}.", diagnosticsJob.Id);
+                }
+
+                InvokeOnUiAction(() =>
+                {
+                    var toRemove = _downloadManager.AllGlobalTracks
+                        .Where(vm => diagnosticTrackIds.Contains(vm.GlobalId))
+                        .ToList();
+
+                    foreach (var vm in toRemove)
+                    {
+                        _downloadManager.AllGlobalTracks.Remove(vm);
+                    }
+                });
+            }
+
+            foreach (var path in tempFiles)
+            {
+                try
+                {
+                    if (File.Exists(path))
+                    {
+                        File.Delete(path);
+                    }
+                }
+                catch (Exception fileEx)
+                {
+                    _logger.LogWarning(fileEx, "Diagnostics: failed to delete temporary file {Path}.", path);
+                }
+            }
+
+            _isDiagnosticsRunning = false;
+        }
+    }
+
     private async Task SearchAllImportedAsync()
     {
         IsSearching = true;
+        _searchCts = new CancellationTokenSource(); // Create a new CTS for this operation
+        var searchToken = _searchCts.Token;
+
         StatusText = $"Orchestrating batch search for {ImportedQueries.Count} imported items...";
+        _logger.LogInformation("SearchAllImportedAsync started for {count} queries.", ImportedQueries.Count);
+        
         System.Windows.Application.Current.Dispatcher.Invoke(() =>
         {
             SearchResults.Clear();
@@ -1326,7 +1569,7 @@ public class MainViewModel : INotifyPropertyChanged
             }
 
             // Orchestrate: Search each query, rank, and select best match
-            await Parallel.ForEachAsync(ImportedQueries, new ParallelOptions { MaxDegreeOfParallelism = 4 }, async (query, ct) =>
+            await Parallel.ForEachAsync(ImportedQueries, new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = searchToken }, async (query, ct) =>
             {
                 var queryStr = query.ToString();
                 var progress = orchestrationProgress[queryStr];
@@ -1416,11 +1659,26 @@ public class MainViewModel : INotifyPropertyChanged
                         });
                     }
 
-                    Interlocked.Increment(ref processedQueries);
+                    var completed = Interlocked.Increment(ref processedQueries);
                     System.Windows.Application.Current.Dispatcher.Invoke(() =>
                     {
-                        StatusText = $"Processed {processedQueries}/{ImportedQueries.Count} queries. Found {bestMatchesPerQuery.Count} best matches.";
+                        StatusText = $"Processed {completed}/{ImportedQueries.Count} queries. Found {bestMatchesPerQuery.Count} best matches.";
                     });
+
+                }
+                catch (OperationCanceledException)
+                {
+                    // This is an expected exception when the user cancels the search.
+                    // We log it and update the UI for this specific item.
+                    // Then we rethrow to signal cancellation to the Parallel.ForEachAsync.
+                    System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        progress.State = "Cancelled";
+                        progress.IsProcessing = false;
+                        progress.IsComplete = true;
+                    });
+                    _logger.LogInformation("Orchestration for query was cancelled: {Query}", queryStr);
+                    throw;
                 }
                 catch (Exception ex)
                 {
@@ -1494,6 +1752,11 @@ public class MainViewModel : INotifyPropertyChanged
                 await StartDownloadsAsync();
             }
         }
+        catch (OperationCanceledException)
+        {
+            StatusText = "Batch search cancelled.";
+            _logger.LogInformation("SearchAllImportedAsync was cancelled.");
+        }
         catch (Exception ex)
         {
             StatusText = $"Batch orchestration failed: {ex.Message}";
@@ -1502,6 +1765,7 @@ public class MainViewModel : INotifyPropertyChanged
         finally
         {
             IsSearching = false;
+            _logger.LogInformation("SearchAllImportedAsync finished.");
         }
     }
 

@@ -1,11 +1,13 @@
 using Microsoft.EntityFrameworkCore;
 using System.IO;
+using SLSKDONET.Models;
 
 namespace SLSKDONET.Data;
 
 public class AppDbContext : DbContext
 {
     public DbSet<TrackEntity> Tracks { get; set; }
+    public DbSet<LibraryEntryEntity> LibraryEntries { get; set; }
     public DbSet<PlaylistJobEntity> PlaylistJobs { get; set; }
     public DbSet<PlaylistTrackEntity> PlaylistTracks { get; set; }
 
@@ -28,5 +30,31 @@ public class AppDbContext : DbContext
             .WithOne(t => t.Job)
             .HasForeignKey(t => t.PlaylistId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        // Phase 1A: Add Query Indexes
+        modelBuilder.Entity<PlaylistTrackEntity>()
+            .HasIndex(t => t.PlaylistId)
+            .HasDatabaseName("IX_PlaylistTrack_PlaylistId");
+
+        modelBuilder.Entity<PlaylistTrackEntity>()
+            .HasIndex(t => t.Status)
+            .HasDatabaseName("IX_PlaylistTrack_Status");
+
+        // Data Integrity: Add index for sync checks
+        modelBuilder.Entity<PlaylistTrackEntity>()
+            .HasIndex(t => t.TrackUniqueHash);
+
+        modelBuilder.Entity<PlaylistJobEntity>()
+            .HasIndex(j => j.CreatedAt)
+            .HasDatabaseName("IX_PlaylistJob_CreatedAt");
+
+        // Phase 1B: Centralize Status Enum (using EF Core's built-in converter)
+        modelBuilder
+            .Entity<PlaylistTrackEntity>()
+            .Property(e => e.Status)
+            .HasConversion<string>();
+
+        // Phase 1C: Implement Global Query Filter for Soft Deletes
+        modelBuilder.Entity<PlaylistJobEntity>().HasQueryFilter(j => !j.IsDeleted);
     }
 }

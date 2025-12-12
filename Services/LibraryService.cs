@@ -1,12 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.IO;
 using System.Linq;
-using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using SLSKDONET.Configuration;
 using SLSKDONET.Data;
 using SLSKDONET.Models;
 
@@ -22,63 +19,44 @@ namespace SLSKDONET.Services;
 public class LibraryService : ILibraryService
 {
     private readonly ILogger<LibraryService> _logger;
-    private readonly DownloadLogService _downloadLogService;
     private readonly DatabaseService _databaseService;
-    private readonly string _libraryIndexPath;
 
-    // In-memory cache (for performance)
-    private List<LibraryEntry> _libraryCache = new();
-    private DateTime _lastLibraryCacheTime = DateTime.MinValue;
-
-    public LibraryService(ILogger<LibraryService> logger, DownloadLogService downloadLogService, DatabaseService databaseService)
+    public LibraryService(ILogger<LibraryService> logger, DatabaseService databaseService)
     {
         _logger = logger;
-        _downloadLogService = downloadLogService;
         _databaseService = databaseService;
-        
-        var configDir = Path.GetDirectoryName(ConfigManager.GetDefaultConfigPath());
-        var dataDir = Path.Combine(configDir ?? AppContext.BaseDirectory, "library_data");
-        Directory.CreateDirectory(dataDir);
-
-        _libraryIndexPath = Path.Combine(dataDir, "library_entries.json");
 
         _logger.LogDebug("LibraryService initialized with database persistence for playlists");
     }
 
-    // ===== INDEX 1: LibraryEntry (Main Global Index - JSON backed) =====
+    // ===== INDEX 1: LibraryEntry (Main Global Index - DB backed) =====
 
     public LibraryEntry? FindLibraryEntry(string uniqueHash)
     {
-        var entries = LoadDownloadedTracks();
-        return entries.FirstOrDefault(e => e.UniqueHash == uniqueHash);
+        var entity = _databaseService.FindLibraryEntryAsync(uniqueHash).Result;
+        return entity != null ? EntityToLibraryEntry(entity) : null;
     }
 
     public async Task<LibraryEntry?> FindLibraryEntryAsync(string uniqueHash)
     {
-        var entries = await LoadDownloadedTracksAsync();
-        return entries.FirstOrDefault(e => e.UniqueHash == uniqueHash);
+        var entity = await _databaseService.FindLibraryEntryAsync(uniqueHash);
+        return entity != null ? EntityToLibraryEntry(entity) : null;
     }
 
     public async Task<List<LibraryEntry>> LoadAllLibraryEntriesAsync()
     {
-        return await LoadDownloadedTracksAsync();
+        var entities = await _databaseService.LoadAllLibraryEntriesAsync();
+        return entities.Select(EntityToLibraryEntry).ToList();
     }
 
     public async Task AddLibraryEntryAsync(LibraryEntry entry)
     {
         try
         {
-            var entries = LoadDownloadedTracks();
-            var existing = entries.FirstOrDefault(e => e.UniqueHash == entry.UniqueHash);
-            
-            if (existing != null)
-                entries.Remove(existing);
-            
-            entry.AddedAt = DateTime.UtcNow;
-            entries.Add(entry);
-            
-            await Task.Run(() => SaveLibraryIndex(entries));
-            _lastLibraryCacheTime = DateTime.MinValue;
+            var entity = LibraryEntryToEntity(entry);
+            entity.AddedAt = DateTime.UtcNow; // Ensure timestamp is set on creation
+            entity.LastUsedAt = DateTime.UtcNow;
+            await _databaseService.SaveLibraryEntryAsync(entity);
             _logger.LogDebug("Added library entry: {Hash}", entry.UniqueHash);
         }
         catch (Exception ex)
@@ -92,16 +70,16 @@ public class LibraryService : ILibraryService
     {
         try
         {
-            var entries = LoadDownloadedTracks();
-            var index = entries.FindIndex(e => e.UniqueHash == entry.UniqueHash);
+            var entity = await _databaseService.FindLibraryEntryAsync(entry.UniqueHash);
+            if (entity == null)
+            {
+                await AddLibraryEntryAsync(entry);
+                return;
+            }
             
-            if (index >= 0)
-                entries[index] = entry;
-            else
-                entries.Add(entry);
-            
-            await Task.Run(() => SaveLibraryIndex(entries));
-            _lastLibraryCacheTime = DateTime.MinValue;
+            // Update existing entity
+            entity.LastUsedAt = DateTime.UtcNow;
+            await _databaseService.SaveLibraryEntryAsync(entity);
             _logger.LogDebug("Updated library entry: {Hash}", entry.UniqueHash);
         }
         catch (Exception ex)
@@ -177,8 +155,8 @@ public class LibraryService : ILibraryService
     {
         try
         {
-            await _databaseService.DeletePlaylistJobAsync(playlistId);
-            await _databaseService.DeletePlaylistTracksAsync(playlistId);
+            // With soft delete, we just set the flag
+            await _databaseService.SoftDeletePlaylistJobAsync(playlistId);
             _logger.LogInformation("Deleted playlist job: {Id}", playlistId);
         }
         catch (Exception ex)
@@ -251,19 +229,11 @@ public class LibraryService : ILibraryService
 
     // ===== Legacy / Compatibility Methods =====
 
-    public List<LibraryEntry> LoadDownloadedTracks()
-    {
-        if (DateTime.UtcNow - _lastLibraryCacheTime < TimeSpan.FromMinutes(5) && _libraryCache.Any())
-            return _libraryCache;
-
-        _libraryCache = LoadLibraryIndexFromDisk();
-        _lastLibraryCacheTime = DateTime.UtcNow;
-        return _libraryCache;
-    }
-
     public async Task<List<LibraryEntry>> LoadDownloadedTracksAsync()
     {
-        return await Task.Run(() => LoadDownloadedTracks());
+        // This now directly loads from the database. The old JSON method is gone.
+        var entities = await _databaseService.LoadAllLibraryEntriesAsync();
+        return entities.Select(EntityToLibraryEntry).ToList();
     }
 
     public async Task AddTrackAsync(Track track, string actualFilePath, Guid sourcePlaylistId)
@@ -296,16 +266,30 @@ public class LibraryService : ILibraryService
 
     private PlaylistJob EntityToPlaylistJob(PlaylistJobEntity entity)
     {
-        return new PlaylistJob
+        var playlistTracks = entity.Tracks?.Select(EntityToPlaylistTrack).ToList() ?? new List<PlaylistTrack>();
+
+        var originalTracks = new ObservableCollection<Track>(playlistTracks.Select(pt => new Track {
+            Artist = pt.Artist,
+            Title = pt.Title,
+            Album = pt.Album,
+        }));
+
+        var job = new PlaylistJob
         {
             Id = entity.Id,
             SourceTitle = entity.SourceTitle,
             SourceType = entity.SourceType,
             DestinationFolder = entity.DestinationFolder,
             CreatedAt = entity.CreatedAt,
-            OriginalTracks = new ObservableCollection<Track>(),
-            PlaylistTracks = entity.Tracks?.Select(EntityToPlaylistTrack).ToList() ?? new()
+            OriginalTracks = originalTracks,
+            PlaylistTracks = playlistTracks,
+            SuccessfulCount = entity.SuccessfulCount,
+            FailedCount = entity.FailedCount
         };
+
+        job.MissingCount = entity.TotalTracks - entity.SuccessfulCount - entity.FailedCount;
+        
+        return job;
     }
 
     private PlaylistTrack EntityToPlaylistTrack(PlaylistTrackEntity entity)
@@ -318,7 +302,7 @@ public class LibraryService : ILibraryService
             Title = entity.Title,
             Album = entity.Album,
             TrackUniqueHash = entity.TrackUniqueHash,
-            Status = Enum.TryParse<TrackStatus>(entity.Status, out var status) ? status : TrackStatus.Missing,
+            Status = entity.Status,
             ResolvedFilePath = entity.ResolvedFilePath,
             TrackNumber = entity.TrackNumber,
             AddedAt = entity.AddedAt
@@ -335,7 +319,7 @@ public class LibraryService : ILibraryService
             Title = track.Title,
             Album = track.Album,
             TrackUniqueHash = track.TrackUniqueHash,
-            Status = track.Status.ToString(),
+            Status = track.Status,
             ResolvedFilePath = track.ResolvedFilePath,
             TrackNumber = track.TrackNumber,
             AddedAt = track.AddedAt
@@ -343,37 +327,36 @@ public class LibraryService : ILibraryService
     }
 
     // ===== Private Helper Methods (JSON - LibraryEntry only) =====
-
-    private List<LibraryEntry> LoadLibraryIndexFromDisk()
+    
+    private LibraryEntry EntityToLibraryEntry(LibraryEntryEntity entity)
     {
-        if (!File.Exists(_libraryIndexPath))
-            return new List<LibraryEntry>();
-
-        try
+        return new LibraryEntry
         {
-            var json = File.ReadAllText(_libraryIndexPath);
-            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-            return JsonSerializer.Deserialize<List<LibraryEntry>>(json, options) ?? new();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to load library index from {Path}", _libraryIndexPath);
-            return new List<LibraryEntry>();
-        }
+            UniqueHash = entity.UniqueHash,
+            Artist = entity.Artist,
+            Title = entity.Title,
+            Album = entity.Album,
+            FilePath = entity.FilePath,
+            Bitrate = entity.Bitrate,
+            DurationSeconds = entity.DurationSeconds,
+            Format = entity.Format,
+            AddedAt = entity.AddedAt
+        };
     }
 
-    private void SaveLibraryIndex(List<LibraryEntry> entries)
+    private LibraryEntryEntity LibraryEntryToEntity(LibraryEntry entry)
     {
-        try
-        {
-            var options = new JsonSerializerOptions { WriteIndented = true };
-            var json = JsonSerializer.Serialize(entries, options);
-            File.WriteAllText(_libraryIndexPath, json);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to save library index");
-            throw;
-        }
+        // This is a simplified mapping. In a real scenario, you might use a library like AutoMapper.
+        var entity = new LibraryEntryEntity();
+        entity.UniqueHash = entry.UniqueHash;
+        entity.Artist = entry.Artist;
+        entity.Title = entry.Title;
+        entity.Album = entry.Album;
+        entity.FilePath = entry.FilePath;
+        entity.Bitrate = entry.Bitrate;
+        entity.DurationSeconds = entry.DurationSeconds;
+        entity.Format = entry.Format;
+        entity.AddedAt = entry.AddedAt;
+        return entity;
     }
 }

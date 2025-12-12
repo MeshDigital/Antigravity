@@ -24,9 +24,9 @@
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="8.0.1" />
     
     <!-- Configuration -->
-    <PackageReference Include="Microsoft.Extensions.Configuration" Version="9.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="9.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.Ini" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Ini" Version="8.0.0" />
     
     <!-- Dependency Injection -->
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
@@ -41,7 +41,7 @@
     <PackageReference Include="TagLibSharp" Version="2.3.0" />
     
     <!-- JSON serialization for index files -->
-    <PackageReference Include="System.Text.Json" Version="9.0.0" />
+    <PackageReference Include="System.Text.Json" Version="8.0.4" />
 
     <!-- Modern Windows 11 UI Controls -->
     <PackageReference Include="WPF-UI" Version="4.1.0" />

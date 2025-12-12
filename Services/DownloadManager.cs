@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
 using System.Runtime.CompilerServices;
+using System.Threading;
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 using SLSKDONET.Configuration;
@@ -27,7 +28,6 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
     private readonly ITaggerService _taggerService;
     private readonly DatabaseService _databaseService;
     private readonly IMetadataService _metadataService;
-    private readonly ILibraryService _libraryService;
 
     // Concurrency control
     private readonly SemaphoreSlim _concurrencySemaphore;
@@ -49,8 +49,7 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
         FileNameFormatter fileNameFormatter,
         ITaggerService taggerService,
         DatabaseService databaseService,
-        IMetadataService metadataService,
-        ILibraryService libraryService)
+        IMetadataService metadataService)
     {
         _logger = logger;
         _config = config;
@@ -59,7 +58,6 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
         _taggerService = taggerService;
         _databaseService = databaseService;
         _metadataService = metadataService;
-        _libraryService = libraryService;
 
         _concurrencySemaphore = new SemaphoreSlim(_config.MaxConcurrentDownloads);
 
@@ -121,30 +119,32 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
     /// </summary>
     public async Task QueueProject(PlaylistJob job)
     {
-        _logger.LogInformation("Queueing project header: {Title} with {Count} tracks", job.SourceTitle, job.PlaylistTracks.Count);
-        
-        // 1. Persist the job header (for Library UI visibility)
-        try
-        {
-            await _libraryService.SavePlaylistJobAsync(job);
-            _logger.LogInformation("Saved PlaylistJob to database: {Title}", job.SourceTitle);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to persist PlaylistJob {Id}", job.Id);
-            // Non-critical error, continue to queue tracks.
-        }
+        _logger.LogInformation(
+            "Queueing project. Title: {Title}, TrackCount: {Count}, JobId: {JobId}, Thread: {ThreadId}",
+            job.SourceTitle,
+            job.PlaylistTracks.Count,
+            job.Id,
+            Thread.CurrentThread.ManagedThreadId);
 
-        // 2. Persist all playlist tracks to the database
+        // 1. Persist the job header and all associated tracks in a single transaction
         try
         {
-            await _libraryService.SavePlaylistTracksAsync(job.PlaylistTracks);
-            _logger.LogInformation("Saved {Count} playlist tracks to database for job {Title}", job.PlaylistTracks.Count, job.SourceTitle);
+            await _databaseService.SavePlaylistJobWithTracksAsync(job);
+            _logger.LogInformation(
+                "Saved PlaylistJob to DB. Title: {Title}, TrackCount: {Count}, JobId: {JobId}, Thread: {ThreadId}",
+                job.SourceTitle,
+                job.PlaylistTracks.Count,
+                job.Id,
+                Thread.CurrentThread.ManagedThreadId);
+
+            // Run diagnostic log right after saving
+            await _databaseService.LogPlaylistJobDiagnostic(job.Id);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to persist playlist tracks for job {Id}", job.Id);
-            // Non-critical error, continue.
+            _logger.LogError(ex, "Failed to persist PlaylistJob and its tracks: {Id}", job.Id);
+            // This is a critical error, as the tracks won't be processed. We should not continue.
+            return;
         }
 
         // 3. Queue the tracks using the internal method for collection add and individual track persistence

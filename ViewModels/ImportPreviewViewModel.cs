@@ -3,6 +3,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Threading;
 using System.Windows.Input;
 using Microsoft.Extensions.Logging;
 using SLSKDONET.Models;
@@ -173,20 +174,24 @@ public class ImportPreviewViewModel : INotifyPropertyChanged
         IsLoading = true;
         StatusMessage = "Adding to library...";
 
+        // Create PlaylistJob to group all tracks
+        var job = new PlaylistJob
+        {
+            Id = Guid.NewGuid(),
+            SourceTitle = SourceTitle,
+            SourceType = SourceType,
+            CreatedAt = DateTime.UtcNow,
+            DestinationFolder = "" // Use default
+        };
+
         try
         {
             await Task.Delay(100); // Simulate async work
-            _logger.LogInformation("Adding {Count} tracks to library", selectedTracks.Count);
-
-            // Create PlaylistJob to group all tracks
-            var job = new PlaylistJob
-            {
-                Id = Guid.NewGuid(),
-                SourceTitle = SourceTitle,
-                SourceType = SourceType,
-                CreatedAt = DateTime.UtcNow,
-                DestinationFolder = "" // Use default
-            };
+            _logger.LogInformation(
+                "Adding {Count} tracks to library. JobId: {JobId}, Thread: {ThreadId}",
+                selectedTracks.Count,
+                job.Id,
+                Thread.CurrentThread.ManagedThreadId);
 
             // Convert tracks to PlaylistTracks
             foreach (var track in selectedTracks)
@@ -199,12 +204,16 @@ public class ImportPreviewViewModel : INotifyPropertyChanged
             AddedToLibrary?.Invoke(this, job);
 
             StatusMessage = $"✓ Added {selectedTracks.Count} tracks to library";
-            _logger.LogInformation("Successfully added {Count} tracks to library", selectedTracks.Count);
+            _logger.LogInformation(
+                "Successfully added {Count} tracks to library. JobId: {JobId}, Thread: {ThreadId}",
+                selectedTracks.Count,
+                job.Id,
+                Thread.CurrentThread.ManagedThreadId);
         }
         catch (Exception ex)
         {
             StatusMessage = $"Error: {ex.Message}";
-            _logger.LogError(ex, "Failed to add tracks to library");
+            _logger.LogError(ex, "Failed to add tracks to library for JobId: {JobId}", job.Id);
         }
         finally
         {

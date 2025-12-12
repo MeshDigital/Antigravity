@@ -1,9 +1,11 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using SLSKDONET.Data;
+using SLSKDONET.Models;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace SLSKDONET.Services;
@@ -78,12 +80,52 @@ public class DatabaseService
         await context.SaveChangesAsync();
     }
 
+    // ===== LibraryEntry Methods =====
+
+    public async Task<LibraryEntryEntity?> FindLibraryEntryAsync(string uniqueHash)
+    {
+        using var context = new AppDbContext();
+        return await context.LibraryEntries.FindAsync(uniqueHash);
+    }
+
+    public async Task<List<LibraryEntryEntity>> LoadAllLibraryEntriesAsync()
+    {
+        using var context = new AppDbContext();
+        return await context.LibraryEntries.AsNoTracking().ToListAsync();
+    }
+
+    public async Task SaveLibraryEntryAsync(LibraryEntryEntity entry)
+    {
+        using var context = new AppDbContext();
+        var existing = await context.LibraryEntries.FindAsync(entry.UniqueHash);
+        
+        if (existing == null)
+        {
+            await context.LibraryEntries.AddAsync(entry);
+        }
+        else
+        {
+            // Update existing entry
+            existing.Artist = entry.Artist;
+            existing.Title = entry.Title;
+            existing.Album = entry.Album;
+            existing.FilePath = entry.FilePath;
+            existing.Bitrate = entry.Bitrate;
+            existing.DurationSeconds = entry.DurationSeconds;
+            existing.Format = entry.Format;
+            existing.LastUsedAt = DateTime.UtcNow;
+        }
+        
+        await context.SaveChangesAsync();
+    }
+
+
     // ===== PlaylistJob Methods =====
 
     public async Task<List<PlaylistJobEntity>> LoadAllPlaylistJobsAsync()
     {
         using var context = new AppDbContext();
-        return await context.PlaylistJobs
+        return await context.PlaylistJobs.AsNoTracking()
             .Include(j => j.Tracks)
             .OrderByDescending(j => j.CreatedAt)
             .ToListAsync();
@@ -92,7 +134,7 @@ public class DatabaseService
     public async Task<PlaylistJobEntity?> LoadPlaylistJobAsync(Guid jobId)
     {
         using var context = new AppDbContext();
-        return await context.PlaylistJobs
+        return await context.PlaylistJobs.AsNoTracking()
             .Include(j => j.Tracks)
             .FirstOrDefaultAsync(j => j.Id == jobId);
     }
@@ -133,6 +175,20 @@ public class DatabaseService
             _logger.LogInformation("Deleted PlaylistJob: {Id}", jobId);
         }
     }
+
+    public async Task SoftDeletePlaylistJobAsync(Guid jobId)
+    {
+        using var context = new AppDbContext();
+        var job = await context.PlaylistJobs.FindAsync(jobId);
+        if (job != null)
+        {
+            job.IsDeleted = true;
+            job.DeletedAt = DateTime.UtcNow;
+            await context.SaveChangesAsync();
+            _logger.LogInformation("Soft-deleted PlaylistJob: {Id}", jobId);
+        }
+    }
+
 
     // ===== PlaylistTrack Methods =====
 
@@ -194,5 +250,132 @@ public class DatabaseService
         
         await context.SaveChangesAsync();
         _logger.LogInformation("Deleted {Count} playlist tracks for job {JobId}", tracks.Count, jobId);
+    }
+
+    /// <summary>
+    /// Atomically saves a PlaylistJob and all its associated tracks in a single transaction.
+    /// This ensures data integrity: either the entire job+tracks are saved, or none are.
+    /// Called by DownloadManager.QueueProject() for imports.
+    /// </summary>
+    public async Task SavePlaylistJobWithTracksAsync(PlaylistJob job)
+    {
+        using var context = new AppDbContext();
+        using var transaction = await context.Database.BeginTransactionAsync();
+        
+        try
+        {
+            // Convert model to entity
+            var jobEntity = new PlaylistJobEntity
+            {
+                Id = job.Id,
+                SourceTitle = job.SourceTitle,
+                SourceType = job.SourceType,
+                DestinationFolder = job.DestinationFolder,
+                CreatedAt = job.CreatedAt,
+                TotalTracks = job.TotalTracks,
+                SuccessfulCount = job.SuccessfulCount,
+                FailedCount = job.FailedCount,
+                IsDeleted = false
+            };
+            
+            // Check if job already exists
+            var existing = await context.PlaylistJobs.FindAsync(job.Id);
+            if (existing == null)
+            {
+                await context.PlaylistJobs.AddAsync(jobEntity);
+            }
+            else
+            {
+                // Update existing job
+                existing.SourceTitle = jobEntity.SourceTitle;
+                existing.SourceType = jobEntity.SourceType;
+                existing.DestinationFolder = jobEntity.DestinationFolder;
+                existing.TotalTracks = jobEntity.TotalTracks;
+                existing.SuccessfulCount = jobEntity.SuccessfulCount;
+                existing.FailedCount = jobEntity.FailedCount;
+            }
+            
+            // Add all tracks
+            foreach (var track in job.PlaylistTracks)
+            {
+                var trackEntity = new PlaylistTrackEntity
+                {
+                    Id = track.Id,
+                    PlaylistId = job.Id,
+                    Artist = track.Artist,
+                    Title = track.Title,
+                    Album = track.Album,
+                    TrackUniqueHash = track.TrackUniqueHash,
+                    Status = track.Status,
+                    ResolvedFilePath = track.ResolvedFilePath,
+                    TrackNumber = track.TrackNumber,
+                    AddedAt = track.AddedAt
+                };
+                
+                var existingTrack = await context.PlaylistTracks.FindAsync(track.Id);
+                if (existingTrack == null)
+                {
+                    await context.PlaylistTracks.AddAsync(trackEntity);
+                }
+                else
+                {
+                    existingTrack.Status = trackEntity.Status;
+                    existingTrack.ResolvedFilePath = trackEntity.ResolvedFilePath;
+                }
+            }
+            
+            await context.SaveChangesAsync();
+            await transaction.CommitAsync();
+            
+            _logger.LogInformation(
+                "Atomically saved PlaylistJob '{Title}' ({Id}) with {TrackCount} tracks. Thread: {ThreadId}",
+                job.SourceTitle,
+                job.Id,
+                job.PlaylistTracks.Count,
+                Thread.CurrentThread.ManagedThreadId);
+        }
+        catch (Exception ex)
+        {
+            await transaction.RollbackAsync();
+            _logger.LogError(ex, "Failed to save PlaylistJob and tracks - transaction rolled back");
+            throw;
+        }
+    }
+
+    public async Task LogPlaylistJobDiagnostic(Guid jobId)
+    {
+        using var context = new AppDbContext();
+        var job = await context.PlaylistJobs
+            .AsNoTracking()
+            .Include(j => j.Tracks)
+            .FirstOrDefaultAsync(j => j.Id == jobId);
+
+        if (job == null)
+        {
+            _logger.LogWarning("DIAGNOSTIC: JobId {JobId} not found.", jobId);
+            return;
+        }
+
+        _logger.LogInformation(
+            "DIAGNOSTIC for JobId {JobId}: Title='{SourceTitle}', IsDeleted={IsDeleted}, CreatedAt={CreatedAt}, TotalTracks={TotalTracks}",
+            job.Id,
+            job.SourceTitle,
+            job.IsDeleted,
+            job.CreatedAt,
+            job.TotalTracks
+        );
+
+        foreach (var track in job.Tracks)
+        {
+            _logger.LogInformation(
+                "  DIAGNOSTIC for Track {TrackId} in Job {JobId}: Artist='{Artist}', Title='{Title}', TrackUniqueHash='{TrackUniqueHash}', Status='{Status}'",
+                track.Id,
+                job.Id,
+                track.Artist,
+                track.Title,
+                track.TrackUniqueHash,
+                track.Status
+            );
+        }
     }
 }

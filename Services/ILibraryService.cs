@@ -101,12 +101,6 @@ public interface ILibraryService
     // ===== Legacy / Compatibility =====
 
     /// <summary>
-    /// Loads all known downloaded tracks as LibraryEntry objects (legacy).
-    /// Returns entries from the main library index.
-    /// </summary>
-    List<LibraryEntry> LoadDownloadedTracks();
-
-    /// <summary>
     /// Async version of LoadDownloadedTracks.
     /// </summary>
     Task<List<LibraryEntry>> LoadDownloadedTracksAsync();
