@@ -55,11 +55,13 @@ public class ConfigManager
 
             _config = new AppConfig
             {
+                SoulseekServer = config["Soulseek:Server"],
+                SoulseekPort = int.TryParse(config["Soulseek:Port"], out var sPort) ? sPort : 2242,
                 Username = config["Soulseek:Username"],
                 Password = config["Soulseek:Password"],
                 ListenPort = int.TryParse(config["Soulseek:ListenPort"], out var port) ? port : 49998,
                 UseUPnP = bool.TryParse(config["Soulseek:UseUPnP"], out var upnp) && upnp,
-                ConnectTimeout = int.TryParse(config["Soulseek:ConnectTimeout"], out var ct) ? ct : 20000,
+                ConnectTimeout = int.TryParse(config["Soulseek:ConnectTimeout"], out var ct) ? ct : 60000,
                 SearchTimeout = int.TryParse(config["Soulseek:SearchTimeout"], out var st) ? st : 6000,
                 DownloadDirectory = config["Download:Directory"],
                 MaxConcurrentDownloads = int.TryParse(config["Download:MaxConcurrent"], out var mcd) ? mcd : 2,
@@ -75,6 +77,9 @@ public class ConfigManager
                 AutoRetryFailedDownloads = !bool.TryParse(config["Download:AutoRetryFailedDownloads"], out var arf) || arf,
                 MaxDownloadRetries = int.TryParse(config["Download:MaxDownloadRetries"], out var mdr) ? mdr : 2,
             };
+            
+            // Apply defaults if loaded values are empty (for backward compatibility with old configs)
+            if (string.IsNullOrEmpty(_config.SoulseekServer)) _config.SoulseekServer = "server.slsknet.org";
         }
         else
         {
@@ -95,6 +100,8 @@ public class ConfigManager
 
         var iniContent = new System.Text.StringBuilder();
         iniContent.AppendLine("[Soulseek]");
+        iniContent.AppendLine($"Server = {config.SoulseekServer}");
+        iniContent.AppendLine($"Port = {config.SoulseekPort}");
         iniContent.AppendLine($"Username = {config.Username}");
         iniContent.AppendLine($"Password = {(config.RememberPassword ? config.Password : "")}"); // Only save if Remember is true
         iniContent.AppendLine($"ListenPort = {config.ListenPort}");

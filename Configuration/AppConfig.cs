@@ -18,6 +18,10 @@ public class AppConfig
     public int MaxConcurrentDownloads { get; set; } = 2;
     public string? NameFormat { get; set; } = "{artist} - {title}";
     public bool CheckForDuplicates { get; set; } = true;
+
+    // Soulseek Network Settings (matches Soulseek.NET library defaults)
+    public string SoulseekServer { get; set; } = "server.slsknet.org"; 
+    public int SoulseekPort { get; set; } = 2242;
     
     // File preference conditions
     public List<string> PreferredFormats { get; set; } = new() { "mp3", "flac" };

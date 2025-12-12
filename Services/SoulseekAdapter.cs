@@ -32,9 +32,31 @@ public class SoulseekAdapter : IDisposable
         try
         {
             _client = new SoulseekClient();
-            _logger.LogInformation("Connecting to Soulseek as {Username}...", _config.Username);
+            _logger.LogInformation("Connecting to Soulseek as {Username} on {Server}:{Port}...", 
+                _config.Username, _config.SoulseekServer, _config.SoulseekPort);
             
-            await _client.ConnectAsync(_config.Username, password, ct);
+            if (string.IsNullOrEmpty(_config.SoulseekServer))
+            {
+               _logger.LogWarning("SoulseekServer is null or empty! Fallback might occur.");
+            }
+
+            await _client.ConnectAsync(
+                _config.SoulseekServer ?? "server.slsknet.org", 
+                _config.SoulseekPort == 0 ? 2242 : _config.SoulseekPort, 
+                _config.Username, 
+                password, 
+                ct);
+            
+            // Subscribe to state changes
+            _client.StateChanged += (sender, args) =>
+            {
+                _logger.LogInformation("Soulseek state changed: {State} (was {PreviousState})", 
+                    args.State, args.PreviousState);
+                EventBus.OnNext(("state_changed", new { 
+                    state = args.State.ToString(), 
+                    previousState = args.PreviousState.ToString() 
+                }));
+            };
             
             _logger.LogInformation("Successfully connected to Soulseek as {Username}", _config.Username);
             EventBus.OnNext(("connection_status", new { status = "connected", username = _config.Username }));

@@ -27,6 +27,7 @@ public class MainViewModel : INotifyPropertyChanged
 {
     private readonly ILogger<MainViewModel> _logger;
     private readonly AppConfig _config;
+    private readonly ConfigManager _configManager;
     private readonly SoulseekAdapter _soulseek;
     private readonly DownloadManager _downloadManager;
     private string _username = "";
@@ -137,6 +138,7 @@ public class MainViewModel : INotifyPropertyChanged
         _logger.LogInformation("=== MainViewModel Constructor Started ===");
         
         _config = config;
+        _configManager = configManager;
         _soulseek = soulseek;
         _downloadLogService = downloadLogService;
         _navigationService = navigationService;
@@ -212,6 +214,24 @@ public class MainViewModel : INotifyPropertyChanged
              OnPropertyChanged(nameof(DownloadProgressPercentage));
         };
         
+        // Subscribe to Soulseek state changes
+        _soulseek.EventBus.Subscribe(evt =>
+        {
+            if (evt.eventType == "state_changed")
+            {
+                try
+                {
+                    dynamic data = evt.data;
+                    string state = data.state;
+                    HandleStateChange(state);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to handle state change event");
+                }
+            }
+        });
+        
         _logger.LogInformation($"MainViewModel initialized. IsConnected={_isConnected}, IsSearching={_isSearching}, StatusText={_statusText}");
         _logger.LogInformation("=== MainViewModel Constructor Completed ===");
     }
@@ -224,8 +244,58 @@ public class MainViewModel : INotifyPropertyChanged
     public void OnViewLoaded()
     {
         _logger.LogInformation("OnViewLoaded called");
+        
+        // Attempt auto-login if credentials are saved
+        if (!string.IsNullOrEmpty(_config.Username) && 
+            !string.IsNullOrEmpty(_config.Password) &&
+            _config.RememberPassword)
+        {
+            _logger.LogInformation("Auto-login: credentials found, attempting...");
+            _ = AutoLoginAsync();
+        }
+        
         // Load library asynchronously to avoid blocking UI thread
         _ = LoadLibraryAsync();
+    }
+    
+    private async Task AutoLoginAsync()
+    {
+        try
+        {
+            var decryptedPassword = _protectedDataService.Unprotect(_config.Password);
+            Username = _config.Username;
+            await LoginAsync(decryptedPassword);
+            _logger.LogInformation("Auto-login successful");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Auto-login failed, showing login screen");
+            // Login overlay will remain visible since IsConnected is still false
+        }
+    }
+    
+    private void HandleStateChange(string? state)
+    {
+        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+        {
+            _logger.LogInformation("Handling state change: {State}", state);
+            
+            // Map Soulseek states to our IsConnected property
+            if (state == "Connected" || state == "LoggedIn")
+            {
+                IsConnected = true;
+                StatusText = $"Connected as {Username}";
+            }
+            else if (state == "Disconnected")
+            {
+                IsConnected = false;
+                StatusText = "Disconnected";
+            }
+            else if (state == "Connecting")
+            {
+                StatusText = "Connecting...";
+            }
+        });
     }
 
     private async Task LoadLibraryAsync()
@@ -542,11 +612,40 @@ public class MainViewModel : INotifyPropertyChanged
             await _soulseek.ConnectAsync(password);
             IsConnected = true;
             StatusText = $"Connected as {Username}";
+            
+            // Save config to persist credentials
+            _configManager.Save(_config);
+            
             _logger.LogInformation("Login successful");
         }
         catch (Exception ex)
         {
-            StatusText = $"Login failed: {ex.Message}";
+            var message = ex.Message.ToLowerInvariant();
+            
+            // Provide specific, user-friendly error messages
+            if (message.Contains("invalid username or password") || 
+                message.Contains("authentication failed") ||
+                message.Contains("login failed"))
+            {
+                StatusText = "❌ Invalid username or password";
+            }
+            else if (message.Contains("timeout") || message.Contains("timed out"))
+            {
+                StatusText = "⏱️ Connection timeout - check your network";
+            }
+            else if (message.Contains("refused") || message.Contains("connection refused"))
+            {
+                StatusText = "🚫 Connection refused - server may be down";
+            }
+            else if (message.Contains("network") || message.Contains("unreachable"))
+            {
+                StatusText = "🌐 Network error - check your internet connection";
+            }
+            else
+            {
+                StatusText = $"Login failed: {ex.Message}";
+            }
+            
             _logger.LogError(ex, "Login failed");
         }
     }
