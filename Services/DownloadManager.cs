@@ -105,6 +105,7 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
         }
     }
 
+
     // Event for external listeners (UI, Notifications)
     public event EventHandler<PlaylistTrackViewModel>? TrackUpdated;
 
@@ -221,13 +222,23 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
         try 
         {
             var path = vm.Model.ResolvedFilePath;
-            if (!string.IsNullOrEmpty(path) && File.Exists(path)) 
+            if (!string.IsNullOrEmpty(path))
             {
-                File.Delete(path);
-                _logger.LogInformation("Deleted file: {Path}", path);
+                // Delete completed file if exists
+                if (File.Exists(path)) 
+                {
+                    File.Delete(path);
+                    _logger.LogInformation("Deleted file: {Path}", path);
+                }
+                
+                // CRITICAL: Delete .part file to force fresh download from new peer
+                var partFile = path + ".part";
+                if (File.Exists(partFile))
+                {
+                    File.Delete(partFile);
+                    _logger.LogInformation("Deleted partial file: {Path}", partFile);
+                }
             }
-            // Also check for .part? SoulseekAdapter uses stream to final path. 
-            // So just deleting final path is correct if we assume direct write.
         }
         catch (Exception ex)
         {

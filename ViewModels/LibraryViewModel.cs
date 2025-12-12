@@ -17,6 +17,7 @@ public class LibraryViewModel : INotifyPropertyChanged
 {
     private readonly ILogger<LibraryViewModel> _logger;
     private readonly DownloadManager _downloadManager;
+    private readonly ILibraryService _libraryService;
     
     // Master/Detail pattern properties
     private ObservableCollection<PlaylistJob> _allProjects = new();
@@ -76,10 +77,11 @@ public class LibraryViewModel : INotifyPropertyChanged
         }
     }
 
-    public LibraryViewModel(ILogger<LibraryViewModel> logger, DownloadManager downloadManager)
+    public LibraryViewModel(ILogger<LibraryViewModel> logger, DownloadManager downloadManager, ILibraryService libraryService)
     {
         _logger = logger;
         _downloadManager = downloadManager;
+        _libraryService = libraryService;
 
         // Initialize Active View
         ActiveTracksInit.Source = _downloadManager.AllGlobalTracks;
@@ -190,57 +192,78 @@ public class LibraryViewModel : INotifyPropertyChanged
         _downloadManager.HardRetryTrack(vm.GlobalId);
     }
 
-    private void LoadProjectTracks(PlaylistJob job)
+    private async void LoadProjectTracks(PlaylistJob job)
     {
-        _logger.LogInformation("Loading tracks for project: {Name}", job.SourceTitle);
-        
-        var tracks = new ObservableCollection<PlaylistTrackViewModel>();
-        
-        foreach (var track in job.PlaylistTracks)
+        try
         {
-            var vm = new PlaylistTrackViewModel(track);
+            _logger.LogInformation("Loading tracks for project: {Name}", job.SourceTitle);
             
-            // Sync with live DownloadManager state
-            var liveTrack = _downloadManager.AllGlobalTracks
-                .FirstOrDefault(t => t.GlobalId == track.TrackUniqueHash);
+            // Load full track data from database
+            var playlistTracks = await _libraryService.LoadPlaylistTracksAsync(job.Id);
             
-            if (liveTrack != null)
+            var tracks = new ObservableCollection<PlaylistTrackViewModel>();
+            
+            foreach (var track in playlistTracks)
             {
-                vm.State = liveTrack.State;
-                vm.Progress = liveTrack.Progress;
-                vm.CurrentSpeed = liveTrack.CurrentSpeed;
-                vm.ErrorMessage = liveTrack.ErrorMessage;
+                var vm = new PlaylistTrackViewModel(track);
+                
+                // Sync with live DownloadManager state for real-time progress
+                var liveTrack = _downloadManager.AllGlobalTracks
+                    .FirstOrDefault(t => t.GlobalId == track.TrackUniqueHash);
+                
+                if (liveTrack != null)
+                {
+                    vm.State = liveTrack.State;
+                    vm.Progress = liveTrack.Progress;
+                    vm.CurrentSpeed = liveTrack.CurrentSpeed;
+                    vm.ErrorMessage = liveTrack.ErrorMessage;
+                }
+                
+                tracks.Add(vm);
             }
             
-            tracks.Add(vm);
+            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+            {
+                CurrentProjectTracks = tracks;
+            });
+            
+            _logger.LogInformation("Loaded {Count} tracks for project {Title}", tracks.Count, job.SourceTitle);
         }
-        
-        CurrentProjectTracks = tracks;
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load tracks for project {Id}", job.Id);
+        }
     }
     
     private async Task LoadProjectsAsync()
     {
-        // TODO: Load from database service when implemented
-        // For now, create a mock "All Tracks" project
-        var allTracksProject = new PlaylistJob
+        try
         {
-            Id = Guid.Empty,
-            SourceTitle = "All Downloads",
-            SourceType = "Global",
-            CreatedAt = DateTime.Now,
-            PlaylistTracks = _downloadManager.AllGlobalTracks
-                .Select(vm => vm.Model)
-                .Where(m => m != null)
-                .ToList()!
-        };
-        
-        AllProjects.Add(allTracksProject);
-        
-        // Auto-select first project
-        if (AllProjects.Count > 0)
-            SelectedProject = AllProjects[0];
-        
-        await Task.CompletedTask;
+            _logger.LogInformation("Loading all playlist jobs from database");
+            
+            var jobs = await _libraryService.LoadAllPlaylistJobsAsync();
+            
+            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+            {
+                AllProjects.Clear();
+                
+                // Add jobs ordered by creation date (newest first)
+                foreach (var job in jobs.OrderByDescending(j => j.CreatedAt))
+                {
+                    AllProjects.Add(job);
+                }
+                
+                // Auto-select first project
+                if (AllProjects.Count > 0)
+                    SelectedProject = AllProjects[0];
+            });
+            
+            _logger.LogInformation("Loaded {Count} playlist jobs for Library", AllProjects.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load playlist jobs");
+        }
     }
     
     private void OnGlobalTrackUpdated(object? sender, PlaylistTrackViewModel updatedTrack)
