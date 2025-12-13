@@ -40,7 +40,7 @@ namespace SLSKDONET.Views
         {
             if (sender is DataGridRow row && row.DataContext is PlaylistTrackViewModel targetVm)
             {
-                var sourceVm = e.Data.GetData("PlaylistTrackViewModel") as PlaylistTrackViewModel;
+                var sourceVm = e.Data.GetData(typeof(PlaylistTrackViewModel)) as PlaylistTrackViewModel;
                 if (sourceVm != null)
                 {
                     if (DataContext is LibraryViewModel libraryVm)

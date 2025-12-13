@@ -32,6 +32,8 @@ public class MainViewModel : INotifyPropertyChanged
     private readonly SoulseekAdapter _soulseek;
     private readonly DownloadManager _downloadManager;
     private readonly ILibraryService _libraryService;
+    private readonly ImportOrchestrator _importOrchestrator;
+    private readonly System.Collections.Generic.List<IImportProvider> _importProviders;
     private string _username = "";
     private PlaylistJob? _currentPlaylistJob;
     private bool _isConnected = false;
@@ -160,7 +162,10 @@ public class MainViewModel : INotifyPropertyChanged
         INotificationService notificationService,
         ProtectedDataService protectedDataService,
         IUserInputService userInputService,
-        CsvInputSource csvInputSource) // Add CsvInputSource dependency
+        ImportPreviewViewModel importPreviewViewModel,
+        ImportOrchestrator importOrchestrator, // NEW: Central import orchestrator
+        System.Collections.Generic.IEnumerable<IImportProvider> importProviders, // NEW: All registered import providers
+        CsvInputSource csvInputSource)
     {
         _logger = logger;
         _logger.LogInformation("=== MainViewModel Constructor Started ===");
@@ -178,6 +183,9 @@ public class MainViewModel : INotifyPropertyChanged
         _spotifyInputSource = spotifyInputSource;
         _protectedDataService = protectedDataService;
         _userInputService = userInputService;
+        _importPreviewViewModel = importPreviewViewModel; // Assign injected VM
+        _importOrchestrator = importOrchestrator; // Assign import orchestrator
+        _importProviders = importProviders.ToList(); // Store providers for dynamic use
         _searchQueryNormalizer = searchQueryNormalizer; // Store it
         SpotifyClientId = _config.SpotifyClientId;
         SpotifyClientSecret = _config.SpotifyClientSecret;
@@ -1090,24 +1098,16 @@ public class MainViewModel : INotifyPropertyChanged
 
         try
         {
-            StatusText = "Importing CSV...";
-            var queries = await _csvInputSource.ParseAsync(filePath);
-
-            _notificationService.Show("CSV Import Complete",
-                $"{queries.Count} tracks imported successfully.", NotificationType.Success, TimeSpan.FromSeconds(5));
-
-            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            var csvProvider = _importProviders.FirstOrDefault(p => p.Name == "CSV");
+            if (csvProvider == null)
             {
-                ImportedQueries.Clear();
-                foreach (var query in queries)
-                {
-                    ImportedQueries.Add(query);
-                }
-                RebuildUniqueImports();
-            });
+                StatusText = "CSV import provider not available";
+                _logger.LogError("CSV import provider not registered");
+                return;
+            }
 
-            StatusText = $"Imported {queries.Count} queries from CSV.";
-            _logger.LogInformation("Imported {Count} items from CSV", queries.Count);
+            // Use orchestrator with preview
+            await _importOrchestrator.StartImportWithPreviewAsync(csvProvider, filePath);
         }
         catch (Exception ex)
         {
@@ -1124,53 +1124,16 @@ public class MainViewModel : INotifyPropertyChanged
 
         try
         {
-            StatusText = "Importing from Spotify...";
-
-            List<SearchQuery> queries;
-            var useApi = !string.IsNullOrWhiteSpace(SpotifyClientId) && !string.IsNullOrWhiteSpace(SpotifyClientSecret) && !_config.SpotifyUsePublicOnly;
-
-            if (useApi)
+            var spotifyProvider = _importProviders.FirstOrDefault(p => p.Name == "Spotify");
+            if (spotifyProvider == null)
             {
-                _logger.LogInformation("Using Spotify API for import");
-                queries = await _spotifyInputSource.ParseAsync(playlistUrl);
-            }
-            else
-            {
-                _logger.LogInformation("Using Spotify public scraping for import");
-                queries = await _spotifyScraperInputSource.ParseAsync(playlistUrl);
+                StatusText = "Spotify import provider not available";
+                _logger.LogError("Spotify import provider not registered");
+                return;
             }
 
-            // Show preview page instead of auto-searching
-            if (queries.Any())
-            {
-                _logger.LogInformation("Showing import preview for {Count} Spotify tracks", queries.Count);
-
-                // The ImportPreviewViewModel is now a singleton managed by DI. We initialize it here.
-                await _importPreviewViewModel.InitializePreviewAsync(
-                    queries.FirstOrDefault()?.SourceTitle ?? "Spotify Playlist",
-                    "Spotify",
-                    queries);
-                
-                // Subscribe to AddedToLibrary event to trigger search
-                ImportPreviewViewModel.AddedToLibrary += async (s, job) =>
-                {
-                    await HandlePlaylistJobAddedAsync(job);
-                };
-                ImportPreviewViewModel.Cancelled += (s, e) =>
-                {
-                    ImportPreviewViewModel = null;
-                    StatusText = "Import cancelled";
-                    _navigationService.GoBack();
-                };
-                
-                // Navigate to the dedicated import preview page
-                _navigationService.NavigateTo("ImportPreview");
-                StatusText = $"Preview: {queries.Count} tracks loaded from Spotify";
-            }
-            else
-            {
-                StatusText = "No tracks found in the Spotify playlist";
-            }
+            // Use orchestrator with preview
+            await _importOrchestrator.StartImportWithPreviewAsync(spotifyProvider, playlistUrl);
         }
         catch (Exception ex)
         {
@@ -1192,9 +1155,8 @@ public class MainViewModel : INotifyPropertyChanged
                 _logger.LogInformation("PlaylistJob added from ImportPreview: {Title} with {Count} tracks", 
                     job.SourceTitle, job.OriginalTracks.Count);
             
-                // Queue project through DownloadManager to persist, add to Library, and fire ProjectAdded
-                // The DownloadManager will now handle the conversion from OriginalTracks to PlaylistTracks.
-                await _downloadManager.QueueProject(job);
+                // NOTE: The project has already been queued via ImportPreviewViewModel.AddToLibraryAsync()
+                // which calls _downloadManager.QueueProject(job). No need to call it again here.
             
                 // Convert original tracks to SearchQueries for orchestration
                 ImportedQueries.Clear();

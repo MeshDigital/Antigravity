@@ -22,6 +22,14 @@ public interface ILibraryService
     /// </summary>
     event EventHandler<ProjectEventArgs>? ProjectUpdated;
 
+    ObservableCollection<PlaylistJob> Playlists { get; }
+
+    /// <summary>
+    /// Force a refresh of the playlists from the database.
+    /// Useful for debugging or manual sync.
+    /// </summary>
+    Task RefreshPlaylistsAsync();
+
     // ===== INDEX 1: LibraryEntry (Main Global Index) =====
     
     /// <summary>
@@ -59,6 +67,12 @@ public interface ILibraryService
     /// Called when importing a new source.
     /// </summary>
     Task SavePlaylistJobAsync(PlaylistJob job);
+
+    /// <summary>
+    /// Atomically saves a new playlist job AND its tracks.
+    /// Updates the reactive Playlists collection immediately.
+    /// </summary>
+    Task SavePlaylistJobWithTracksAsync(PlaylistJob job);
 
     /// <summary>
     /// Deletes a playlist job and its related PlaylistTrack entries.

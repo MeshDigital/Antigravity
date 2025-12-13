@@ -20,9 +20,20 @@ public class LibraryService : ILibraryService
 {
     private readonly ILogger<LibraryService> _logger;
     private readonly DatabaseService _databaseService;
+    // private bool _isInitialized; // Unused
 
     public event EventHandler<Guid>? ProjectDeleted;
+    
+    // Unused event required by interface - marking to suppress warning
+    #pragma warning disable CS0067
     public event EventHandler<ProjectEventArgs>? ProjectUpdated;
+    #pragma warning restore CS0067
+
+    /// <summary>
+    /// Reactive observable collection of all playlists - single source of truth.
+    /// Auto-syncs with SQLite database.
+    /// </summary>
+    public ObservableCollection<PlaylistJob> Playlists { get; } = new();
 
     public LibraryService(ILogger<LibraryService> logger, DatabaseService databaseService)
     {
@@ -30,6 +41,36 @@ public class LibraryService : ILibraryService
         _databaseService = databaseService;
 
         _logger.LogDebug("LibraryService initialized with database persistence for playlists");
+        
+        // Initialize playlists from database
+        _ = InitializePlaylistsAsync();
+    }
+
+    public Task RefreshPlaylistsAsync() => InitializePlaylistsAsync();
+
+    private async Task InitializePlaylistsAsync()
+    {
+        try
+        {
+            _logger.LogInformation("Loading playlists from database...");
+            var jobs = await _databaseService.LoadAllPlaylistJobsAsync();
+            
+            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+            {
+                Playlists.Clear();
+                foreach (var job in jobs)
+                {
+                    Playlists.Add(EntityToPlaylistJob(job));
+                }
+            });
+            
+            // _isInitialized = true;
+            _logger.LogInformation("Loaded {Count} playlists from database", jobs.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to initialize playlists from database");
+        }
     }
 
     // ===== INDEX 1: LibraryEntry (Main Global Index - DB backed) =====
@@ -114,10 +155,51 @@ public class LibraryService : ILibraryService
 
             await _databaseService.SavePlaylistJobAsync(entity);
             _logger.LogInformation("Saved playlist job: {Title} ({Id})", job.SourceTitle, job.Id);
+
+            // REACTIVE: Auto-add to observable collection if not already there
+            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+            {
+                if (!Playlists.Any(p => p.Id == job.Id))
+                {
+                    Playlists.Add(job);
+                    _logger.LogInformation("Added playlist '{Title}' to reactive collection", job.SourceTitle);
+                }
+            });
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to save playlist job");
+            throw;
+        }
+    }
+
+    public async Task SavePlaylistJobWithTracksAsync(PlaylistJob job)
+    {
+        try
+        {
+            // 1. Save Header + Tracks to DB atomically
+            await _databaseService.SavePlaylistJobWithTracksAsync(job).ConfigureAwait(false);
+            
+            // 2. Update In-Memory Reactive Collection (Fire & Forget to avoid deadlock)
+            _ = System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
+            {
+                try 
+                {
+                    if (!Playlists.Any(p => p.Id == job.Id))
+                    {
+                        Playlists.Add(job);
+                        _logger.LogInformation("Added playlist '{Title}' (with tracks) to reactive collection", job.SourceTitle);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to update reactive collection for {Title}", job.SourceTitle);
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to save playlist job with tracks {Title}", job.SourceTitle);
             throw;
         }
     }
@@ -129,6 +211,17 @@ public class LibraryService : ILibraryService
             // With soft delete, we just set the flag
             await _databaseService.SoftDeletePlaylistJobAsync(playlistId);
             _logger.LogInformation("Deleted playlist job: {Id}", playlistId);
+
+            // REACTIVE: Auto-remove from observable collection
+            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+            {
+                var jobToRemove = Playlists.FirstOrDefault(p => p.Id == playlistId);
+                if (jobToRemove != null)
+                {
+                    Playlists.Remove(jobToRemove);
+                    _logger.LogInformation("Removed playlist '{Title}' from reactive collection", jobToRemove.SourceTitle);
+                }
+            });
 
             // Emit the event so subscribers (like LibraryViewModel) can react.
             ProjectDeleted?.Invoke(this, playlistId);

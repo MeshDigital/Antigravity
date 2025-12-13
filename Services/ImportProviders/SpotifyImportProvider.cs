@@ -1,0 +1,87 @@
+using System;
+using System.Linq;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
+using SLSKDONET.Models;
+using SLSKDONET.Services.InputParsers;
+
+namespace SLSKDONET.Services.ImportProviders;
+
+/// <summary>
+/// Import provider for Spotify playlists.
+/// </summary>
+public class SpotifyImportProvider : IImportProvider
+{
+    private readonly ILogger<SpotifyImportProvider> _logger;
+    private readonly SpotifyInputSource _spotifyInputSource;
+    private readonly SpotifyScraperInputSource _spotifyScraperInputSource;
+    private readonly Configuration.AppConfig _config;
+
+    public string Name => "Spotify";
+    public string IconGlyph => "🎵";
+
+    public SpotifyImportProvider(
+        ILogger<SpotifyImportProvider> logger,
+        SpotifyInputSource spotifyInputSource,
+        SpotifyScraperInputSource spotifyScraperInputSource,
+        Configuration.AppConfig config)
+    {
+        _logger = logger;
+        _spotifyInputSource = spotifyInputSource;
+        _spotifyScraperInputSource = spotifyScraperInputSource;
+        _config = config;
+    }
+
+    public bool CanHandle(string input)
+    {
+        return !string.IsNullOrWhiteSpace(input) && 
+               (input.Contains("spotify.com") || input.StartsWith("spotify:"));
+    }
+
+    public async Task<ImportResult> ImportAsync(string playlistUrl)
+    {
+        try
+        {
+            _logger.LogInformation("Importing from Spotify: {Url}", playlistUrl);
+
+            // Determine which import method to use
+            var useApi = !string.IsNullOrWhiteSpace(_config.SpotifyClientId) && 
+                        !string.IsNullOrWhiteSpace(_config.SpotifyClientSecret) && 
+                        !_config.SpotifyUsePublicOnly;
+
+            var tracks = useApi
+                ? await _spotifyInputSource.ParseAsync(playlistUrl)
+                : await _spotifyScraperInputSource.ParseAsync(playlistUrl);
+
+            if (!tracks.Any())
+            {
+                return new ImportResult
+                {
+                    Success = false,
+                    ErrorMessage = "No tracks found in the Spotify playlist"
+                };
+            }
+
+            var sourceTitle = tracks.FirstOrDefault()?.SourceTitle ?? "Spotify Playlist";
+
+            _logger.LogInformation("Successfully imported {Count} tracks from Spotify playlist '{Title}'", 
+                tracks.Count, sourceTitle);
+
+            return new ImportResult
+            {
+                Success = true,
+                SourceTitle = sourceTitle,
+                Tracks = tracks
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to import from Spotify: {Url}", playlistUrl);
+            return new ImportResult
+            {
+                Success = false,
+                ErrorMessage = $"Spotify import failed: {ex.Message}"
+            };
+        }
+    }
+}

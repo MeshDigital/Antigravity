@@ -6,6 +6,7 @@ using SLSKDONET.Configuration;
 using SLSKDONET.Services.InputParsers;
 using SLSKDONET.Services;
 using SLSKDONET.Views;
+using SLSKDONET.ViewModels;
 
 namespace SLSKDONET;
 
@@ -84,6 +85,10 @@ public partial class App : System.Windows.Application
             // during orchestration, before user navigates to Library page
             _ = Services.GetRequiredService<SLSKDONET.ViewModels.LibraryViewModel>();
             
+            // Start the Download Manager loop
+            var downloadManager = Services.GetRequiredService<DownloadManager>();
+            _ = downloadManager.StartAsync(); // Fire and forget background loop
+
             mainWindow.Show();
         }
         catch (Exception ex)
@@ -140,6 +145,17 @@ public partial class App : System.Windows.Application
 
         // Input parsers
         services.AddSingleton<CsvInputSource>();
+        
+        // Import Plugin System
+        services.AddSingleton<ImportOrchestrator>();
+        services.AddSingleton<IImportProvider, Services.ImportProviders.SpotifyImportProvider>();
+        services.AddSingleton<IImportProvider, Services.ImportProviders.CsvImportProvider>();
+        
+        // Library Action System
+        services.AddSingleton<Services.LibraryActions.LibraryActionProvider>();
+        services.AddSingleton<Services.LibraryActions.ILibraryAction, Services.LibraryActions.OpenFolderAction>();
+        services.AddSingleton<Services.LibraryActions.ILibraryAction, Services.LibraryActions.RemoveFromPlaylistAction>();
+        services.AddSingleton<Services.LibraryActions.ILibraryAction, Services.LibraryActions.DeletePlaylistAction>();
         
         // Download logging and library management
         services.AddSingleton<DownloadLogService>();

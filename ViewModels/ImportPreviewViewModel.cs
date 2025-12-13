@@ -210,29 +210,29 @@ public class ImportPreviewViewModel : INotifyPropertyChanged
 
         try
         {
-            await Task.Delay(100); // Simulate async work
             _logger.LogInformation(
                 "Adding {Count} tracks to library. JobId: {JobId}, Thread: {ThreadId}",
                 selectedTracks.Count,
                 job.Id,
                 Thread.CurrentThread.ManagedThreadId);
 
-            // Convert tracks to PlaylistTracks
+            // Convert tracks to OriginalTracks (DownloadManager will convert to PlaylistTracks and persist)
             foreach (var track in selectedTracks)
             {
-                // Note: PlaylistJob.OriginalTracks is ObservableCollection<Track>, not PlaylistTrack
                 job.OriginalTracks.Add(track);
             }
 
-            // Notify that tracks have been added
+            // CRITICAL FIX: Queue the project! This persists it to SQLite and starts the download scheduler.
+            await _downloadManager.QueueProject(job);
+
+            // Notify navigation service
             AddedToLibrary?.Invoke(this, job);
 
             StatusMessage = $"✓ Added {selectedTracks.Count} tracks to library";
             _logger.LogInformation(
-                "Successfully added {Count} tracks to library. JobId: {JobId}, Thread: {ThreadId}",
+                "Successfully added {Count} tracks to library. JobId: {JobId}",
                 selectedTracks.Count,
-                job.Id,
-                Thread.CurrentThread.ManagedThreadId);
+                job.Id);
         }
         catch (Exception ex)
         {

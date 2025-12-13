@@ -2,13 +2,13 @@
 
 This roadmap outlines the strategic steps to elevate SLSKDONET from a functional prototype to a robust, "daily driver" application.
 
-## 1. The Stability Layer: Persistence (Priority: 🔴 Critical)
-**Current State**: The download queue is fully in-memory. Closing the app wipes the "Warehouse".
+## 1. The Stability Layer: Persistence (Priority: 🟢 Completed)
+**Current State**: **Implemented**. SQLite integration is live. Library and Download Manager share a unified persistence layer.
 **The Plan**:
-- **Database**: Integrate **SQLite** (lightweight, zero-config).
-- **Migration**: Move `PlaylistTrackViewModel` state to persistent storage.
-- **Lifecycle**: On app launch, restore all `Pending`, `Paused`, and `Failed` tracks.
-- **History**: Keep a log of `Completed` downloads for user reference (and to prevent duplicate downloads).
+- [x] **Database**: Integrate **SQLite** (lightweight, zero-config).
+- [x] **Migration**: Move `PlaylistTrackViewModel` state to persistent storage.
+- [x] **Lifecycle**: On app launch, restore all `Pending`, `Paused`, and `Failed` tracks.
+- [x] **History**: Keep a log of `Completed` downloads for user reference.
 
 ## 2. The Missing Core: True Album Downloading (Priority: 🟠 High)
 **Current State**: `SoulseekAdapter` finds album directories but doesn't process them. Users must pick tracks individually.

@@ -6,6 +6,7 @@ SLSKDONET is a Windows-first WPF desktop application that orchestrates Soulseek 
 
 - Orchestrated playlist pipeline (`CSV`, Spotify API, Spotify scraper, manual input) feeding a normalized import queue.
 - Persistent library index backed by EF Core + SQLite with playlist/job history, track state, and cover art metadata.
+- **Unified Persistence**: Single source of truth (SQLite) for both Library and Download Manager, ensuring data integrity across app restarts.
 - Download manager with progress-aware `PlaylistTrackViewModel` instances, automatic state transitions, and global counters.
 - Modern navigation shell (Search → Imported → Downloads → Library → Settings) with WPF UI styling via WPF-UI controls.
 - Built-in diagnostics harness (`Ctrl+R`) that seeds a synthetic playlist, exercises persistence, and validates the cancellation flow without hitting Soulseek.

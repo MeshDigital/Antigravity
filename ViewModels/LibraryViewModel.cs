@@ -5,9 +5,11 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using System.Windows.Input;
+using System.Collections.Generic;
 using Microsoft.Extensions.Logging;
 using SLSKDONET.Models;
 using SLSKDONET.Services;
+using SLSKDONET.Services.LibraryActions;
 using SLSKDONET.Views;
 
 namespace SLSKDONET.ViewModels;
@@ -17,9 +19,9 @@ public class LibraryViewModel : INotifyPropertyChanged
     private readonly ILogger<LibraryViewModel> _logger;
     private readonly DownloadManager _downloadManager;
     private readonly ILibraryService _libraryService;
+    private readonly LibraryActionProvider _actionProvider;
 
     // Master/Detail pattern properties
-    private ObservableCollection<PlaylistJob> _allProjects = new();
     private PlaylistJob? _selectedProject;
     private ObservableCollection<PlaylistTrackViewModel> _currentProjectTracks = new();
     private string _noProjectSelectedMessage = "Select an import job to view its tracks";
@@ -30,13 +32,14 @@ public class LibraryViewModel : INotifyPropertyChanged
     public ICommand CancelCommand { get; }
     public ICommand OpenProjectCommand { get; }
     public ICommand DeleteProjectCommand { get; }
+    public ICommand ExecuteActionCommand { get; }
+    public ICommand RefreshLibraryCommand { get; }
 
-    // Master List: All import jobs/projects
-    public ObservableCollection<PlaylistJob> AllProjects
-    {
-        get => _allProjects;
-        set { _allProjects = value; OnPropertyChanged(); }
-    }
+    /// <summary>
+    /// Master List: REACTIVE binding to LibraryService.Playlists
+    /// This automatically updates when playlists are added/removed from the database
+    /// </summary>
+    public ObservableCollection<PlaylistJob> AllProjects => _libraryService.Playlists;
 
     // Selected project
     public PlaylistJob? SelectedProject
@@ -84,13 +87,16 @@ public class LibraryViewModel : INotifyPropertyChanged
         }
     }
 
-    private bool _initialLoadCompleted = false;
-
-    public LibraryViewModel(ILogger<LibraryViewModel> logger, DownloadManager downloadManager, ILibraryService libraryService)
+    public LibraryViewModel(
+        ILogger<LibraryViewModel> logger,
+        DownloadManager downloadManager,
+        ILibraryService libraryService,
+        LibraryActionProvider actionProvider)
     {
         _logger = logger;
         _downloadManager = downloadManager;
         _libraryService = libraryService;
+        _actionProvider = actionProvider;
 
         // Commands
         HardRetryCommand = new RelayCommand<PlaylistTrackViewModel>(ExecuteHardRetry);
@@ -99,11 +105,13 @@ public class LibraryViewModel : INotifyPropertyChanged
         CancelCommand = new RelayCommand<PlaylistTrackViewModel>(ExecuteCancel);
         OpenProjectCommand = new RelayCommand<PlaylistJob>(project => SelectedProject = project);
         DeleteProjectCommand = new AsyncRelayCommand<PlaylistJob>(ExecuteDeleteProjectAsync);
+        ExecuteActionCommand = new AsyncRelayCommand<ILibraryAction>(ExecuteLibraryActionAsync);
+        RefreshLibraryCommand = new AsyncRelayCommand(RefreshLibraryAsync);
 
         // Subscribe to global track updates for live project track status
         _downloadManager.TrackUpdated += OnGlobalTrackUpdated;
 
-        // Subscribe to project added events
+        // Subscribe to project added events to auto-select new imports
         _downloadManager.ProjectAdded += OnProjectAdded;
         
         // NEW: Subscribe to updates
@@ -112,8 +120,7 @@ public class LibraryViewModel : INotifyPropertyChanged
         // Subscribe to project deletion events for real-time Library updates
         _libraryService.ProjectDeleted += OnProjectDeleted;
 
-        // Load projects asynchronously
-        _ = LoadProjectsAsync();
+        _logger.LogInformation("LibraryViewModel initialized with reactive Playlists binding");
     }
 
     private async void OnProjectUpdated(object? sender, Guid jobId)
@@ -147,33 +154,37 @@ public class LibraryViewModel : INotifyPropertyChanged
 
         await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
         {
-            var jobToRemove = AllProjects.FirstOrDefault(p => p.Id == projectId);
-            if (jobToRemove != null)
+            // REACTIVE: AllProjects is bound to LibraryService.Playlists, which auto-removes
+            // We just need to update selection if the deleted project was selected
+            if (SelectedProject?.Id == projectId)
             {
-                AllProjects.Remove(jobToRemove);
-
-                // Auto-select next project if the deleted one was selected
-                if (SelectedProject == jobToRemove)
-                    SelectedProject = AllProjects.FirstOrDefault();
+                SelectedProject = AllProjects.FirstOrDefault();
+                _logger.LogInformation("Deleted project was selected, auto-selected next project");
             }
         });
     }
     private async void OnProjectAdded(object? sender, ProjectEventArgs e)
     {
-        _logger.LogInformation("OnProjectAdded ENTRY for job {JobId}. Current project count: {ProjectCount}, Global track count: {TrackCount}", e.Job.Id, AllProjects.Count, _downloadManager.AllGlobalTracks.Count);
+        _logger.LogInformation("OnProjectAdded event for job {JobId}", e.Job.Id);
         if (System.Windows.Application.Current is null) return;
         
         await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
         {
-            // Add the new project to the observable collection
-            AllProjects.Add(e.Job);
-
-            // Auto-select the newly added project so it shows immediately
-            SelectedProject = e.Job;
-
-            _logger.LogInformation("Project '{Title}' added to Library view.", e.Job.SourceTitle);
+            // REACTIVE: AllProjects is bound to LibraryService.Playlists, which auto-updates
+            // We just need to auto-select the newly added project
+            
+            // Find the project in the reactive collection (it should already be there)
+            var addedProject = AllProjects.FirstOrDefault(p => p.Id == e.Job.Id);
+            if (addedProject != null)
+            {
+                SelectedProject = addedProject;
+                _logger.LogInformation("Auto-selected new project '{Title}' in Library view", addedProject.SourceTitle);
+            }
+            else
+            {
+                _logger.LogWarning("Project {JobId} not found in reactive collection after ProjectAdded event", e.Job.Id);
+            }
         });
-        _logger.LogInformation("OnProjectAdded EXIT for job {JobId}. New project count: {ProjectCount}", e.Job.Id, AllProjects.Count);
     }
 
     public void ReorderTrack(PlaylistTrackViewModel source, PlaylistTrackViewModel target)
@@ -276,6 +287,12 @@ public class LibraryViewModel : INotifyPropertyChanged
         }
     }
 
+    private async Task RefreshLibraryAsync()
+    {
+        _logger.LogInformation("Manual library refresh requested");
+        await _libraryService.RefreshPlaylistsAsync();
+    }
+
     private async Task LoadProjectTracksAsync(PlaylistJob job)
     {
         try
@@ -316,79 +333,7 @@ public class LibraryViewModel : INotifyPropertyChanged
         }
     }
 
-    private async Task LoadProjectsAsync()
-    {
-        try
-        {
-            _logger.LogInformation("Loading all playlist jobs from database...");
-
-            var jobs = await _libraryService.LoadAllPlaylistJobsAsync();
-
-            if (System.Windows.Application.Current is null) return;
-            await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
-            {
-                if (_initialLoadCompleted)
-                {
-                    _logger.LogWarning("LoadProjectsAsync called after initial load, performing a safe sync.");
-                    // Safe sync: add missing, remove deleted, then re-sort
-                    var loadedJobIds = new HashSet<Guid>(jobs.Select(j => j.Id));
-                    var currentJobIds = new HashSet<Guid>(AllProjects.Select(j => j.Id));
-
-                    // Add new jobs not in the current collection
-                    foreach (var job in jobs)
-                    {
-                        if (!currentJobIds.Contains(job.Id))
-                        {
-                            AllProjects.Add(job);
-                        }
-                    }
-
-                    // Remove jobs from collection that are no longer in the database
-                    var jobsToRemove = AllProjects.Where(j => !loadedJobIds.Contains(j.Id)).ToList();
-                    foreach (var job in jobsToRemove)
-                    {
-                        AllProjects.Remove(job);
-                    }
-                }
-                else
-                {
-                    // Initial load: clear and add all
-                    AllProjects.Clear();
-                    foreach (var job in jobs)
-                    {
-                        AllProjects.Add(job);
-                    }
-                }
-
-                // Re-sort the entire collection to ensure order is correct
-                var sorted = AllProjects.OrderByDescending(j => j.CreatedAt).ToList();
-                for (int i = 0; i < sorted.Count; i++)
-                {
-                    var job = sorted[i];
-                    int currentIndex = AllProjects.IndexOf(job);
-                    if (currentIndex != i)
-                    {
-                        AllProjects.Move(currentIndex, i);
-                    }
-                }
-
-                if (SelectedProject == null && AllProjects.Any())
-                {
-                    SelectedProject = AllProjects.First();
-                }
-
-                if (!_initialLoadCompleted)
-                {
-                    _initialLoadCompleted = true;
-                    _logger.LogInformation("Initial load of {count} projects completed.", AllProjects.Count);
-                }
-            });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to load playlist jobs");
-        }
-    }
+    // LoadProjectsAsync method REMOVED - AllProjects now reactively bound to LibraryService.Playlists
     private void OnGlobalTrackUpdated(object? sender, PlaylistTrackViewModel? updatedTrack)
     {
         if (updatedTrack == null || CurrentProjectTracks == null) return;
@@ -408,6 +353,49 @@ public class LibraryViewModel : INotifyPropertyChanged
                 localTrack.ErrorMessage = updatedTrack.ErrorMessage;
             }
         });
+    }
+
+    /// <summary>
+    /// Get list of actions available for current selection
+    /// </summary>
+    public List<ILibraryAction> AvailableActions
+    {
+        get
+        {
+            var context = new LibraryContext
+            {
+                SelectedPlaylist = SelectedProject,
+                SelectedTracks = CurrentProjectTracks.ToList(),
+                ViewModel = this
+            };
+
+            return _actionProvider.GetAvailableActions(context);
+        }
+    }
+
+    /// <summary>
+    /// Execute a library action
+    /// </summary>
+    private async Task ExecuteLibraryActionAsync(ILibraryAction? action)
+    {
+        if (action == null) return;
+
+        try
+        {
+            var context = new LibraryContext
+            {
+                SelectedPlaylist = SelectedProject,
+                SelectedTracks = CurrentProjectTracks.ToList(),
+                ViewModel = this
+            };
+
+            _logger.LogInformation("Executing library action: {ActionName}", action.Name);
+            await action.ExecuteAsync(context);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to execute library action {ActionName}", action.Name);
+        }
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;

@@ -4,305 +4,309 @@
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
       xmlns:viewmodels="clr-namespace:SLSKDONET.ViewModels"
-      xmlns:converters="clr-namespace:SLSKDONET.Converters"
       mc:Ignorable="d" 
       d:DataContext="{d:DesignInstance Type=viewmodels:LibraryViewModel}"
       d:DesignHeight="800" d:DesignWidth="1200"
       Title="LibraryPage">
 
-    <Grid Background="#1E1E1E">
+    <Page.Resources>
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+    </Page.Resources>
+
+    <Grid Background="#121212">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="280"/>  <!-- Master List: Projects -->
-            <ColumnDefinition Width="Auto"/> <!-- Splitter -->
-            <ColumnDefinition Width="*"/>    <!-- Detail View: Tracks -->
+            <ColumnDefinition Width="300"/>
+            <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
 
-        <!-- MASTER LIST: Projects/Import History -->
-        <Border Grid.Column="0" Background="#252526" BorderBrush="#404040" BorderThickness="0,0,1,0">
+        <!-- LEFT SIDEBAR: Playlists -->
+        <Border Grid.Column="0" Background="#1E1E1E" BorderBrush="#333" BorderThickness="0,0,1,0">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
-                
-                <TextBlock Text="📂 Import History" 
-                           FontSize="16" FontWeight="Bold" 
-                           Foreground="White" Margin="16,12"/>
-                
+
+                <!-- Header -->
+                <Grid Margin="20,20,20,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="My Library" FontSize="24" FontWeight="Bold" Foreground="White"/>
+                    <Button Grid.Column="1" Content="🔄" 
+                            Command="{Binding RefreshLibraryCommand}"
+                            Background="Transparent" BorderThickness="0" Foreground="#888" Cursor="Hand"
+                            FontSize="16" ToolTip="Refresh Library"
+                            Padding="5"/>
+                </Grid>
+
+                <!-- Empty State for Playlist List -->
+                <TextBlock Grid.Row="1" Text="No playlists found." 
+                           Foreground="#888" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,20,0,0">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding AllProjects.Count}" Value="0">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+
+                <!-- Playlist List -->
                 <ListBox Grid.Row="1" 
                          ItemsSource="{Binding AllProjects}" 
                          SelectedItem="{Binding SelectedProject}"
                          Background="Transparent"
                          BorderThickness="0"
-                         Foreground="White"
-                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                         Padding="10">
                     <ListBox.ItemContainerStyle>
                         <Style TargetType="ListBoxItem">
                             <Setter Property="Template">
                                 <Setter.Value>
                                     <ControlTemplate TargetType="ListBoxItem">
-                                        <Border x:Name="Border"
-                                                Background="{TemplateBinding Background}"
-                                                BorderBrush="{TemplateBinding BorderBrush}"
-                                                BorderThickness="{TemplateBinding BorderThickness}"
-                                                Padding="{TemplateBinding Padding}">
+                                        <Border x:Name="Border" 
+                                                Padding="10,8" 
+                                                CornerRadius="6" 
+                                                Margin="0,2"
+                                                Background="Transparent"
+                                                SnapsToDevicePixels="True">
                                             <ContentPresenter/>
                                         </Border>
                                         <ControlTemplate.Triggers>
                                             <Trigger Property="IsSelected" Value="True">
-                                                <Setter TargetName="Border" Property="Background" Value="#007ACC"/>
+                                                <Setter TargetName="Border" Property="Background" Value="#333333"/>
                                             </Trigger>
                                             <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter TargetName="Border" Property="Background" Value="#3A3A3A"/>
+                                                <Setter TargetName="Border" Property="Background" Value="#252525"/>
                                             </Trigger>
                                         </ControlTemplate.Triggers>
                                     </ControlTemplate>
                                 </Setter.Value>
                             </Setter>
+                            <Setter Property="Foreground" Value="#E0E0E0"/>
                         </Style>
                     </ListBox.ItemContainerStyle>
                     <ListBox.ItemTemplate>
                         <DataTemplate>
-                            <Border Background="Transparent" 
-                                    Margin="8,4" Padding="12,10" 
-                                    CornerRadius="4">
-                                <StackPanel>
-                                    <TextBlock Text="{Binding SourceTitle}" 
-                                               FontWeight="SemiBold" 
-                                               TextTrimming="CharacterEllipsis"
-                                               Foreground="White"/>
-                                    <TextBlock Foreground="#A0A0A0" FontSize="11" Margin="0,2,0,0">
-                                        <Run Text="{Binding TotalTracks}"/>
-                                        <Run Text="tracks •"/>
-                                        <Run Text="{Binding SuccessfulCount}"/>
-                                        <Run Text="done"/>
-                                    </TextBlock>
-                                    <TextBlock Text="{Binding SourceType}" 
-                                               Foreground="#666" FontSize="10" 
-                                               Margin="0,2,0,0"/>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                
+                                <!-- Icon placeholder -->
+                                <Border Width="40" Height="40" CornerRadius="4" Background="#2A2A2A" Margin="0,0,12,0">
+                                    <TextBlock Text="🎵" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="16"/>
+                                </Border>
+
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding SourceTitle}" FontWeight="SemiBold" FontSize="14" TextTrimming="CharacterEllipsis"/>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding SourceType}" FontSize="11" Foreground="#88FFFFFF" Margin="0,2,8,0"/>
+                                        <TextBlock Text="{Binding TotalTracks, StringFormat='{}{0} tracks'}" FontSize="11" Foreground="#66FFFFFF" Margin="0,2,0,0"/>
+                                    </StackPanel>
                                 </StackPanel>
-                            </Border>
+                            </Grid>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
             </Grid>
         </Border>
 
-        <!-- VERTICAL SPLITTER -->
-        <GridSplitter Grid.Column="1" Width="2" 
-                      Background="#404040" 
-                      HorizontalAlignment="Stretch"/>
-
-        <!-- DETAIL VIEW: Project Manifest for Selected Job -->
-        <Grid Grid.Column="2" Background="#1E1E1E">
+        <!-- MAIN CONTENT AREA -->
+        <Grid Grid.Column="1">
             <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/> <!-- Header & Toolbar -->
+                <RowDefinition Height="*"/>    <!-- Track List -->
             </Grid.RowDefinitions>
 
-            <!-- No Project Selected Message -->
-            <TextBlock Grid.Row="0" Grid.RowSpan="2"
-                       Text="{Binding NoProjectSelectedMessage}"
-                       HorizontalAlignment="Center"
-                       VerticalAlignment="Center"
-                       FontSize="14"
-                       Foreground="#666"
-                       IsHitTestVisible="False">
-                <TextBlock.Visibility>
-                    <Binding Path="SelectedProject" Converter="{StaticResource NullToVisibilityConverter}"/>
-                </TextBlock.Visibility>
-            </TextBlock>
+            <!-- EMPTY STATE -->
+            <Grid Grid.RowSpan="2" Panel.ZIndex="0" 
+                  Visibility="{Binding SelectedProject, Converter={StaticResource NullToVisibilityConverter}, ConverterParameter=Inverse}">
+                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Opacity="0.5">
+                    <TextBlock Text="🎵" FontSize="48" HorizontalAlignment="Center" Margin="0,0,0,20"/>
+                    <TextBlock Text="Select a playlist to view tracks" FontSize="18" Foreground="#888"/>
+                </StackPanel>
+            </Grid>
 
-            <!-- Project Header with Progress -->
-            <Border Grid.Row="0" Background="#252526" BorderBrush="#404040" BorderThickness="0,0,0,1" Padding="16,12">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-
-                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                        <TextBlock Text="{Binding SelectedProject.SourceTitle, StringFormat='📁 {0}'}"
-                                   FontSize="16" FontWeight="Bold" Foreground="White"/>
-                        <TextBlock Foreground="#A0A0A0" FontSize="11" Margin="0,4,0,0">
-                            <Run Text="{Binding SelectedProject.TotalTracks}"/>
-                            <Run Text="tracks •"/>
-                            <Run Text="{Binding SelectedProject.SuccessfulCount}"/>
-                            <Run Text="downloaded"/>
-                        </TextBlock>
-                    </StackPanel>
-
-                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="20,0,0,0">
-                        <ProgressBar Value="{Binding SelectedProject.ProgressPercentage, Mode=OneWay}" 
-                                     Maximum="100" Height="6" Width="150" VerticalAlignment="Center" 
-                                     Background="#333" Foreground="#4CAF50"/>
-                        <TextBlock Text="{Binding SelectedProject.ProgressPercentage, StringFormat={}{0:F0}%}" 
-                                   HorizontalAlignment="Center" Margin="0,4,0,0" FontSize="11" Foreground="#A0A0A0"/>
-                    </StackPanel>
-                </Grid>
-            </Border>
-
-            <!-- Project Tracks List -->
-            <Grid Grid.Row="1">
+            <!-- ACTIVE CONTENT -->
+            <Grid Grid.RowSpan="2"
+                   Visibility="{Binding SelectedProject, Converter={StaticResource NullToVisibilityConverter}}">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" MinHeight="30"/>
+                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
 
-                <!-- View Mode Selector -->
-                <Border Grid.Row="0" Background="#252526" Padding="12">
-                    <CheckBox Content="🖼️ Gallery Mode" 
-                              IsChecked="{Binding IsGridView}" 
-                              Foreground="White" 
-                              VerticalAlignment="Center"
-                              FontSize="12"/>
+                <!-- HEADER & ACTIONS -->
+                <Border Grid.Row="0" Padding="30,25,30,20" Background="#181818">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        
+                        <!-- Title & Stats -->
+                        <StackPanel>
+                            <TextBlock Text="{Binding SelectedProject.SourceTitle}" 
+                                       FontSize="28" FontWeight="Bold" Foreground="White"
+                                       TextTrimming="CharacterEllipsis"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                <TextBlock Text="{Binding SelectedProject.SourceType}" Foreground="#AAA" Margin="0,0,15,0"/>
+                                <TextBlock Text="•" Foreground="#555" Margin="0,0,15,0"/>
+                                <TextBlock Foreground="#AAA">
+                                    <Run Text="{Binding SelectedProject.SuccessfulCount, Mode=OneWay}"/>
+                                    <Run Text="/"/>
+                                    <Run Text="{Binding SelectedProject.TotalTracks, Mode=OneWay}"/>
+                                    <Run Text="downloaded"/>
+                                </TextBlock>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- ACTIONS TOOLBAR (New Plugin System) -->
+                        <ItemsControl Grid.Column="1" ItemsSource="{Binding AvailableActions}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Button Command="{Binding DataContext.ExecuteActionCommand, RelativeSource={RelativeSource AncestorType=Page}}" 
+                                            CommandParameter="{Binding}"
+                                            Margin="8,0,0,0" Padding="12,8" Background="#262626" BorderThickness="0">
+                                        <Button.Style>
+                                            <Style TargetType="Button">
+                                                <Setter Property="Template">
+                                                    <Setter.Value>
+                                                        <ControlTemplate TargetType="Button">
+                                                            <Border x:Name="BtnBorder" Background="{TemplateBinding Background}" CornerRadius="4">
+                                                                <StackPanel Orientation="Horizontal">
+                                                                    <TextBlock Text="{Binding IconGlyph}" Margin="0,0,8,0" FontSize="14"/>
+                                                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Foreground="White"/>
+                                                                </StackPanel>
+                                                            </Border>
+                                                            <ControlTemplate.Triggers>
+                                                                <Trigger Property="IsMouseOver" Value="True">
+                                                                    <Setter TargetName="BtnBorder" Property="Background" Value="#353535"/>
+                                                                </Trigger>
+                                                                <Trigger Property="IsPressed" Value="True">
+                                                                    <Setter TargetName="BtnBorder" Property="Background" Value="#404040"/>
+                                                                </Trigger>
+                                                            </ControlTemplate.Triggers>
+                                                        </ControlTemplate>
+                                                    </Setter.Value>
+                                                </Setter>
+                                            </Style>
+                                        </Button.Style>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </Grid>
                 </Border>
 
-                <!-- Gallery View (Grid) -->
-                <ListBox Grid.Row="1"
-                         ItemsSource="{Binding CurrentProjectTracks}"
-                         Background="Transparent"
-                         BorderThickness="0"
-                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                    <ListBox.Visibility>
-                        <Binding Path="IsGridView" Converter="{StaticResource BooleanToVisibilityConverter}"/>
-                    </ListBox.Visibility>
-                    <ListBox.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <WrapPanel Orientation="Horizontal"/>
-                        </ItemsPanelTemplate>
-                    </ListBox.ItemsPanel>
-                    <ListBox.ItemTemplate>
-                        <DataTemplate>
-                            <Border Background="#2D2D2D" Margin="8" Padding="12" CornerRadius="8" Width="160">
-                                <StackPanel>
-                                    <!-- Album Art with Fallback -->
-                                    <Border Background="#1E1E1E" CornerRadius="4" Height="140" Width="140">
-                                        <Image Source="{Binding CoverArtUrl}" Stretch="UniformToFill"/>
-                                    </Border>
-                                    <TextBlock Text="{Binding Artist}" FontWeight="Bold" Margin="0,8,0,2" TextTrimming="CharacterEllipsis" Foreground="White"/>
-                                    <TextBlock Text="{Binding Title}" FontSize="11" Foreground="#A0A0A0" TextTrimming="CharacterEllipsis"/>
-                                    <TextBlock Text="{Binding State}" FontSize="10" Margin="0,4,0,0" Foreground="#A0A0A0"/>
-                                    <ProgressBar Value="{Binding Progress, Mode=OneWay}" Maximum="100" Height="2" Margin="0,4,0,0" Background="#333" Foreground="#007ACC"/>
-                                </StackPanel>
-                            </Border>
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
-
-                <!-- List View (DataGrid) -->
-                <DataGrid Grid.Row="1"
+                <!-- TRACK LIST DATAGRID -->
+                <DataGrid Grid.Row="1" 
                           ItemsSource="{Binding CurrentProjectTracks}"
                           AutoGenerateColumns="False"
-                          AllowDrop="True"
                           Background="Transparent"
-                          GridLinesVisibility="Horizontal"
-                          HorizontalGridLinesBrush="#333"
-                          RowBackground="#1E1E1E"
-                          AlternatingRowBackground="#252526"
-                          Foreground="White"
                           BorderThickness="0"
+                          GridLinesVisibility="Horizontal"
+                          HorizontalGridLinesBrush="#222"
+                          RowBackground="Transparent"
+                          Foreground="#DDD"
+                          RowHeight="40"
                           HeadersVisibility="Column"
-                          IsReadOnly="False">
-                    <DataGrid.Visibility>
-                        <Binding Path="IsGridView" Converter="{StaticResource InverseBooleanToVisibilityConverter}"/>
-                    </DataGrid.Visibility>
+                          Padding="10">
+                    
                     <DataGrid.Resources>
                         <Style TargetType="DataGridColumnHeader">
-                            <Setter Property="Background" Value="#2D2D2D"/>
-                            <Setter Property="Foreground" Value="#A0A0A0"/>
+                            <Setter Property="Background" Value="Transparent"/>
+                            <Setter Property="Foreground" Value="#888"/>
                             <Setter Property="Padding" Value="10,8"/>
-                            <Setter Property="BorderThickness" Value="0,0,1,1"/>
-                            <Setter Property="BorderBrush" Value="#404040"/>
+                            <Setter Property="FontWeight" Value="SemiBold"/>
+                            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+                            <Setter Property="BorderBrush" Value="#333"/>
                         </Style>
                         <Style TargetType="DataGridCell">
                             <Setter Property="BorderThickness" Value="0"/>
                             <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
-                        </Style>
-                        <Style TargetType="DataGridRow">
-                            <Setter Property="AllowDrop" Value="True"/>
-                            <EventSetter Event="PreviewMouseLeftButtonDown" Handler="DataGridRow_PreviewMouseLeftButtonDown"/>
-                            <EventSetter Event="Drop" Handler="DataGridRow_Drop"/>
-                            <EventSetter Event="PreviewDragOver" Handler="OnPreviewDragOver"/>
-                            <Setter Property="ContextMenu">
+                            <Setter Property="Padding" Value="10,0"/>
+                            <Setter Property="Template">
                                 <Setter.Value>
-                                    <ContextMenu>
-                                        <MenuItem Header="▶️ Resume" 
-                                                  Command="{Binding DataContext.ResumeCommand, RelativeSource={RelativeSource AncestorType=Page}}"
-                                                  CommandParameter="{Binding}"/>
-                                        <MenuItem Header="⏸️ Pause" 
-                                                  Command="{Binding DataContext.PauseCommand, RelativeSource={RelativeSource AncestorType=Page}}"
-                                                  CommandParameter="{Binding}"/>
-                                        <MenuItem Header="🔄 Hard Retry" 
-                                                  Command="{Binding DataContext.HardRetryCommand, RelativeSource={RelativeSource AncestorType=Page}}"
-                                                  CommandParameter="{Binding}"/>
-                                        <Separator/>
-                                        <MenuItem Header="❌ Cancel" 
-                                                  Command="{Binding DataContext.CancelCommand, RelativeSource={RelativeSource AncestorType=Page}}"
-                                                  CommandParameter="{Binding}"/>
-                                    </ContextMenu>
+                                    <ControlTemplate TargetType="DataGridCell">
+                                        <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" Padding="{TemplateBinding Padding}">
+                                            <ContentPresenter VerticalAlignment="Center"/>
+                                        </Border>
+                                    </ControlTemplate>
                                 </Setter.Value>
                             </Setter>
                         </Style>
+                        <Style TargetType="DataGridRow">
+                            <EventSetter Event="PreviewMouseLeftButtonDown" Handler="DataGridRow_PreviewMouseLeftButtonDown"/>
+                            <EventSetter Event="Drop" Handler="DataGridRow_Drop"/>
+                            <EventSetter Event="PreviewDragOver" Handler="OnPreviewDragOver"/>
+                            <Setter Property="Background" Value="Transparent"/>
+                            <Style.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter Property="Background" Value="#1AFFFFFF"/>
+                                </Trigger>
+                                <Trigger Property="IsSelected" Value="True">
+                                    <Setter Property="Background" Value="#2AFFFFFF"/>
+                                </Trigger>
+                            </Style.Triggers>
+                        </Style>
                     </DataGrid.Resources>
+
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="Artist" Binding="{Binding Artist}" Width="*"/>
-                        <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="*"/>
-                        <DataGridTextColumn Header="Album" Binding="{Binding Model.Album}" Width="*"/>
+                        <!-- # -->
+                        <DataGridTextColumn Header="#" Binding="{Binding SortOrder}" Width="40" Foreground="#666"/>
                         
-                        <!-- Status & Progress -->
-                        <DataGridTemplateColumn Header="Status" Width="120">
+                        <!-- Title -->
+                        <DataGridTemplateColumn Header="Title" Width="2*">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="{Binding State}" VerticalAlignment="Center"/>
-                                        <TextBlock Text=" 🔄" VerticalAlignment="Center">
-                                            <TextBlock.Style>
-                                                <Style TargetType="TextBlock">
-                                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding State}" Value="Searching">
-                                                            <Setter Property="Visibility" Value="Visible"/>
-                                                        </DataTrigger>
-                                                        <DataTrigger Binding="{Binding State}" Value="Downloading">
-                                                            <Setter Property="Visibility" Value="Visible"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </TextBlock.Style>
-                                        </TextBlock>
-                                    </StackPanel>
+                                    <TextBlock Text="{Binding Title}" FontWeight="Medium" Foreground="White" VerticalAlignment="Center"/>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
 
-                        <!-- Progress Bar -->
-                        <DataGridTemplateColumn Header="Progress" Width="150">
+                        <!-- Artist -->
+                        <DataGridTextColumn Header="Artist" Binding="{Binding Artist}" Width="1.5*"/>
+
+                        <!-- Album -->
+                        <DataGridTextColumn Header="Album" Binding="{Binding Model.Album}" Width="1.5*" />
+
+                        <!-- Status -->
+                        <DataGridTemplateColumn Header="Status" Width="120">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
-                                    <Grid>
-                                        <ProgressBar Value="{Binding Progress, Mode=OneWay}" Maximum="100" Height="4" VerticalAlignment="Center" Background="#333" Foreground="#007ACC"/>
-                                        <TextBlock Text="{Binding Progress, StringFormat={}{0:F0}%}" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="10" Foreground="White"/>
-                                    </Grid>
+                                    <Border CornerRadius="4" Padding="6,2" HorizontalAlignment="Left" Background="#22FFFFFF">
+                                        <TextBlock Text="{Binding State}" FontSize="11" Foreground="#CCC"/>
+                                    </Border>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
                         
-                        <DataGridTextColumn Header="Speed" Binding="{Binding CurrentSpeed}" Width="100"/>
-                        
-                        <!-- Actions -->
-                        <DataGridTemplateColumn Header="Actions" Width="80">
-                            <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate>
-                                    <Button Content="Retry" 
-                                            Command="{Binding DataContext.HardRetryCommand, RelativeSource={RelativeSource AncestorType=Page}}" 
-                                            CommandParameter="{Binding}"
-                                            Background="#FF6C00" Foreground="White" BorderThickness="0" Padding="5,2"/>
-                                </DataTemplate>
-                            </DataGridTemplateColumn.CellTemplate>
-                        </DataGridTemplateColumn>
+                        <!-- Progress -->
+                         <DataGridTemplateColumn Header="Progress" Width="100">
+                             <DataGridTemplateColumn.CellTemplate>
+                                 <DataTemplate>
+                                     <Grid Height="4">
+                                         <ProgressBar Value="{Binding Progress, Mode=OneWay}" Maximum="100" Height="4" BorderThickness="0" Background="#333" Foreground="#4CAF50"/>
+                                     </Grid>
+                                 </DataTemplate>
+                             </DataGridTemplateColumn.CellTemplate>
+                         </DataGridTemplateColumn>
+
                     </DataGrid.Columns>
                 </DataGrid>
+                
             </Grid>
         </Grid>
     </Grid>

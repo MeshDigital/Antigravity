@@ -160,12 +160,14 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
             job.Id,
             Thread.CurrentThread.ManagedThreadId);
 
-        // 1. Persist the job header and all associated tracks in a single transaction
+        // 1. Persist the job header and all associated tracks via LibraryService
+        // This ensures the Library UI (Left Sidebar) is updated immediately.
         try
         {
-            await _databaseService.SavePlaylistJobWithTracksAsync(job);
+            await _libraryService.SavePlaylistJobWithTracksAsync(job);
+            
             _logger.LogInformation(
-                "Saved PlaylistJob to DB. Title: {Title}, TrackCount: {Count}, JobId: {JobId}, Thread: {ThreadId}",
+                "Saved PlaylistJob to Library. Title: {Title}, TrackCount: {Count}, JobId: {JobId}, Thread: {ThreadId}",
                 job.SourceTitle,
                 job.PlaylistTracks.Count,
                 job.Id,

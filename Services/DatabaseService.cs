@@ -327,14 +327,27 @@ public class DatabaseService
                 IsDeleted = false
             };
             
-            // Use the atomic upsert pattern for the job header.
-            // EF Core will handle INSERT vs. UPDATE.
-            context.PlaylistJobs.Update(jobEntity);
-            
-            // Use the atomic upsert pattern for each track.
-            foreach (var track in job.PlaylistTracks)
+            // Check if job exists to decide between Add (Insert) and Update
+            var exists = await context.PlaylistJobs.AnyAsync(j => j.Id == job.Id);
+
+            if (exists)
             {
-                var trackEntity = new PlaylistTrackEntity
+                // Update existing job
+                context.PlaylistJobs.Update(jobEntity);
+            }
+            else
+            {
+                // Insert new job
+                context.PlaylistJobs.Add(jobEntity);
+            }
+            
+            // For tracks, we also need to handle Add vs Update. 
+            // In a bulk import, they are usually all new, but we must be safe.
+            // Optimization: If job is new, tracks are definitely new.
+            
+            if (!exists)
+            {
+                var trackEntities = job.PlaylistTracks.Select(track => new PlaylistTrackEntity
                 {
                     Id = track.Id,
                     PlaylistId = job.Id,
@@ -346,8 +359,52 @@ public class DatabaseService
                     ResolvedFilePath = track.ResolvedFilePath,
                     TrackNumber = track.TrackNumber,
                     AddedAt = track.AddedAt
-                };
-                context.PlaylistTracks.Update(trackEntity);
+                });
+                context.PlaylistTracks.AddRange(trackEntities);
+            }
+            else
+            {
+                // Job exists, track logic is more complex (upsert). 
+                // For now, fall back to Update which works for existing tracks, 
+                // BUT for new tracks in existing job, we need to check.
+                // Given this method is primarily for "Save Job WITH Tracks" (Import), 
+                // we'll check each track or use a more robust upsert strategy?
+                // Checking 1000 tracks is slow.
+                // Assumption: This method is used for NEW imports or Full Saves.
+                // Let's check existence of IDs in bulk?
+                
+                var trackIds = job.PlaylistTracks.Select(t => t.Id).ToList();
+                var existingTrackIds = await context.PlaylistTracks
+                    .Where(t => trackIds.Contains(t.Id))
+                    .Select(t => t.Id)
+                    .ToListAsync();
+                var existingTrackIdSet = new HashSet<Guid>(existingTrackIds);
+
+                foreach (var track in job.PlaylistTracks)
+                {
+                    var trackEntity = new PlaylistTrackEntity
+                    {
+                        Id = track.Id,
+                        PlaylistId = job.Id,
+                        Artist = track.Artist,
+                        Title = track.Title,
+                        Album = track.Album,
+                        TrackUniqueHash = track.TrackUniqueHash,
+                        Status = track.Status,
+                        ResolvedFilePath = track.ResolvedFilePath,
+                        TrackNumber = track.TrackNumber,
+                        AddedAt = track.AddedAt
+                    };
+
+                    if (existingTrackIdSet.Contains(track.Id))
+                    {
+                        context.PlaylistTracks.Update(trackEntity);
+                    }
+                    else
+                    {
+                        context.PlaylistTracks.Add(trackEntity);
+                    }
+                }
             }
             
             await context.SaveChangesAsync();

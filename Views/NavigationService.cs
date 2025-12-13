@@ -10,6 +10,7 @@ public interface INavigationService
     void SetFrame(Frame frame);
     void RegisterPage(string key, Type pageType);
     void NavigateTo(string pageKey);
+    void GoBack();
 }
 
 public class NavigationService : INavigationService
@@ -57,6 +58,14 @@ public class NavigationService : INavigationService
                 }
                 _frame.Navigate(page);
             }
+        }
+    }
+
+    public void GoBack()
+    {
+        if (_frame != null && _frame.CanGoBack)
+        {
+            _frame.GoBack();
         }
     }
 }
