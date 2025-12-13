@@ -1,5 +1,6 @@
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 using System;
 
 namespace SLSKDONET;
@@ -32,6 +33,8 @@ class Program
 =======
 =======
 >>>>>>> Stashed changes
+=======
+>>>>>>> Stashed changes
 // Program.cs (Standard Avalonia Desktop Entry Point)
 
 using Avalonia;
@@ -57,6 +60,9 @@ namespace SLSKDONET
                 .UseReactiveUI();
     }
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 =======
 >>>>>>> Stashed changes

@@ -1,5 +1,10 @@
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
+=======
+// App.axaml.cs (Avalonia Application & DI Setup)
+
+>>>>>>> Stashed changes
 =======
 // App.axaml.cs (Avalonia Application & DI Setup)
 
@@ -14,6 +19,7 @@ using Avalonia.Markup.Xaml;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using SLSKDONET.Configuration;
+<<<<<<< Updated upstream
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
 using SLSKDONET.Services;
@@ -165,6 +171,8 @@ public partial class AvaloniaApp : Application
 =======
 =======
 >>>>>>> Stashed changes
+=======
+>>>>>>> Stashed changes
 using SLSKDONET.Services.InputParsers;
 using SLSKDONET.Services;
 using SLSKDONET.ViewModels;
@@ -267,6 +275,9 @@ namespace SLSKDONET
             services.AddSingleton<SearchQueryNormalizer>();
         }
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 =======
 >>>>>>> Stashed changes
