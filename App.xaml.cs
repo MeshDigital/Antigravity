@@ -84,7 +84,11 @@ public partial class App : System.Windows.Application
             
             // Eagerly instantiate LibraryViewModel so it subscribes to ProjectAdded events
             // during orchestration, before user navigates to Library page
-            _ = Services.GetRequiredService<SLSKDONET.ViewModels.LibraryViewModel>();
+            var libraryViewModel = Services.GetRequiredService<SLSKDONET.ViewModels.LibraryViewModel>();
+            
+            // Wire up MainViewModel reference (avoids circular dependency in constructor)
+            var mainViewModel = Services.GetRequiredService<MainViewModel>();
+            libraryViewModel.SetMainViewModel(mainViewModel);
             
             // Start the Download Manager loop
             var downloadManager = Services.GetRequiredService<DownloadManager>();

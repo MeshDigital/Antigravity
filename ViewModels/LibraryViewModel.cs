@@ -23,6 +23,7 @@ public class LibraryViewModel : INotifyPropertyChanged
     private readonly ImportHistoryViewModel _importHistoryViewModel;
     private readonly INavigationService _navigationService;
     private readonly IUserInputService _userInputService;
+    private MainViewModel? _mainViewModel; // Set after construction to avoid circular dependency
 
 
     private bool FilterTracks(object obj)
@@ -250,6 +251,12 @@ public class LibraryViewModel : INotifyPropertyChanged
 
     private bool _initialLoadCompleted = false;
 
+    // Public setter to inject MainViewModel after construction (avoids circular dependency)
+    public void SetMainViewModel(MainViewModel mainViewModel)
+    {
+        _mainViewModel = mainViewModel;
+    }
+
     public LibraryViewModel(
         ILogger<LibraryViewModel> logger, 
         DownloadManager downloadManager, 
@@ -378,49 +385,6 @@ public class LibraryViewModel : INotifyPropertyChanged
         _logger.LogInformation("OnProjectAdded EXIT for job {JobId}. New project count: {ProjectCount}", e.Job.Id, AllProjects.Count);
     }
 
-    public async void AddToPlaylist(PlaylistJob targetPlaylist, PlaylistTrackViewModel sourceTrack)
-    {
-        if (targetPlaylist == null || sourceTrack == null || targetPlaylist.Id == Guid.Empty) return; // Prevent invalid drops
-
-        _logger.LogInformation("Adding track {Track} to playlist {Playlist}", sourceTrack.Title, targetPlaylist.SourceTitle);
-
-        try
-        {
-            // 1. Create new PlaylistTrack model linked to the target playlist
-            var newTrack = new PlaylistTrack
-            {
-                Id = Guid.NewGuid(),
-                PlaylistId = targetPlaylist.Id,
-                Artist = sourceTrack.Artist,
-                Title = sourceTrack.Title,
-                Album = sourceTrack.Album,
-                TrackUniqueHash = sourceTrack.GlobalId,
-                Status = TrackStatus.Downloaded, // Assuming we dragged a downloaded/existing track
-                SortOrder = targetPlaylist.TotalTracks + 1 // Default sort order
-            };
-
-            // 2. Persist to Database
-            await _libraryService.SavePlaylistTrackAsync(newTrack);
-
-            // 3. Log Activity
-            await _libraryService.LogPlaylistActivityAsync(targetPlaylist.Id, "Add", $"Added track '{sourceTrack.Artist} - {sourceTrack.Title}'");
-
-            // 4. Update Target Playlist Counts/Metadata if needed
-            // The service might do this, or we rely on events.
-            // Let's manually refresh the target playlist's in-memory list if it's currently selected?
-            // If it's NOT selected, we just need to update the TotalTracks count on the job object.
-            
-            targetPlaylist.TotalTracks++;
-            targetPlaylist.SuccessfulCount++; // Validation: check actual status? 
-            
-            _logger.LogInformation("Successfully added track to playlist {Playlist}", targetPlaylist.SourceTitle);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to add track to playlist");
-        }
-    }
-
     public async void ReorderTrack(PlaylistTrackViewModel source, PlaylistTrackViewModel target)
     {
         if (source == null || target == null || source == target) return;
@@ -503,9 +467,11 @@ public class LibraryViewModel : INotifyPropertyChanged
         _logger.LogInformation("Playing track: {Title} by {Artist}", vm.Title, vm.Artist);
         _playerViewModel.PlayTrack(vm.Model!.ResolvedFilePath, vm.Title ?? "Unknown", vm.Artist ?? "Unknown Artist");
         
-        // Also ensure sidebar is visible?
-        // _mainViewModel.TogglePlayerCommand.Execute(null); // No reference to MainViewModel here.
-        // We'll trust user to open it, or maybe use an event aggregator later if we want auto-open.
+        // FIX: Ensure the player sidebar is visible
+        if (_mainViewModel != null)
+        {
+            _mainViewModel.IsPlayerSidebarVisible = true;
+        }
     }
 
     private void ExecutePauseProject(PlaylistJob? job)
@@ -516,6 +482,59 @@ public class LibraryViewModel : INotifyPropertyChanged
         foreach (var t in tracks)
         {
             if (t.CanPause) _downloadManager.PauseTrack(t.GlobalId);
+        }
+    }
+
+    public async void AddToPlaylist(PlaylistJob targetPlaylist, PlaylistTrackViewModel sourceTrack)
+    {
+        if (targetPlaylist == null || sourceTrack == null || targetPlaylist.Id == Guid.Empty) return;
+
+        _logger.LogInformation("Adding track {Track} to playlist {Playlist}", sourceTrack.Title, targetPlaylist.SourceTitle);
+
+        try
+        {
+            // 1. Create new PlaylistTrack for the target playlist
+            var newTrack = new PlaylistTrack
+            {
+                Id = Guid.NewGuid(),
+                PlaylistId = targetPlaylist.Id,
+                Artist = sourceTrack.Artist ?? "",
+                Title = sourceTrack.Title ?? "",
+                Album = sourceTrack.Model?.Album ?? "",
+                SortOrder = targetPlaylist.TotalTracks + 1,
+                Status = sourceTrack.State == PlaylistTrackState.Completed ? TrackStatus.Downloaded : TrackStatus.Missing,
+                ResolvedFilePath = sourceTrack.Model?.ResolvedFilePath ?? "",
+                TrackUniqueHash = sourceTrack.GlobalId.ToString()
+            };
+
+            // 2. Persist to Database
+            await _libraryService.SavePlaylistTrackAsync(newTrack);
+
+            // 3. Log Activity
+            await _libraryService.LogPlaylistActivityAsync(targetPlaylist.Id, "Add", $"Added track '{sourceTrack.Artist} - {sourceTrack.Title}'");
+
+            // 4. Update Target Playlist Counts/Metadata
+            targetPlaylist.TotalTracks++;
+            if (sourceTrack.State == PlaylistTrackState.Completed)
+            {
+                targetPlaylist.SuccessfulCount++;
+            }
+            
+            // FIX: Force UI reload of the target playlist to ensure drag/drop changes are visible.
+            // This relies on the SelectedProject setter calling LoadProjectTracksAsync.
+            if (SelectedProject == targetPlaylist)
+            {
+                 // Clear and reset the selection to force setter to fire LoadProjectTracksAsync
+                 var temp = SelectedProject;
+                 SelectedProject = null;
+                 SelectedProject = temp;
+            }
+
+            _logger.LogInformation("Successfully added track to playlist {Playlist}", targetPlaylist.SourceTitle);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to add track to playlist");
         }
     }
 
