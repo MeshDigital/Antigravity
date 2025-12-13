@@ -437,33 +437,7 @@ public class MainViewModel : INotifyPropertyChanged
         });
     }
 
-    // LEGACY: This method is no longer used. Library management now handled by LibraryViewModel.
-    /*
-    private async Task LoadLibraryAsync()
-    {
-        try
-        {
-            var entries = await Task.Run(() => _downloadLogService.GetEntries());
-            // Update UI collection on the UI thread
-            if (System.Windows.Application.Current?.Dispatcher != null)
-            {
-                await Dispatcher.UIThread.InvokeAsync(() =>
-                {
-                    LibraryEntries.Clear();
-                    foreach (var entry in entries)
-                    {
-                        LibraryEntries.Add(entry);
-                    }
-                });
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to load library entries");
-            StatusText = "Failed to load library";
-        }
-    }
-    */
+
 
     public string Username
     {

@@ -147,6 +147,7 @@ public partial class App : Application
         services.AddSingleton<INavigationService, NavigationService>();
         services.AddSingleton<IUserInputService, UserInputService>();
         services.AddSingleton<IFileInteractionService, FileInteractionService>();
+        services.AddSingleton<INotificationService, NotificationServiceAdapter>();
 
         // ViewModels
         services.AddSingleton<MainViewModel>();
