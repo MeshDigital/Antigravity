@@ -122,14 +122,12 @@ namespace SLSKDONET.Services
                 _mediaPlayer.Stop();
             }
             
-            // CRITICAL FIX: LibVLC needs a proper file URI with forward slashes
-            // Convert Windows path to URI format: C:\path\file.mp3 -> file:///C:/path/file.mp3
-            var uri = new Uri(cleanPath).AbsoluteUri;
+            // CRITICAL: Pass the RAW Windows path directly
+            // LibVLC handles Windows paths correctly without URI conversion
+            Console.WriteLine($"[AudioPlayerService] Creating media from path: {cleanPath}");
             
-            Console.WriteLine($"[AudioPlayerService] Creating media from URI: {uri}");
-            
-            // Create media from URI (LibVLC handles this correctly)
-            var media = new Media(_libVLC, uri);
+            // Create media from raw path
+            var media = new Media(_libVLC, cleanPath);
             media.Parse(MediaParseOptions.ParseLocal);
             
             _mediaPlayer.Play(media);
