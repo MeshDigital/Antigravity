@@ -30,6 +30,7 @@ public class LibraryViewModel : INotifyPropertyChanged
     public ICommand CancelCommand { get; }
     public ICommand OpenProjectCommand { get; }
     public ICommand DeleteProjectCommand { get; }
+    public ICommand RefreshLibraryCommand { get; }
 
     // Master List: All import jobs/projects
     public ObservableCollection<PlaylistJob> AllProjects
@@ -99,6 +100,7 @@ public class LibraryViewModel : INotifyPropertyChanged
         CancelCommand = new RelayCommand<PlaylistTrackViewModel>(ExecuteCancel);
         OpenProjectCommand = new RelayCommand<PlaylistJob>(project => SelectedProject = project);
         DeleteProjectCommand = new AsyncRelayCommand<PlaylistJob>(ExecuteDeleteProjectAsync);
+        RefreshLibraryCommand = new AsyncRelayCommand(async () => await LoadProjectsAsync());
 
         // Subscribe to global track updates for live project track status
         _downloadManager.TrackUpdated += OnGlobalTrackUpdated;
@@ -165,6 +167,13 @@ public class LibraryViewModel : INotifyPropertyChanged
         
         await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
         {
+            // Check if the job already exists in the collection (race condition safety)
+            if (AllProjects.Any(j => j.Id == e.Job.Id))
+            {
+                _logger.LogWarning("Project {JobId} already exists in AllProjects, skipping add.", e.Job.Id);
+                return;
+            }
+
             // Add the new project to the observable collection
             AllProjects.Add(e.Job);
 
@@ -320,9 +329,17 @@ public class LibraryViewModel : INotifyPropertyChanged
     {
         try
         {
+            _logger.LogInformation("LoadProjectsAsync ENTRY. Current AllProjects.Count: {Count}", AllProjects.Count);
             _logger.LogInformation("Loading all playlist jobs from database...");
 
             var jobs = await _libraryService.LoadAllPlaylistJobsAsync();
+            
+            _logger.LogInformation("LoadProjectsAsync: Loaded {Count} jobs from database", jobs.Count);
+            foreach (var job in jobs)
+            {
+                _logger.LogInformation("  - Job {JobId}: '{Title}' with {TrackCount} tracks, Created: {Created}", 
+                    job.Id, job.SourceTitle, job.TotalTracks, job.CreatedAt);
+            }
 
             if (System.Windows.Application.Current is null) return;
             await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
@@ -339,6 +356,7 @@ public class LibraryViewModel : INotifyPropertyChanged
                     {
                         if (!currentJobIds.Contains(job.Id))
                         {
+                            _logger.LogInformation("Adding missing job {JobId} to AllProjects", job.Id);
                             AllProjects.Add(job);
                         }
                     }
@@ -347,12 +365,14 @@ public class LibraryViewModel : INotifyPropertyChanged
                     var jobsToRemove = AllProjects.Where(j => !loadedJobIds.Contains(j.Id)).ToList();
                     foreach (var job in jobsToRemove)
                     {
+                        _logger.LogInformation("Removing deleted job {JobId} from AllProjects", job.Id);
                         AllProjects.Remove(job);
                     }
                 }
                 else
                 {
                     // Initial load: clear and add all
+                    _logger.LogInformation("Initial load: clearing AllProjects and adding {Count} jobs", jobs.Count);
                     AllProjects.Clear();
                     foreach (var job in jobs)
                     {

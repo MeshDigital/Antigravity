@@ -2,6 +2,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows;
 using SLSKDONET.ViewModels;
+using System.Threading.Tasks;
 
 namespace SLSKDONET.Views
 {
@@ -15,6 +16,17 @@ namespace SLSKDONET.Views
             _viewModel = viewModel;
             // This is the critical step: set the DataContext before navigation can overwrite it.
             this.DataContext = _viewModel;
+            
+            // Refresh the library when the page is loaded
+            // This ensures we show the latest data from the database
+            Loaded += OnPageLoaded;
+        }
+
+        private async void OnPageLoaded(object sender, RoutedEventArgs e)
+        {
+            // Give the UI a moment to render, then refresh if needed
+            await Task.Delay(50);
+            _viewModel.RefreshLibraryCommand?.Execute(null);
         }
 
         private void DataGridRow_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)

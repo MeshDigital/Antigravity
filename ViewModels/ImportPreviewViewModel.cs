@@ -229,8 +229,10 @@ public class ImportPreviewViewModel : INotifyPropertyChanged
             }
 
             // Notify that tracks have been added
+            _logger.LogInformation("Firing AddedToLibrary event for job {JobId}", job.Id);
             AddedToLibrary?.Invoke(this, job);
 
+            _logger.LogInformation("AddedToLibrary event fired. Updating status message.");
             StatusMessage = $"✓ Added {selectedTracks.Count} tracks to library";
             _logger.LogInformation(
                 "Successfully added {Count} tracks to library. JobId: {JobId}, Thread: {ThreadId}",
@@ -292,18 +294,24 @@ public class ImportPreviewViewModel : INotifyPropertyChanged
     {
         try
         {
-            _logger.LogInformation("PlaylistJob added from ImportPreview: {Title} with {Count} tracks",
+            _logger.LogInformation("HandlePlaylistJobAddedAsync ENTRY: {Title} with {Count} tracks",
                 job.SourceTitle, job.OriginalTracks.Count);
 
             // Queue project through DownloadManager to persist and add to Library.
             await _downloadManager.QueueProject(job);
+            
+            _logger.LogInformation("QueueProject completed for {JobId}. Job saved to database.", job.Id);
+
+            // Small delay to ensure ProjectAdded event handler completes
+            // This allows LibraryViewModel.OnProjectAdded to finish adding to AllProjects
+            await Task.Delay(200);
+            
+            _logger.LogInformation("Navigating to Library page to show job {JobId}...", job.Id);
 
             // Navigate to Library to see the new job.
             _navigationService.NavigateTo("Library");
 
-            // Optionally, start the orchestration search automatically.
-            // This would require more dependencies, so for now we just navigate.
-            _logger.LogInformation("Navigated to Library. User can start search from there.");
+            _logger.LogInformation("Navigation to Library completed.");
         }
         catch (Exception ex)
         {
