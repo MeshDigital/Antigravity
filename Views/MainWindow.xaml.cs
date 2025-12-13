@@ -82,7 +82,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private System.Windows.Forms.NotifyIcon _notifyIcon;
+    private System.Windows.Forms.NotifyIcon? _notifyIcon;
 
     private void SetupTrayIcon()
     {

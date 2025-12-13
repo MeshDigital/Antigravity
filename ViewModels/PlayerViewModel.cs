@@ -78,12 +78,29 @@ namespace SLSKDONET.ViewModels
             }
         }
 
+        private bool _isPlayerInitialized;
+        public bool IsPlayerInitialized
+        {
+            get => _isPlayerInitialized;
+            set => SetProperty(ref _isPlayerInitialized, value);
+        }
+
         public ICommand TogglePlayPauseCommand { get; }
         public ICommand StopCommand { get; }
 
         public PlayerViewModel(IAudioPlayerService playerService)
         {
             _playerService = playerService;
+            
+            // Check if LibVLC initialized successfully
+            IsPlayerInitialized = _playerService.IsInitialized;
+            if (!IsPlayerInitialized)
+            {
+                // Set diagnostic message if initialization failed
+                TrackTitle = "Player Initialization Failed";
+                TrackArtist = "Check LibVLC files in output directory";
+                System.Diagnostics.Debug.WriteLine("[PlayerViewModel] WARNING: AudioPlayerService failed to initialize. LibVLC native libraries may be missing.");
+            }
             
             _playerService.PausableChanged += (s, e) => IsPlaying = _playerService.IsPlaying;
             _playerService.EndReached += (s, e) => IsPlaying = false;

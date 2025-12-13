@@ -48,6 +48,8 @@ namespace SLSKDONET.Services
             }
         }
 
+        public bool IsInitialized => _isInitialized;
+        
         public bool IsPlaying => _mediaPlayer?.IsPlaying ?? false;
         
         public long Length => _mediaPlayer?.Length ?? 0;

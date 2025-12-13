@@ -32,8 +32,8 @@ namespace SLSKDONET.Views
 
 
         private System.Windows.Point _dragStartPoint;
-        private DragAdorner _adorner;
-        private AdornerLayer _layer;
+        private DragAdorner? _adorner;
+        private AdornerLayer? _layer;
 
         private void DataGridRow_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
@@ -83,8 +83,8 @@ namespace SLSKDONET.Views
                             if (_layer != null && _adorner != null)
                             {
                                 _layer.Remove(_adorner);
-                                _adorner = null;
-                                _layer = null;
+                                _adorner = null!;
+                                _layer = null!;
                                 System.Diagnostics.Debug.WriteLine("[DRAG] Adorner cleaned up");
                             }
                         }
