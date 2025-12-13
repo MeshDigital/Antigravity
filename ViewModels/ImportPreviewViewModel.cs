@@ -9,6 +9,7 @@ using System.Windows.Input;
 using Microsoft.Extensions.Logging;
 using SLSKDONET.Models;
 using SLSKDONET.Services;
+using SLSKDONET.Services;
 using SLSKDONET.Views;
 
 namespace SLSKDONET.ViewModels;
@@ -22,6 +23,7 @@ public class ImportPreviewViewModel : INotifyPropertyChanged
     private readonly ILogger<ImportPreviewViewModel> _logger;
     private readonly DownloadManager _downloadManager;
     private readonly ILibraryService? _libraryService;
+    private readonly INavigationService _navigationService;
     
     private string _sourceTitle = "Import Preview";
     private string _sourceType = "";
@@ -96,11 +98,13 @@ public class ImportPreviewViewModel : INotifyPropertyChanged
     public ImportPreviewViewModel(
         ILogger<ImportPreviewViewModel> logger,
         DownloadManager downloadManager,
+        INavigationService navigationService,
         ILibraryService? libraryService = null)
     {
         _logger = logger;
         _downloadManager = downloadManager;
         _libraryService = libraryService;
+        _navigationService = navigationService;
 
         AddToLibraryCommand = new AsyncRelayCommand(AddToLibraryAsync, () => CanAddToLibrary);
         SelectAllCommand = new RelayCommand(SelectAll);
@@ -210,29 +214,31 @@ public class ImportPreviewViewModel : INotifyPropertyChanged
 
         try
         {
+            await Task.Delay(100); // Simulate async work
             _logger.LogInformation(
                 "Adding {Count} tracks to library. JobId: {JobId}, Thread: {ThreadId}",
                 selectedTracks.Count,
                 job.Id,
                 Thread.CurrentThread.ManagedThreadId);
 
-            // Convert tracks to OriginalTracks (DownloadManager will convert to PlaylistTracks and persist)
+            // Convert tracks to PlaylistTracks
             foreach (var track in selectedTracks)
             {
+                // Note: PlaylistJob.OriginalTracks is ObservableCollection<Track>, not PlaylistTrack
                 job.OriginalTracks.Add(track);
             }
 
-            // CRITICAL FIX: Queue the project! This persists it to SQLite and starts the download scheduler.
-            await _downloadManager.QueueProject(job);
-
-            // Notify navigation service
+            // Notify that tracks have been added
+            _logger.LogInformation("Firing AddedToLibrary event for job {JobId}", job.Id);
             AddedToLibrary?.Invoke(this, job);
 
+            _logger.LogInformation("AddedToLibrary event fired. Updating status message.");
             StatusMessage = $"✓ Added {selectedTracks.Count} tracks to library";
             _logger.LogInformation(
-                "Successfully added {Count} tracks to library. JobId: {JobId}",
+                "Successfully added {Count} tracks to library. JobId: {JobId}, Thread: {ThreadId}",
                 selectedTracks.Count,
-                job.Id);
+                job.Id,
+                Thread.CurrentThread.ManagedThreadId);
         }
         catch (Exception ex)
         {
@@ -278,6 +284,51 @@ public class ImportPreviewViewModel : INotifyPropertyChanged
             SelectedCount = newCount;
             OnPropertyChanged(nameof(CanAddToLibrary));
         }
+    }
+
+    /// <summary>
+    /// Handles the logic when a playlist job is confirmed and added from the preview.
+    /// This was moved from MainViewModel to make this component more self-contained.
+    /// </summary>
+    public async Task HandlePlaylistJobAddedAsync(PlaylistJob job)
+    {
+        try
+        {
+            _logger.LogInformation("HandlePlaylistJobAddedAsync ENTRY: {Title} with {Count} tracks",
+                job.SourceTitle, job.OriginalTracks.Count);
+
+            // Queue project through DownloadManager to persist and add to Library.
+            await _downloadManager.QueueProject(job);
+            
+            _logger.LogInformation("QueueProject completed for {JobId}. Job saved to database.", job.Id);
+
+            // Small delay to ensure ProjectAdded event handler completes
+            // This allows LibraryViewModel.OnProjectAdded to finish adding to AllProjects
+            await Task.Delay(200);
+            
+            _logger.LogInformation("Navigating to Library page to show job {JobId}...", job.Id);
+
+            // Navigate to Library to see the new job.
+            _navigationService.NavigateTo("Library");
+
+            _logger.LogInformation("Navigation to Library completed.");
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Error adding to library: {ex.Message}";
+            _logger.LogError(ex, "Failed to handle PlaylistJob addition");
+        }
+    }
+
+    /// <summary>
+    /// Handles the logic when the import is cancelled.
+    /// This was moved from MainViewModel.
+    /// </summary>
+    public void HandleCancellation()
+    {
+        // Navigate back to the search page on cancellation.
+        _navigationService.NavigateTo("Search");
+        _logger.LogInformation("Import cancelled, navigating back to Search page.");
     }
 
     protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
