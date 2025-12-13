@@ -490,22 +490,16 @@
                             <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
                             <Setter Property="Padding" Value="10,0"/>
                             <Setter Property="Template">
-                                <Setter.Value>
                                     <ControlTemplate TargetType="DataGridCell">
                                         <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" Padding="{TemplateBinding Padding}">
                                             <ContentPresenter VerticalAlignment="Center"/>
                                         </Border>
                                     </ControlTemplate>
+                                    </ControlTemplate>
                                 </Setter.Value>
                             </Setter>
-                            <Style.Triggers>
-                                <Trigger Property="IsSelected" Value="True">
-                                    <Setter Property="Background" Value="#2AFFFFFF"/>
-                                    <Setter Property="Foreground" Value="White"/>
-                                </Trigger>
-                            </Style.Triggers>
                         </Style>
-                        
+
                         <!-- Styles for Editing -->
                         <Style x:Key="TitleColumnStyle" TargetType="TextBlock">
                             <Setter Property="FontWeight" Value="Medium"/>
@@ -523,6 +517,18 @@
                             <EventSetter Event="Drop" Handler="DataGridRow_Drop"/>
                             <EventSetter Event="PreviewDragOver" Handler="OnPreviewDragOver"/>
                             <Setter Property="Background" Value="Transparent"/>
+                            
+                            <!-- Double Click to Play -->
+                            <Setter Property="InputBindings">
+                                <Setter.Value>
+                                    <InputBindingCollection>
+                                        <MouseBinding Gesture="LeftDoubleClick" 
+                                                      Command="{Binding DataContext.PlayTrackCommand, RelativeSource={RelativeSource AncestorType=Page}}" 
+                                                      CommandParameter="{Binding}"/>
+                                    </InputBindingCollection>
+                                </Setter.Value>
+                            </Setter>
+
                             <Style.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
                                     <Setter Property="Background" Value="#1AFFFFFF"/>

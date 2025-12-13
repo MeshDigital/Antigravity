@@ -163,6 +163,10 @@ public partial class App : System.Windows.Application
         services.AddSingleton<DownloadLogService>();
         services.AddSingleton<LibraryService>();
         services.AddSingleton<ILibraryService>(provider => provider.GetRequiredService<LibraryService>());
+
+        // Audio Player
+        services.AddSingleton<IAudioPlayerService, AudioPlayerService>();
+        services.AddSingleton<PlayerViewModel>();
         
         // Metadata and tagging service
         services.AddSingleton<ITaggerService, MetadataTaggerService>();

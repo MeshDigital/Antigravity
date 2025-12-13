@@ -3,7 +3,8 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="clr-namespace:SLSKDONET.Views"
     xmlns:converters="clr-namespace:SLSKDONET.Converters"
-    Title="Soulseek Downloader" 
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    Title="Soulseek Downloader"  
     Height="800" 
     Width="1200"
     WindowStartupLocation="CenterScreen"
@@ -33,23 +34,36 @@
         <!-- Main Content Area with Simple Navigation Menu -->
         <Grid x:Name="RootContent" Grid.Row="1" Background="#1E1E1E">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition x:Name="NavColumn" Width="200"/>
                 <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition x:Name="PlayerColumn" Width="0"/>
             </Grid.ColumnDefinitions>
+
+            <Grid.Style>
+                <Style TargetType="Grid">
+                    <Style.Triggers>
+                        <!-- Navigation Sidebar Logic -->
+                        <DataTrigger Binding="{Binding IsNavigationCollapsed}" Value="True">
+                            <Setter TargetName="NavColumn" Property="Width" Value="48"/>
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding IsNavigationCollapsed}" Value="False">
+                            <Setter TargetName="NavColumn" Property="Width" Value="200"/>
+                        </DataTrigger>
+                        
+                        <!-- Player Sidebar Logic -->
+                        <DataTrigger Binding="{Binding IsPlayerSidebarVisible}" Value="True">
+                            <Setter TargetName="PlayerColumn" Property="Width" Value="300"/>
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding IsPlayerSidebarVisible}" Value="False">
+                            <Setter TargetName="PlayerColumn" Property="Width" Value="0"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Grid.Style>
             
             <!-- Left Navigation Panel -->
             <Border Grid.Column="0" Background="#252526" BorderBrush="#404040" BorderThickness="0,0,1,0">
-                <Border.Style>
-                    <Style TargetType="Border">
-                        <Setter Property="Width" Value="200"/>
-                        <Style.Triggers>
-                            <DataTrigger Binding="{Binding IsSidebarCollapsed}" Value="True">
-                                <Setter Property="Width" Value="60"/>
-                            </DataTrigger>
-                        </Style.Triggers>
-                    </Style>
-                </Border.Style>
+                <!-- Border Width binding is REMOVED in favor of Column Width Trigggers -->
                 
                 <Grid>
                     <Grid.RowDefinitions>
@@ -58,9 +72,9 @@
                     </Grid.RowDefinitions>
                     
                     <!-- Hamburger Toggle -->
-                    <Button Grid.Row="0" Command="{Binding ToggleSidebarCommand}" 
+                    <Button Grid.Row="0" Command="{Binding ToggleNavigationCommand}" 
                             Background="Transparent" BorderThickness="0" Foreground="#AAA"
-                            HorizontalAlignment="Left" Margin="10,15,0,0" Padding="8" Cursor="Hand">
+                            HorizontalAlignment="Left" Margin="4,10,0,0" Padding="8" Cursor="Hand">
                         <TextBlock Text="≡" FontSize="20"/>
                     </Button>
 
@@ -74,7 +88,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="🔍" FontSize="16" Width="24" TextAlignment="Center"/>
                                 <TextBlock Grid.Column="1" Text="Search" Margin="12,0,0,0" VerticalAlignment="Center"
-                                           Visibility="{Binding IsSidebarCollapsed, Converter={StaticResource InverseBooleanToVisibilityConverter}}"/>
+                                           Visibility="{Binding IsNavigationCollapsed, Converter={StaticResource InverseBooleanToVisibilityConverter}}"/>
                             </Grid>
                         </Button>
                         <Button Command="{Binding NavigateLibraryCommand}" Style="{StaticResource NavButtonStyle}" Margin="10,5" ToolTip="Library">
@@ -85,7 +99,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="📚" FontSize="16" Width="24" TextAlignment="Center"/>
                                 <TextBlock Grid.Column="1" Text="Library" Margin="12,0,0,0" VerticalAlignment="Center"
-                                           Visibility="{Binding IsSidebarCollapsed, Converter={StaticResource InverseBooleanToVisibilityConverter}}"/>
+                                           Visibility="{Binding IsNavigationCollapsed, Converter={StaticResource InverseBooleanToVisibilityConverter}}"/>
                             </Grid>
                         </Button>
                         <Button Command="{Binding NavigateDownloadsCommand}" Style="{StaticResource NavButtonStyle}" Margin="10,5" ToolTip="Downloads">
@@ -96,7 +110,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="⬇️" FontSize="16" Width="24" TextAlignment="Center"/>
                                 <TextBlock Grid.Column="1" Text="Downloads" Margin="12,0,0,0" VerticalAlignment="Center"
-                                           Visibility="{Binding IsSidebarCollapsed, Converter={StaticResource InverseBooleanToVisibilityConverter}}"/>
+                                           Visibility="{Binding IsNavigationCollapsed, Converter={StaticResource InverseBooleanToVisibilityConverter}}"/>
                             </Grid>
                         </Button>
                         <Button Command="{Binding NavigateSettingsCommand}" Style="{StaticResource NavButtonStyle}" Margin="10,5" ToolTip="Settings">
@@ -107,7 +121,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="⚙️" FontSize="16" Width="24" TextAlignment="Center"/>
                                 <TextBlock Grid.Column="1" Text="Settings" Margin="12,0,0,0" VerticalAlignment="Center"
-                                           Visibility="{Binding IsSidebarCollapsed, Converter={StaticResource InverseBooleanToVisibilityConverter}}"/>
+                                           Visibility="{Binding IsNavigationCollapsed, Converter={StaticResource InverseBooleanToVisibilityConverter}}"/>
                             </Grid>
                         </Button>
                     </StackPanel>
@@ -118,17 +132,81 @@
             <Frame x:Name="RootFrame" Grid.Column="1" NavigationUIVisibility="Hidden" Background="Transparent"/>
             
             <!-- Right Sidebar Placeholder (Music Player) -->
-            <Border Grid.Column="2" Background="#222" BorderBrush="#333" BorderThickness="1,0,0,0" Width="280">
+            <Border Grid.Column="2" Background="#222" BorderBrush="#333" BorderThickness="1,0,0,0">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
                     
-                    <Border Background="#2A2A2A" Padding="15" Margin="15,20,15,10" CornerRadius="8">
+                    <Button Command="{Binding TogglePlayerCommand}" HorizontalAlignment="Right" Margin="10" Background="Transparent" BorderThickness="0" Foreground="#888">
+                        <TextBlock Text="✕" FontSize="14"/>
+                    </Button>
+                    
+                    <Border Grid.Row="1" Background="#2A2A2A" Padding="15" Margin="15,0,15,10" CornerRadius="8" VerticalAlignment="Top">
                         <StackPanel>
-                             <TextBlock Text="🎵 No Track Playing" Foreground="#DDD" FontWeight="SemiBold" HorizontalAlignment="Center"/>
-                             <TextBlock Text="Music Player Coming Soon" Foreground="#777" FontSize="12" Margin="0,5,0,0" HorizontalAlignment="Center"/>
+                            <!-- Album Art / Icon -->
+                            <Border Background="#333" CornerRadius="4" Height="120" Margin="0,0,0,15">
+                                <TextBlock Text="🎵" FontSize="48" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="#555"/>
+                            </Border>
+
+                            <!-- Track Info -->
+                            <TextBlock Text="{Binding PlayerViewModel.TrackTitle}" 
+                                       Foreground="White" FontWeight="SemiBold" FontSize="14" 
+                                       TextTrimming="CharacterEllipsis" TextAlignment="Center" Margin="0,0,0,4"
+                                       ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+                            <TextBlock Text="{Binding PlayerViewModel.TrackArtist}" 
+                                       Foreground="#A0A0A0" FontSize="12" 
+                                       TextTrimming="CharacterEllipsis" TextAlignment="Center" Margin="0,0,0,15"/>
+
+                            <!-- Progress & Time -->
+                            <Grid Margin="0,0,0,10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{Binding PlayerViewModel.CurrentTimeStr}" Foreground="#888" FontSize="11"/>
+                                <Slider Grid.Column="1" Margin="8,0" VerticalAlignment="Center"
+                                        Minimum="0" Maximum="1" Value="{Binding PlayerViewModel.Position, Mode=TwoWay}"
+                                        IsMoveToPointEnabled="True" Cursor="Hand"/>
+                                <TextBlock Grid.Column="2" Text="{Binding PlayerViewModel.TotalTimeStr}" Foreground="#888" FontSize="11"/>
+                            </Grid>
+
+                            <!-- Controls -->
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,20">
+                                <Button Command="{Binding PlayerViewModel.StopCommand}" ToolTip="Stop"
+                                        Background="Transparent" BorderThickness="0" Padding="10" Cursor="Hand">
+                                    <TextBlock Text="⏹" FontSize="16" Foreground="#DDD"/>
+                                </Button>
+                                <!-- Play/Pause -->
+                                <Button Command="{Binding PlayerViewModel.TogglePlayPauseCommand}" ToolTip="Play/Pause"
+                                        Background="#444" BorderThickness="0" Padding="0" Width="40" Height="40" Cursor="Hand" Margin="10,0">
+                                    <Button.Resources>
+                                        <Style TargetType="{x:Type Border}">
+                                            <Setter Property="CornerRadius" Value="20"/>
+                                        </Style>
+                                    </Button.Resources>
+                                    <TextBlock Text="{Binding PlayerViewModel.IsPlaying, Converter={StaticResource BooleanToPlayPauseIconConverter}}" 
+                                               FontSize="18" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Button>
+                                <!-- Next (Future) -->
+                                <Button IsEnabled="False" ToolTip="Next (Coming Soon)"
+                                        Background="Transparent" BorderThickness="0" Padding="10">
+                                    <TextBlock Text="⏭" FontSize="16" Foreground="#555"/>
+                                </Button>
+                            </StackPanel>
+
+                            <!-- Volume -->
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="🔊" FontSize="14" Foreground="#888" Margin="0,0,8,0"/>
+                                <Slider Grid.Column="1" Minimum="0" Maximum="100" Value="{Binding PlayerViewModel.Volume, Mode=TwoWay}"
+                                        VerticalAlignment="Center" IsMoveToPointEnabled="True"/>
+                            </Grid>
                         </StackPanel>
                     </Border>
                     
@@ -252,6 +330,18 @@
                                Foreground="#A0A0A0" FontSize="11" Margin="0,0,12,0"/>
                     <TextBlock Text="{Binding FailedCount, StringFormat='✗ {0} failed'}" 
                                Foreground="#A0A0A0" FontSize="11"/>
+                    
+                    <!-- Separator -->
+                    <Border Width="1" Height="14" Background="#404040" Margin="12,0,12,0" />
+
+                    <!-- Player Toggle -->
+                    <Button Command="{Binding TogglePlayerCommand}" ToolTip="Toggle Music Player"
+                            Background="Transparent" BorderThickness="0" Padding="6,2" Cursor="Hand">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="🎵" FontSize="14" Foreground="#A0A0A0" Margin="0,1,6,0"/>
+                            <TextBlock Text="Player" FontSize="11" Foreground="#A0A0A0" FontWeight="SemiBold"/>
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
             </Grid>
         </Border>

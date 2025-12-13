@@ -17,7 +17,9 @@ public class LibraryViewModel : INotifyPropertyChanged
 {
     private readonly ILogger<LibraryViewModel> _logger;
     private readonly DownloadManager _downloadManager;
+    private readonly DownloadManager _downloadManager;
     private readonly ILibraryService _libraryService;
+    private readonly PlayerViewModel _playerViewModel;
 
 
     private bool FilterTracks(object obj)
@@ -58,7 +60,9 @@ public class LibraryViewModel : INotifyPropertyChanged
     public ICommand LoadAllTracksCommand { get; }
     public ICommand OpenFolderCommand { get; }
     public ICommand RemoveTrackCommand { get; }
+    public ICommand RemoveTrackCommand { get; }
     public ICommand AddPlaylistCommand { get; }
+    public ICommand PlayTrackCommand { get; }
 
     // Master List: All import jobs/projects
     public ObservableCollection<PlaylistJob> AllProjects
@@ -230,7 +234,12 @@ public class LibraryViewModel : INotifyPropertyChanged
     {
         _logger = logger;
         _downloadManager = downloadManager;
+    public LibraryViewModel(ILogger<LibraryViewModel> logger, DownloadManager downloadManager, ILibraryService libraryService, PlayerViewModel playerViewModel)
+    {
+        _logger = logger;
+        _downloadManager = downloadManager;
         _libraryService = libraryService;
+        _playerViewModel = playerViewModel;
 
         // Commands
         HardRetryCommand = new RelayCommand<PlaylistTrackViewModel>(ExecuteHardRetry);
@@ -244,7 +253,9 @@ public class LibraryViewModel : INotifyPropertyChanged
         ResumeProjectCommand = new RelayCommand<PlaylistJob>(ExecuteResumeProject);
         LoadAllTracksCommand = new RelayCommand(() => SelectedProject = _allTracksJob);
         ToggleActiveDownloadsCommand = new RelayCommand<object>(_ => IsActiveDownloadsVisible = !IsActiveDownloadsVisible);
+        ToggleActiveDownloadsCommand = new RelayCommand<object>(_ => IsActiveDownloadsVisible = !IsActiveDownloadsVisible);
         AddPlaylistCommand = new AsyncRelayCommand(ExecuteAddPlaylistAsync);
+        PlayTrackCommand = new RelayCommand<PlaylistTrackViewModel>(ExecutePlayTrack);
         
         // Basic impl for missing commands
         OpenFolderCommand = new RelayCommand<object>(_ => { /* TODO: Implement Open Folder */ });
@@ -419,6 +430,21 @@ public class LibraryViewModel : INotifyPropertyChanged
 
         _logger.LogInformation("Cancel requested for {Artist} - {Title}", vm.Artist, vm.Title);
         _downloadManager.CancelTrack(vm.GlobalId);
+        _logger.LogInformation("Cancel requested for {Artist} - {Title}", vm.Artist, vm.Title);
+        _downloadManager.CancelTrack(vm.GlobalId);
+    }
+
+    private void ExecutePlayTrack(PlaylistTrackViewModel? vm)
+    {
+        if (vm == null || string.IsNullOrEmpty(vm.LocalPath)) return;
+        
+        // Ensure file exists? libVLC will fail or log err if not.
+        _logger.LogInformation("Playing track: {Title} by {Artist}", vm.Title, vm.Artist);
+        _playerViewModel.PlayTrack(vm.LocalPath, vm.Title ?? "Unknown", vm.Artist ?? "Unknown Artist");
+        
+        // Also ensure sidebar is visible?
+        // _mainViewModel.TogglePlayerCommand.Execute(null); // No reference to MainViewModel here.
+        // We'll trust user to open it, or maybe use an event aggregator later if we want auto-open.
     }
 
     private void ExecutePauseProject(PlaylistJob? job)

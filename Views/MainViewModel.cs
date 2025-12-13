@@ -68,6 +68,7 @@ public class MainViewModel : INotifyPropertyChanged
     
     // Import Preview ViewModel (for CSV/Spotify imports)
     public ImportPreviewViewModel? ImportPreviewViewModel { get; private set; }
+    public PlayerViewModel PlayerViewModel { get; }
     
     private bool _isImportPreviewVisible;
     public bool IsImportPreviewVisible
@@ -76,11 +77,18 @@ public class MainViewModel : INotifyPropertyChanged
         set => SetProperty(ref _isImportPreviewVisible, value);
     }
 
-    private bool _isSidebarCollapsed;
-    public bool IsSidebarCollapsed
+    private bool _isNavigationCollapsed;
+    public bool IsNavigationCollapsed
     {
-        get => _isSidebarCollapsed;
-        set => SetProperty(ref _isSidebarCollapsed, value);
+        get => _isNavigationCollapsed;
+        set => SetProperty(ref _isNavigationCollapsed, value);
+    }
+    
+    private bool _isPlayerSidebarVisible;
+    public bool IsPlayerSidebarVisible
+    {
+        get => _isPlayerSidebarVisible;
+        set => SetProperty(ref _isPlayerSidebarVisible, value);
     }
 
     // --- Downloads Page Search & Filtering ---
@@ -159,7 +167,8 @@ public class MainViewModel : INotifyPropertyChanged
     public ICommand ShowLoginCommand { get; }
     public ICommand DismissLoginCommand { get; }
     public ICommand DisconnectCommand { get; }
-    public ICommand ToggleSidebarCommand { get; }
+    public ICommand ToggleNavigationCommand { get; }
+    public ICommand TogglePlayerCommand { get; }
     private readonly INotificationService _notificationService;
     private readonly INavigationService _navigationService;
 
@@ -180,7 +189,8 @@ public class MainViewModel : INotifyPropertyChanged
         INotificationService notificationService,
         ProtectedDataService protectedDataService,
         IUserInputService userInputService,
-        CsvInputSource csvInputSource) // Add CsvInputSource dependency
+        CsvInputSource csvInputSource, // Add CsvInputSource dependency
+        PlayerViewModel playerViewModel)
     {
         _logger = logger;
         _logger.LogInformation("=== MainViewModel Constructor Started ===");
@@ -201,6 +211,8 @@ public class MainViewModel : INotifyPropertyChanged
         _searchQueryNormalizer = searchQueryNormalizer; // Store it
         SpotifyClientId = _config.SpotifyClientId;
         SpotifyClientSecret = _config.SpotifyClientSecret;
+        
+        PlayerViewModel = playerViewModel;
         
         _logger.LogInformation("Dependencies injected successfully");
 
@@ -292,7 +304,8 @@ public class MainViewModel : INotifyPropertyChanged
             StatusText = "Disconnected";
         });
 
-        ToggleSidebarCommand = new RelayCommand(() => IsSidebarCollapsed = !IsSidebarCollapsed);
+        ToggleNavigationCommand = new RelayCommand(() => IsNavigationCollapsed = !IsNavigationCollapsed);
+        TogglePlayerCommand = new RelayCommand(() => IsPlayerSidebarVisible = !IsPlayerSidebarVisible);
         
         // Subscribe to download events
         // REMOVED: DownloadManager events are deprecated in Bundle 1 refactor.

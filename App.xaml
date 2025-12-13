@@ -35,6 +35,8 @@
 
             <!-- Add utility converters -->
             <converters:CountToVisibilityConverter x:Key="CountToVisibilityConverter"/>
+            <converters:BytesToReadableStringConverter x:Key="BytesToReadableStringConverter"/>
+            <converters:BooleanToPlayPauseIconConverter x:Key="BooleanToPlayPauseIconConverter"/>
             <converters:NullToVisibilityConverter x:Key="NullToVisibilityConverter"/>
             <converters:InverseNullToVisibilityConverter x:Key="InverseNullToVisibilityConverter"/>
             <converters:InverseBooleanConverter x:Key="InverseBooleanConverter"/>

@@ -16,6 +16,8 @@
 
   <ItemGroup>
     <!-- Soulseek.NET library -->
+    <PackageReference Include="LibVLCSharp" Version="3.9.5" />
+    <PackageReference Include="LibVLCSharp.WPF" Version="3.9.5" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.*" />
     <PackageReference Include="Soulseek" Version="8.5.0" />
     
@@ -42,6 +44,7 @@
     
     <!-- JSON serialization for index files -->
     <PackageReference Include="System.Text.Json" Version="8.0.5" />
+    <PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.21" />
 
     <!-- Modern Windows 11 UI Controls -->
     <PackageReference Include="WPF-UI" Version="4.1.0" />
