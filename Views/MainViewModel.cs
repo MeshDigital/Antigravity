@@ -1374,14 +1374,20 @@ public class MainViewModel : INotifyPropertyChanged
         var diagnosticTrackIds = new HashSet<string>();
         PlaylistJob? diagnosticsJob = null;
 
-        T InvokeOnUi<T>(Func<T> func)
+    /// <summary>
+    /// Helper to run async code on UI thread
+    /// </summary>
+    private async Task<T> RunOnUIThreadAsync<T>(Func<T> func)
+    {
+        if (Dispatcher.UIThread.CheckAccess())
         {
-            if (Dispatcher.UIThread.CheckAccess())
-                return func();
-
-            return Dispatcher.UIThread.InvokeAsync(func).Result;
+            return func();
         }
-
+        else
+        {
+            return await Dispatcher.UIThread.InvokeAsync(func);
+        }
+    }
         void InvokeOnUiAction(Action action)
         {
             if (Dispatcher.UIThread.CheckAccess())
