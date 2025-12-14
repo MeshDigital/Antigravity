@@ -49,6 +49,33 @@
                             <TextBlock Text="Import History" FontSize="13"/>
                         </StackPanel>
                     </Button>
+                    
+                    <!-- All Tracks Button -->
+                    <Button Command="{Binding LoadAllTracksCommand}" 
+                            Classes="nav"
+                            HorizontalContentAlignment="Left"
+                            Padding="12,10"
+                            ToolTip.Tip="View all downloaded tracks from all playlists">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <TextBlock Text="🎵" FontSize="16"/>
+                            <TextBlock Text="All Tracks" FontSize="13" FontWeight="Bold"/>
+                        </StackPanel>
+                    </Button>
+                    
+                    <!-- Delete Playlist Button -->
+                    <Button Command="{Binding DeleteProjectCommand}" 
+                            CommandParameter="{Binding SelectedProject}"
+                            Classes="nav"
+                            HorizontalContentAlignment="Left"
+                            Padding="12,10"
+                            IsEnabled="{Binding !!SelectedProject}"
+                            ToolTip.Tip="Delete selected playlist (with confirmation)">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <TextBlock Text="🗑️" FontSize="16"/>
+                            <TextBlock Text="Delete Playlist" FontSize="13" Foreground="#FF6B6B"/>
+                        </StackPanel>
+                    </Button>
+                    
                 </StackPanel>
                 
                 <!-- Playlist List -->
