@@ -153,9 +153,128 @@
                 <ContentControl Content="{Binding ImportPreviewViewModel}"/>
             </Border>
 
-            <!-- Search Results -->
-            <ScrollViewer IsVisible="{Binding !IsImportPreviewVisible}">
+            <!-- Album Search Results -->
+            <ScrollViewer IsVisible="{Binding IsAlbumSearch}">
                 <StackPanel Margin="24,0,24,24">
+                    <!-- Album Results Header -->
+                    <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,16">
+                        <TextBlock Grid.Column="0"
+                                   Text="{Binding AlbumResults.Count, StringFormat='Found {0} albums'}" 
+                                   FontSize="18" 
+                                   FontWeight="SemiBold" 
+                                   Foreground="White"/>
+                    </Grid>
+
+                    <!-- Album Results Grid -->
+                    <DataGrid ItemsSource="{Binding AlbumResults}"
+                              AutoGenerateColumns="False"
+                              Background="Transparent"
+                              BorderThickness="0"
+                              GridLinesVisibility="Horizontal"
+                              RowBackground="Transparent"
+                              Foreground="#DDD"
+                              HeadersVisibility="Column"
+                              CanUserReorderColumns="False"
+                              CanUserResizeColumns="True"
+                              CanUserSortColumns="False"
+                              IsReadOnly="True">
+                        
+                        <DataGrid.Styles>
+                            <Style Selector="DataGridRow:pointerover">
+                                <Setter Property="Background" Value="#1AFFFFFF"/>
+                            </Style>
+                            <Style Selector="DataGridRow:selected">
+                                <Setter Property="Background" Value="#2A0078D4"/>
+                            </Style>
+                        </DataGrid.Styles>
+
+                        <DataGrid.Columns>
+                            <!-- Album Title -->
+                            <DataGridTextColumn Header="Album" 
+                                                Binding="{Binding AlbumTitle}" 
+                                                Width="3*"/>
+                            
+                            <!-- Artist -->
+                            <DataGridTextColumn Header="Artist" 
+                                                Binding="{Binding Artist}" 
+                                                Width="2*"/>
+                            
+                            <!-- Track Count -->
+                            <DataGridTextColumn Header="Tracks" 
+                                                Binding="{Binding TrackCount, StringFormat='{}{0} tracks'}" 
+                                                Width="100"/>
+                            
+                            <!-- Quality -->
+                            <DataGridTextColumn Header="Quality" 
+                                                Binding="{Binding QualitySummary}" 
+                                                Width="120"/>
+                            
+                            <!-- Size -->
+                            <DataGridTextColumn Header="Size" 
+                                                Binding="{Binding TotalSizeMb, StringFormat='{}{0:F1} MB'}" 
+                                                Width="100"/>
+                            
+                            <!-- User -->
+                            <DataGridTextColumn Header="User" 
+                                                Binding="{Binding Username}" 
+                                                Width="120"/>
+                            
+                            <!-- Free Slot -->
+                            <DataGridTemplateColumn Header="🚀" Width="40">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="✓" 
+                                                   Foreground="#4CAF50" 
+                                                   HorizontalAlignment="Center"
+                                                   FontWeight="Bold"
+                                                   IsVisible="{Binding HasFreeSlot}"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            
+                            <!-- Download Button -->
+                            <DataGridTemplateColumn Header="Action" Width="150">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <Button Command="{Binding DownloadAlbumCommand}"
+                                                Classes="primary"
+                                                Padding="12,6">
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <TextBlock Text="⬇️" FontSize="12"/>
+                                                <TextBlock Text="Download" FontSize="12" FontWeight="SemiBold"/>
+                                            </StackPanel>
+                                        </Button>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+
+                    <!-- Empty State -->
+                    <Border Background="#252526" 
+                            CornerRadius="8" 
+                            Padding="48,32"
+                            IsVisible="{Binding !AlbumResults.Count}"
+                            Margin="0,24,0,0">
+                        <StackPanel HorizontalAlignment="Center" Spacing="16">
+                            <TextBlock Text="💿" FontSize="48" HorizontalAlignment="Center"/>
+                            <TextBlock Text="No albums found" 
+                                       FontSize="18" 
+                                       FontWeight="SemiBold" 
+                                       Foreground="White"
+                                       HorizontalAlignment="Center"/>
+                            <TextBlock Text="Try a different search query" 
+                                       FontSize="13" 
+                                       Foreground="#A0A0A0"
+                                       HorizontalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- Track Search Results -->
+            <ScrollViewer IsVisible="{Binding !IsImportPreviewVisible}">
+                <StackPanel Margin="24,0,24,24" IsVisible="{Binding !IsAlbumSearch}">
                     <!-- Results Header -->
                     <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,16">
                         <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="12">
