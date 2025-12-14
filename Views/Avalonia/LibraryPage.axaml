@@ -176,7 +176,7 @@
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <TextBlock Text="🔄"/>
                                 <TextBlock Text="Refresh"/>
-                            </Stackanel>
+                            </StackPanel>
                         </Button>
                     </StackPanel>
                 </Grid>
