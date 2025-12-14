@@ -1,9 +1,10 @@
-
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows.Input; // For ICommand
 using SLSKDONET.Models;
+using SLSKDONET.Services;
 using SLSKDONET.Views; // For RelayCommand
 
 namespace SLSKDONET.ViewModels;
@@ -99,6 +100,37 @@ public class PlaylistTrackViewModel : INotifyPropertyChanged
 
     // Cancellation token source for this specific track's operation
     public System.Threading.CancellationTokenSource? CancellationTokenSource { get; set; }
+
+    // User engagement
+    private int _rating;
+    public int Rating
+    {
+        get => _rating;
+        set
+        {
+            if (_rating != value)
+            {
+                _rating = value;
+                Model.Rating = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    private bool _isLiked;
+    public bool IsLiked
+    {
+        get => _isLiked;
+        set
+        {
+            if (_isLiked != value)
+            {
+                _isLiked = value;
+                Model.IsLiked = value;
+                OnPropertyChanged();
+            }
+        }
+    }
 
     // Commands
     public ICommand PauseCommand { get; }
