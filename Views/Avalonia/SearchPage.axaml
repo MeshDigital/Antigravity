@@ -114,6 +114,32 @@
                             <TextBlock Text="Cancel" FontSize="13" FontWeight="SemiBold"/>
                         </StackPanel>
                     </Button>
+                    
+                    <!-- Select All -->
+                    <Button Command="{Binding SelectAllSearchResultsCommand}"
+                            Background="#424242"
+                            Foreground="White"
+                            Padding="12,8"
+                            CornerRadius="6"
+                            IsVisible="{Binding !!SearchResults.Count}">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="☑" FontSize="14"/>
+                            <TextBlock Text="Select All" FontSize="13"/>
+                        </StackPanel>
+                    </Button>
+                    
+                    <!-- Deselect All -->
+                    <Button Command="{Binding DeselectAllSearchResultsCommand}"
+                            Background="#424242"
+                            Foreground="White"
+                            Padding="12,8"
+                            CornerRadius="6"
+                            IsVisible="{Binding !!SelectedTrackCount}">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="☐" FontSize="14"/>
+                            <TextBlock Text="Deselect All" FontSize="13"/>
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
 
                 <!-- Status Bar -->

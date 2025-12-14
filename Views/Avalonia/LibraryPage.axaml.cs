@@ -31,7 +31,73 @@ namespace SLSKDONET.Views.Avalonia
                 // Wire up pointer events for initiating drag
                 _dataGrid.AddHandler(PointerPressedEvent, OnPointerPressed, handledEventsToo: true);
                 _dataGrid.AddHandler(PointerMovedEvent, OnPointerMoved, handledEventsToo: true);
+                
+                // Setup context menu
+                SetupContextMenu();
             }
+        }
+
+        private void SetupContextMenu()
+        {
+            if (_dataGrid == null || DataContext is not LibraryViewModel viewModel) return;
+
+            var contextMenu = new ContextMenu();
+            
+            // Get the LibraryActionProvider from the service provider
+            // For now, we'll create basic menu items directly
+            var playItem = new MenuItem { Header = "▶️ Play" };
+            playItem.Click += (s, e) =>
+            {
+                if (_dataGrid.SelectedItem is PlaylistTrackViewModel track)
+                {
+                    viewModel.PlayTrackCommand?.Execute(track);
+                }
+            };
+            
+            var removeItem = new MenuItem { Header = "🗑️ Remove from Playlist" };
+            removeItem.Click += (s, e) =>
+            {
+                if (_dataGrid.SelectedItem is PlaylistTrackViewModel track)
+                {
+                    viewModel.RemoveTrackCommand?.Execute(track);
+                }
+            };
+            
+            var openFolderItem = new MenuItem { Header = "📁 Open Folder" };
+            openFolderItem.Click += (s, e) =>
+            {
+                if (_dataGrid.SelectedItem is PlaylistTrackViewModel track && 
+                    !string.IsNullOrEmpty(track.Model.ResolvedFilePath))
+                {
+                    var folder = System.IO.Path.GetDirectoryName(track.Model.ResolvedFilePath);
+                    if (!string.IsNullOrEmpty(folder) && System.IO.Directory.Exists(folder))
+                    {
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = folder,
+                            UseShellExecute = true
+                        });
+                    }
+                }
+            };
+            
+            var retryItem = new MenuItem { Header = "♻️ Retry Download" };
+            retryItem.Click += (s, e) =>
+            {
+                if (_dataGrid.SelectedItem is PlaylistTrackViewModel track)
+                {
+                    track.FindNewVersionCommand?.Execute(null);
+                }
+            };
+            
+            contextMenu.Items.Add(playItem);
+            contextMenu.Items.Add(new Separator());
+            contextMenu.Items.Add(openFolderItem);
+            contextMenu.Items.Add(retryItem);
+            contextMenu.Items.Add(new Separator());
+            contextMenu.Items.Add(removeItem);
+            
+            _dataGrid.ContextMenu = contextMenu;
         }
 
         private void OnPointerPressed(object? sender, PointerPressedEventArgs e)
