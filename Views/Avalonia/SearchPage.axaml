@@ -3,6 +3,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:views="clr-namespace:SLSKDONET.Views.Avalonia"
+             xmlns:models="clr-namespace:SLSKDONET.Models"
              mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="800"
              x:Class="SLSKDONET.Views.Avalonia.SearchPage"
              Background="#1E1E1E" Foreground="White">
@@ -23,88 +24,116 @@
 
         <!-- Dynamic Search Bar -->
         <Border Grid.Row="1" Background="#1E1E1E" Padding="24,20">
-            <Grid RowDefinitions="Auto,Auto,Auto">
-                
-                <!-- Main Search Input -->
-                <Border Grid.Row="0" 
-                        Background="#252526" 
-                        BorderBrush="#0078D4" 
-                        BorderThickness="2" 
-                        CornerRadius="8"
-                        Padding="4">
-                    <Grid ColumnDefinitions="Auto,*,Auto,Auto">
-                        <!-- Search Icon -->
-                        <TextBlock Grid.Column="0" 
-                                   Text="🔍" 
-                                   FontSize="20" 
-                                   VerticalAlignment="Center"
-                                   Margin="12,0,8,0"/>
-                        
-                        <!-- Input Box -->
-                        <TextBox Grid.Column="1"
-                                 x:Name="SearchInput"
-                                 Text="{Binding SearchQuery, Mode=TwoWay}"
-                                 Watermark="Search tracks, paste Spotify URL, or drop CSV file..."
-                                 Background="Transparent"
-                                 BorderThickness="0"
-                                 Foreground="White"
-                                 FontSize="15"
-                                 Padding="8,12"
-                                 VerticalContentAlignment="Center"/>
-                        
-                        <!-- CSV Import Button -->
-                        <Button Grid.Column="2"
-                                Command="{Binding ImportCsvCommand}"
-                                Background="Transparent"
-                                BorderThickness="0"
-                                Padding="12,8"
-                                ToolTip.Tip="Import CSV File"
-                                Margin="4,0">
-                            <StackPanel Orientation="Horizontal" Spacing="6">
-                                <TextBlock Text="📄" FontSize="16"/>
-                                <TextBlock Text="CSV" FontSize="13" Foreground="#A0A0A0"/>
-                            </StackPanel>
-                        </Button>
-                        
-                        <!-- Search Button -->
-                        <Button Grid.Column="3"
-                                Classes="primary"
-                                Command="{Binding SearchCommand}"
-                                Height="48"
-                                Padding="24,0"
-                                Margin="4,0,4,0">
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <TextBlock Text="Search" FontSize="14" FontWeight="SemiBold"/>
-                                <TextBlock Text="⏎" FontSize="14" Foreground="#FFFFFF80"/>
-                            </StackPanel>
-                        </Button>
-                    </Grid>
-                </Border>
+            <StackPanel Spacing="16">
+                <!-- Unified Input Row -->
+                <Grid ColumnDefinitions="*,Auto,Auto">
+                    
+                    <!-- Main Search Input -->
+                    <Border Grid.Column="0" 
+                            Background="#252526" 
+                            BorderBrush="#0078D4" 
+                            BorderThickness="2" 
+                            CornerRadius="8"
+                            Padding="4">
+                        <Grid ColumnDefinitions="Auto,*,Auto">
+                            <!-- Input Box -->
+                            <TextBox Grid.Column="1"
+                                     x:Name="SearchInput"
+                                     Text="{Binding SearchQuery, Mode=TwoWay}"
+                                     Watermark="Enter song, artist, Spotify URL, or CSV file path..."
+                                     Background="Transparent"
+                                     BorderThickness="0"
+                                     Foreground="White"
+                                     FontSize="15"
+                                     Padding="8,8"
+                                     VerticalContentAlignment="Center"/>
+                            
+                            <!-- Clear Button -->
+                            <Button Grid.Column="2"
+                                    Command="{Binding ClearSearchCommand}"
+                                    Background="Transparent"
+                                    BorderThickness="0"
+                                    Padding="8,4"
+                                    Margin="0,0,4,0"
+                                    IsVisible="{Binding !!SearchQuery.Length}">
+                                <TextBlock Text="✕" FontSize="14" Foreground="#808080"/>
+                            </Button>
+                        </Grid>
+                    </Border>
 
-                <!-- Quick Actions -->
-                <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="12" Margin="0,16,0,0">
-                    <!-- Album Search Toggle -->
+                    <!-- Browse CSV Button -->
+                    <Button Grid.Column="1" 
+                            Content="📂 Browse CSV..." 
+                            Command="{Binding BrowseCsvCommand}"
+                            Classes="secondary"
+                            Height="42"
+                            Margin="12,0,0,0"
+                            Padding="12,0"
+                            VerticalAlignment="Top"/>
+
+                    <!-- Search Button -->
+                    <Button Grid.Column="2"
+                            Classes="primary"
+                            Command="{Binding UnifiedSearchCommand}"
+                            Height="42"
+                            Padding="24,0"
+                            Margin="12,0,0,0"
+                            VerticalAlignment="Top"
+                            IsEnabled="{Binding !!SearchQuery.Length}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="Search / Import" FontSize="14" FontWeight="SemiBold"/>
+                            <TextBlock Text="➡️" FontSize="14"/>
+                        </StackPanel>
+                    </Button>
+                </Grid>
+
+                <!-- Advanced Filters Panel -->
+                <Expander Header="Advanced Filters &amp; Ranking" 
+                          IsExpanded="False"
+                          Background="#252526"
+                          CornerRadius="4">
+                    <StackPanel Spacing="16" Margin="12">
+                        <!-- Ranking Preset -->
+                        <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto">
+                            <TextBlock Grid.Row="0" Grid.Column="0" 
+                                       Text="Ranking Priority:" 
+                                       VerticalAlignment="Center" 
+                                       FontWeight="SemiBold"
+                                       Margin="0,0,16,0"/>
+                            
+                            <ComboBox Grid.Row="0" Grid.Column="1" 
+                                      SelectedItem="{Binding RankingPreset}"
+                                      Width="200"
+                                      HorizontalAlignment="Left">
+                                <ComboBoxItem Content="⚖️ Balanced Default" Tag="{x:Static models:RankingPreset.Balanced}"/>
+                                <ComboBoxItem Content="💎 High Quality (FLAC/320)" Tag="{x:Static models:RankingPreset.HighQuality}"/>
+                                <ComboBoxItem Content="⚡ Fastest Download" Tag="{x:Static models:RankingPreset.FastestDownload}"/>
+                            </ComboBox>
+                        </Grid>
+                        
+                        <!-- Bitrate Range -->
+                        <Grid ColumnDefinitions="Auto,Auto,Auto,Auto" RowDefinitions="Auto">
+                             <TextBlock Grid.Column="0" Text="Min Bitrate:" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                             <NumericUpDown Grid.Column="1" Value="{Binding MinBitrate}" Minimum="0" Maximum="5000" Increment="32" Width="100"/>
+                             
+                             <TextBlock Grid.Column="2" Text="Max Bitrate:" VerticalAlignment="Center" Margin="24,0,12,0"/>
+                             <NumericUpDown Grid.Column="3" Value="{Binding MaxBitrate}" Minimum="0" Maximum="5000" Increment="32" Width="100"/>
+                        </Grid>
+                    </StackPanel>
+                </Expander>
+
+                <!-- Quick Actions (Legacy/Extra) -->
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                     <!-- Album Search Toggle -->
                     <ToggleButton IsChecked="{Binding IsAlbumSearch, Mode=TwoWay}"
                                   Background="#2D2D2D"
                                   Padding="12,8"
                                   CornerRadius="6">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <TextBlock Text="💿" FontSize="14"/>
-                            <TextBlock Text="Album Search" FontSize="13"/>
+                            <TextBlock Text="Album Search Mode" FontSize="13"/>
                         </StackPanel>
                     </ToggleButton>
-                    
-                    <!-- Spotify Import -->
-                    <Button Command="{Binding ImportFromSpotifyCommand}"
-                            Background="#1DB954"
-                            Foreground="White"
-                            Padding="12,8"
-                            CornerRadius="6">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <TextBlock Text="🎵" FontSize="14"/>
-                            <TextBlock Text="Import Spotify Playlist" FontSize="13" FontWeight="SemiBold"/>
-                        </StackPanel>
-                    </Button>
                     
                     <!-- Cancel Search -->
                     <Button Command="{Binding CancelSearchCommand}"
@@ -115,54 +144,26 @@
                             IsVisible="{Binding IsSearching}">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <TextBlock Text="⏹" FontSize="14"/>
-                            <TextBlock Text="Cancel" FontSize="13" FontWeight="SemiBold"/>
-                        </StackPanel>
-                    </Button>
-                    
-                    <!-- Select All -->
-                    <Button Command="{Binding SelectAllSearchResultsCommand}"
-                            Background="#424242"
-                            Foreground="White"
-                            Padding="12,8"
-                            CornerRadius="6"
-                            IsVisible="{Binding !!SearchResults.Count}">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <TextBlock Text="☑" FontSize="14"/>
-                            <TextBlock Text="Select All" FontSize="13"/>
-                        </StackPanel>
-                    </Button>
-                    
-                    <!-- Deselect All -->
-                    <Button Command="{Binding DeselectAllSearchResultsCommand}"
-                            Background="#424242"
-                            Foreground="White"
-                            Padding="12,8"
-                            CornerRadius="6"
-                            IsVisible="{Binding !!SelectedTrackCount}">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <TextBlock Text="☐" FontSize="14"/>
-                            <TextBlock Text="Deselect All" FontSize="13"/>
+                            <TextBlock Text="Cancel Operation" FontSize="13" FontWeight="SemiBold"/>
                         </StackPanel>
                     </Button>
                 </StackPanel>
 
-                <!-- Status Bar -->
-                <Border Grid.Row="2" 
-                        Background="#1A4CAF50" 
-                        CornerRadius="6" 
-                        Padding="16,12" 
-                        Margin="0,16,0,0"
+                <!-- Status Bar (Small) -->
+                <Border Background="#1A4CAF50" 
+                        CornerRadius="4" 
+                        Padding="12,8" 
                         IsVisible="{Binding IsSearching}">
                     <Grid ColumnDefinitions="Auto,*,Auto">
                         <ProgressBar Grid.Column="0" 
                                      IsIndeterminate="True" 
-                                     Width="24" 
-                                     Height="24"
+                                     Width="16" 
+                                     Height="16"
                                      Foreground="#4CAF50"/>
                         <TextBlock Grid.Column="1" 
                                    Text="{Binding StatusText}" 
                                    Foreground="White" 
-                                   FontSize="13"
+                                   FontSize="12"
                                    VerticalAlignment="Center"
                                    Margin="12,0"/>
                         <TextBlock Grid.Column="2"
@@ -172,7 +173,7 @@
                                    VerticalAlignment="Center"/>
                     </Grid>
                 </Border>
-            </Grid>
+            </StackPanel>
         </Border>
 
         <!-- Results Area -->

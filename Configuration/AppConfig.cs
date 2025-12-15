@@ -41,6 +41,7 @@ public class AppConfig
     public int MaxSearchAttempts { get; set; } = 3; // Max progressive search attempts per track
     public bool AutoRetryFailedDownloads { get; set; } = true;
     public int MaxDownloadRetries { get; set; } = 2;
+    public string RankingPreset { get; set; } = "Balanced";
     
     // Window state persistence
     public double WindowWidth { get; set; } = 1400;
