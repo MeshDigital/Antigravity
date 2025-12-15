@@ -158,9 +158,11 @@ To import playlists from Spotify, you need to create a Spotify Developer account
 2. **Configure Spotify API** (see above) for playlist import
 3. **Set download directory** in Settings
 4. **Import music** from Spotify, CSV, or paste a tracklist
-5. **Start downloading** and enjoy! It Works
+5. **Start downloading** and enjoy!
 
-### Typical Workflow
+---
+
+## 🎵 How It Works
 1. **Import** → Paste a Spotify playlist URL or tracklist from YouTube
 2. **Preview** → Review imported tracks, adjust search queries
 3. **Download** → Tracks are queued and downloaded automatically
