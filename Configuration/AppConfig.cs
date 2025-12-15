@@ -42,6 +42,11 @@ public class AppConfig
     public bool AutoRetryFailedDownloads { get; set; } = true;
     public int MaxDownloadRetries { get; set; } = 2;
 
+    // Library Management
+    public List<string> LibraryRootPaths { get; set; } = new(); // Root directories to scan for music files
+    public bool EnableFilePathResolution { get; set; } = true; // Enable automatic resolution of moved files
+    public double FuzzyMatchThreshold { get; set; } = 0.85; // Minimum similarity score (0.0-1.0) for fuzzy matching
+
     public override string ToString()
     {
         return $"AppConfig(User={Username}, Port={ListenPort}, Downloads={DownloadDirectory})";

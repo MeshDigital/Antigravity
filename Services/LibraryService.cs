@@ -1,11 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using SLSKDONET.Configuration;
 using SLSKDONET.Data;
 using SLSKDONET.Models;
+using SLSKDONET.Utils;
 
 namespace SLSKDONET.Services;
 
@@ -20,6 +23,7 @@ public class LibraryService : ILibraryService
 {
     private readonly ILogger<LibraryService> _logger;
     private readonly DatabaseService _databaseService;
+    private readonly AppConfig _appConfig;
     // private bool _isInitialized; // Unused
 
     public event EventHandler<Guid>? ProjectDeleted;
@@ -35,10 +39,11 @@ public class LibraryService : ILibraryService
     /// </summary>
     public ObservableCollection<PlaylistJob> Playlists { get; } = new();
 
-    public LibraryService(ILogger<LibraryService> logger, DatabaseService databaseService)
+    public LibraryService(ILogger<LibraryService> logger, DatabaseService databaseService, AppConfig appConfig)
     {
         _logger = logger;
         _databaseService = databaseService;
+        _appConfig = appConfig;
 
         _logger.LogDebug("LibraryService initialized with database persistence for playlists");
     
@@ -550,5 +555,182 @@ public class LibraryService : ILibraryService
             entity.AddedAt = DateTime.UtcNow;
         }
         return entity;
+    }
+
+    // ===== File Path Resolution Methods =====
+
+    /// <summary>
+    /// Attempts to find a missing track file using improved matching logic.
+    /// Uses a multi-step resolution process:
+    /// 1. Fast Check: Verify the original path still exists
+    /// 2. Filename Match: Search for the exact filename in library root paths
+    /// 3. Fuzzy Metadata Match: Use Levenshtein distance on metadata (Artist - Title)
+    /// </summary>
+    /// <param name="missingTrack">The library entry with an invalid/missing file path</param>
+    /// <returns>The newly resolved full path, or null if no match is found</returns>
+    public async Task<string?> ResolveMissingFilePathAsync(LibraryEntry missingTrack)
+    {
+        if (!_appConfig.EnableFilePathResolution)
+        {
+            _logger.LogDebug("File path resolution is disabled in configuration");
+            return null;
+        }
+
+        if (_appConfig.LibraryRootPaths == null || !_appConfig.LibraryRootPaths.Any())
+        {
+            _logger.LogWarning("No library root paths configured for file resolution");
+            return null;
+        }
+
+        // Step 0: Fast check - does the original path still exist?
+        if (File.Exists(missingTrack.FilePath))
+        {
+            return missingTrack.FilePath;
+        }
+
+        _logger.LogInformation("Attempting to resolve missing file: {Artist} - {Title} (Original: {Path})", 
+            missingTrack.Artist, missingTrack.Title, missingTrack.FilePath);
+
+        // Step 1: DIRECT FILENAME MATCH
+        // Case: File moved but kept the same filename
+        string oldFileName = Path.GetFileName(missingTrack.FilePath);
+        string? resolvedPath = await Task.Run(() => SearchByFilename(oldFileName, _appConfig.LibraryRootPaths));
+        
+        if (resolvedPath != null)
+        {
+            _logger.LogInformation("Resolved via filename match: {Path}", resolvedPath);
+            return resolvedPath;
+        }
+
+        // Step 2: FUZZY METADATA MATCH
+        // Case: File moved AND renamed, or slight metadata differences
+        resolvedPath = await Task.Run(() => SearchByFuzzyMetadata(missingTrack, _appConfig.LibraryRootPaths));
+        
+        if (resolvedPath != null)
+        {
+            _logger.LogInformation("Resolved via fuzzy metadata match: {Path}", resolvedPath);
+            return resolvedPath;
+        }
+
+        _logger.LogWarning("Could not resolve missing file: {Artist} - {Title}", 
+            missingTrack.Artist, missingTrack.Title);
+        return null;
+    }
+
+    /// <summary>
+    /// Searches for an exact filename match in the configured library root paths.
+    /// </summary>
+    private string? SearchByFilename(string fileName, IEnumerable<string> rootPaths)
+    {
+        foreach (string rootPath in rootPaths)
+        {
+            if (!Directory.Exists(rootPath))
+            {
+                _logger.LogWarning("Library root path does not exist: {Path}", rootPath);
+                continue;
+            }
+
+            try
+            {
+                // Use EnumerateFiles for potentially faster/lazy search
+                var foundPath = Directory.EnumerateFiles(rootPath, fileName, SearchOption.AllDirectories)
+                    .FirstOrDefault();
+
+                if (foundPath != null)
+                {
+                    return foundPath;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error searching directory: {Path}", rootPath);
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Searches for files using fuzzy metadata matching based on Artist and Title.
+    /// Uses Levenshtein distance to find the best match above the configured threshold.
+    /// </summary>
+    private string? SearchByFuzzyMetadata(LibraryEntry missingTrack, IEnumerable<string> rootPaths)
+    {
+        // Skip fuzzy matching if metadata is missing
+        if (string.IsNullOrWhiteSpace(missingTrack.Artist) || string.IsNullOrWhiteSpace(missingTrack.Title))
+        {
+            _logger.LogDebug("Skipping fuzzy match - insufficient metadata");
+            return null;
+        }
+
+        string targetMetadata = $"{missingTrack.Artist} - {missingTrack.Title}";
+        string? bestMatchPath = null;
+        double bestMatchScore = _appConfig.FuzzyMatchThreshold;
+
+        // Common music file extensions
+        string[] musicExtensions = { ".mp3", ".flac", ".m4a", ".ogg", ".wav", ".wma", ".aac" };
+
+        foreach (string rootPath in rootPaths)
+        {
+            if (!Directory.Exists(rootPath))
+            {
+                continue;
+            }
+
+            try
+            {
+                // Enumerate all potential music files
+                var allFiles = Directory.EnumerateFiles(rootPath, "*.*", SearchOption.AllDirectories)
+                    .Where(f => musicExtensions.Any(ext => f.EndsWith(ext, StringComparison.OrdinalIgnoreCase)));
+
+                foreach (string filePath in allFiles)
+                {
+                    // Use filename as metadata proxy (faster than reading tags from every file)
+                    string currentMetadata = Path.GetFileNameWithoutExtension(filePath);
+                    double score = StringDistanceUtils.GetNormalizedMatchScore(targetMetadata, currentMetadata);
+
+                    if (score > bestMatchScore)
+                    {
+                        bestMatchScore = score;
+                        bestMatchPath = filePath;
+                        
+                        _logger.LogDebug("Found potential match: {Path} (score: {Score:F2})", filePath, score);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during fuzzy search in: {Path}", rootPath);
+            }
+        }
+
+        if (bestMatchPath != null)
+        {
+            _logger.LogInformation("Fuzzy match found with score {Score:F2}: {Path}", bestMatchScore, bestMatchPath);
+        }
+
+        return bestMatchPath;
+    }
+
+    /// <summary>
+    /// Updates the file path for a library entry and persists the change.
+    /// </summary>
+    public async Task UpdateLibraryEntryPathAsync(string uniqueHash, string newPath)
+    {
+        try
+        {
+            var entity = await _databaseService.FindLibraryEntryAsync(uniqueHash);
+            if (entity != null)
+            {
+                entity.FilePath = newPath;
+                await _databaseService.SaveLibraryEntryAsync(entity);
+                _logger.LogInformation("Updated file path for {Hash}: {NewPath}", uniqueHash, newPath);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to update library entry path");
+            throw;
+        }
     }
 }

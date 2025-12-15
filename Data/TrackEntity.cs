@@ -91,6 +91,7 @@ public class LibraryEntryEntity
     public string Title { get; set; } = string.Empty;
     public string Album { get; set; } = string.Empty;
     public string FilePath { get; set; } = string.Empty;
+    public string? OriginalFilePath { get; set; } // Track original path for resolution tracking
 
     // Audio metadata
     public int Bitrate { get; set; }
@@ -100,4 +101,5 @@ public class LibraryEntryEntity
     // Timestamps
     public DateTime AddedAt { get; set; }
     public DateTime LastUsedAt { get; set; }
+    public DateTime? FilePathUpdatedAt { get; set; } // Track when path was last resolved/updated
 }
