@@ -155,7 +155,13 @@ public class ImportPreviewViewModel : INotifyPropertyChanged
             }
         }
 
-        ImportedTracks = new ObservableCollection<Track>(tempTracks);
+        // Update existing collection instead of replacing to preserve binding
+        ImportedTracks.Clear();
+        foreach (var track in tempTracks)
+        {
+            ImportedTracks.Add(track);
+        }
+
         // Group by album for display
         GroupByAlbum();
         StatusMessage = $"Loaded {ImportedTracks.Count} tracks";
