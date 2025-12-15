@@ -49,19 +49,45 @@
 
 ### High Priority
 
-#### 1. Album Download Completion
+#### 1. Spotify Metadata Foundation ✨ (Antigravity Ignition)
+**The Gravity Well That Stabilizes Everything**
+
+- **Database Schema**: Add Spotify IDs (track/album/artist) to all entities
+- **Metadata Service**: Automatic enrichment with artwork, genres, popularity
+- **Import Integration**: Every import gets canonical metadata anchors
+- **Cache Layer**: Local metadata cache to avoid API spam
+- **Impact**: **CRITICAL** - Foundation for all future features. Building this first avoids 12+ hours of rework later.
+
+> **Why First**: Adding Spotify IDs later requires database migrations, import refactoring, and metadata backfill for existing tracks. Build the gravity well now, everything else orbits around it.
+
+#### 2. Spotify OAuth Authentication (Anchorless Beacon)
+- User sign-in with Spotify (PKCE flow) ✅ Core complete
+- Access private playlists and collections
+- Saved/liked tracks import
+- Secure cross-platform token storage ✅ Complete
+- **Status**: 40% complete (auth core done, UI pending)
+- **Impact**: Unlocks user's entire Spotify library
+
+#### 3. Critical Bug Fixes (Orbit Correction)
+- Fix drag-drop namespace issue (build error)
+- Implement Open Folder command
+- Replace WPF dialogs with Avalonia
+- Complete album download logic
+- **Impact**: Stability and compilation
+
+#### 2. Album Download Completion
 - Recursive directory parsing for album mode
 - UI grouping by album in Library view
 - Batch download job management
 - **Impact**: Major feature gap
 
-#### 2. Metadata Enrichment
+#### 3. Metadata Enrichment
 - Album art fetching (Last.fm/Spotify API)
 - Automatic ID3 tag writing
 - Cover art display in Library
 - **Impact**: Visual polish
 
-#### 3. Download Resume
+#### 4. Download Resume
 - Partial file recovery after crashes
 - Resume interrupted downloads
 - Better error recovery
@@ -144,11 +170,12 @@
 
 ## 📝 Next Immediate Actions
 
-1. **Complete album downloading** - Highest user impact
-2. **Add metadata/cover art** - Visual polish
-3. **Implement download resume** - Reliability improvement
-4. **Performance optimization** - Handle larger libraries
-5. **User documentation** - Tutorials and guides
+1. **Implement Spotify OAuth (PKCE)** - Enable private playlist access
+2. **Complete album downloading** - Highest user impact
+3. **Add metadata/cover art** - Visual polish
+4. **Implement download resume** - Reliability improvement
+5. **Performance optimization** - Handle larger libraries
+6. **User documentation** - Tutorials and guides
 
 ---
 

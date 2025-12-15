@@ -81,6 +81,54 @@ public class PlaylistTrackEntity
     public DateTime AddedAt { get; set; }
     public int SortOrder { get; set; }
     
+    // Spotify Metadata (Phase 0: Metadata Gravity Well)
+    /// <summary>
+    /// Spotify track ID - canonical identifier for this track.
+    /// Used for duplicate detection, quality guard, and recommendations.
+    /// </summary>
+    public string? SpotifyTrackId { get; set; }
+    
+    /// <summary>
+    /// Spotify album ID - for artwork and album grouping.
+    /// </summary>
+    public string? SpotifyAlbumId { get; set; }
+    
+    /// <summary>
+    /// Spotify artist ID - for artist pages and recommendations.
+    /// </summary>
+    public string? SpotifyArtistId { get; set; }
+    
+    /// <summary>
+    /// Album artwork URL from Spotify (300x300 or larger).
+    /// </summary>
+    public string? AlbumArtUrl { get; set; }
+    
+    /// <summary>
+    /// Artist image URL from Spotify.
+    /// </summary>
+    public string? ArtistImageUrl { get; set; }
+    
+    /// <summary>
+    /// Genres as JSON array (e.g. ["rock", "indie"]).
+    /// </summary>
+    public string? Genres { get; set; }
+    
+    /// <summary>
+    /// Spotify popularity score (0-100).
+    /// </summary>
+    public int? Popularity { get; set; }
+    
+    /// <summary>
+    /// Canonical track duration from Spotify (milliseconds).
+    /// Used for quality guard and fake detection.
+    /// </summary>
+    public int? CanonicalDuration { get; set; }
+    
+    /// <summary>
+    /// Release date from Spotify.
+    /// </summary>
+    public DateTime? ReleaseDate { get; set; }
+    
     public PlaylistJobEntity? Job { get; set; }
 }
 

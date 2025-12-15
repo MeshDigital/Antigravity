@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 using SLSKDONET.Models;
 using SLSKDONET.Services;
 using SLSKDONET.Views;
-using DraggingService;
+// using DraggingService; // TODO: Fix drag-drop library reference
 
 namespace SLSKDONET.ViewModels
 {
@@ -278,6 +278,35 @@ namespace SLSKDONET.ViewModels
             });
         }
         
+        /// <summary>
+        /// Moves a track in the queue from one position to another.
+        /// Used for drag-and-drop reordering.
+        /// </summary>
+        public void MoveTrack(string globalId, int targetIndex)
+        {
+            if (string.IsNullOrEmpty(globalId) || targetIndex < 0)
+                return;
+                
+            Dispatcher.UIThread.Post(() =>
+            {
+                var track = Queue.FirstOrDefault(t => t.GlobalId == globalId);
+                if (track == null) return;
+                    
+                var oldIndex = Queue.IndexOf(track);
+                if (oldIndex < 0 || oldIndex == targetIndex) return;
+                    
+                targetIndex = Math.Clamp(targetIndex, 0, Queue.Count - 1);
+                Queue.Move(oldIndex, targetIndex);
+                
+                if (oldIndex == CurrentQueueIndex)
+                    CurrentQueueIndex = targetIndex;
+                else if (oldIndex < CurrentQueueIndex && targetIndex >= CurrentQueueIndex)
+                    CurrentQueueIndex--;
+                else if (oldIndex > CurrentQueueIndex && targetIndex <= CurrentQueueIndex)
+                    CurrentQueueIndex++;
+            });
+        }
+        
         private void PlayNextTrack()
         {
             if (!Queue.Any()) return;
@@ -495,6 +524,8 @@ namespace SLSKDONET.ViewModels
         }
 
         // Drag & Drop
+        // TODO: Fix drag-drop library reference
+        /*
         public DraggingServiceDropEvent OnDropQueue => (DraggingServiceDropEventsArgs args) => {
             var droppedTracks = DragContext.Current as List<PlaylistTrackViewModel>;
             if (droppedTracks != null && droppedTracks.Any())
@@ -507,5 +538,6 @@ namespace SLSKDONET.ViewModels
                 });
             }
         };
+        */
     }
 }

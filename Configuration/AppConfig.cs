@@ -35,6 +35,11 @@ public class AppConfig
     public string? SpotifyClientSecret { get; set; }
     public bool SpotifyUsePublicOnly { get; set; } = true; // Default to public scraping only
     
+    // Spotify OAuth settings
+    public string SpotifyRedirectUri { get; set; } = "http://localhost:5000/callback/";
+    public int SpotifyCallbackPort { get; set; } = 5000;
+    public bool SpotifyRememberAuth { get; set; } = true; // Store refresh token by default
+    
     // Search and download preferences
     public int SearchLengthToleranceSeconds { get; set; } = 3; // Allow +/- 3 seconds duration mismatch
     public bool FuzzyMatchEnabled { get; set; } = true; // Enable fuzzy matching for search results

@@ -83,6 +83,12 @@ public class SearchQuery
     public bool ArtistMaybeWrong { get; set; }
     public int? AlbumTrackCount { get; set; }
     public DownloadMode DownloadMode { get; set; } = DownloadMode.Normal;
+    
+    // Spotify Metadata (Phase 0: Metadata Gravity Well)
+    public string? SpotifyTrackId { get; set; }
+    public string? SpotifyAlbumId { get; set; }
+    public string? SpotifyArtistId { get; set; }
+    public string? AlbumArtUrl { get; set; }
 
     /// <summary>
     /// Parses a search string into a SearchQuery.

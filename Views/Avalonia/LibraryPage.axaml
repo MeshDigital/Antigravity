@@ -72,13 +72,12 @@
                 
                 <!-- Playlist List -->
                 <ListBox Grid.Row="2" 
+                         x:Name="PlaylistListBox"
                          ItemsSource="{Binding AllProjects}"
                          SelectedItem="{Binding SelectedProject, Mode=TwoWay}"
                          Background="Transparent"
                          BorderThickness="0"
-                         Padding="12"
-                         ds:DraggingServiceAttached.IsDropEnable="True"
-                         ds:DraggingServiceAttached.DropCallback="{Binding OnDropTrack}">
+                         Padding="12">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
                             <!-- Modern Card Design -->
@@ -293,13 +292,9 @@
                       RowBackground="Transparent"
                       Foreground="#DDD"
                       HeadersVisibility="Column"
-                      CanUserReorderColumns="False"
                       CanUserResizeColumns="True"
                       CanUserSortColumns="False"
-                      IsReadOnly="{Binding IsDataGridReadOnly}"
-                      ds:DraggingServiceAttached.IsDragEnable="True"
-                      ds:DraggingServiceAttached.DragCallback="{Binding OnDragTrack}"
-                      DragDrop.AllowDrop="True">
+                      IsReadOnly="{Binding IsDataGridReadOnly}">
                 
                 <DataGrid.ContextMenu>
                     <ContextMenu>

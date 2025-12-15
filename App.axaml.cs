@@ -163,6 +163,12 @@ public partial class App : Application
         // Spotify services
         services.AddSingleton<SpotifyInputSource>();
         services.AddSingleton<SpotifyScraperInputSource>();
+        
+        // Spotify OAuth services
+        services.AddSingleton<LocalHttpServer>();
+        services.AddSingleton<ISecureTokenStorage>(sp => SecureTokenStorageFactory.Create(sp));
+        services.AddSingleton<SpotifyAuthService>();
+        services.AddSingleton<SpotifyMetadataService>();
 
         // Input parsers
         services.AddSingleton<CsvInputSource>();

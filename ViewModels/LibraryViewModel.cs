@@ -9,7 +9,7 @@ using SLSKDONET.Models;
 using SLSKDONET.Services;
 using SLSKDONET.Views;
 using Avalonia.Threading;
-using DraggingService;
+// using DraggingService; // TODO: Fix drag-drop library reference
 
 namespace SLSKDONET.ViewModels;
 
@@ -826,6 +826,8 @@ public class LibraryViewModel : INotifyPropertyChanged
     }
 
     // Drag & Drop Callbacks
+    // TODO: Fix drag-drop library reference
+    /*
     public DraggingServiceDragEvent OnDragTrack => (DraggingServiceDragEventsArgs args) => {
         // Extract the dragged items (e.g., from the DataGrid selection)
         // Library API uses camelCase 'draggedControls'
@@ -859,6 +861,7 @@ public class LibraryViewModel : INotifyPropertyChanged
             });
         }
     };
+    */
 
     private async Task ExecuteMoveToPlaylistAsync(PlaylistJob targetPlaylist, PlaylistTrackViewModel track)
     {

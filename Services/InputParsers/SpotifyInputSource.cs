@@ -67,7 +67,12 @@ public class SpotifyInputSource : IInputSource
 						Album = album,
 						SourceTitle = playlist.Name,
 						TotalTracks = total,
-						DownloadMode = DownloadMode.Normal
+						DownloadMode = DownloadMode.Normal,
+						// Spotify Metadata (Phase 0: Metadata Gravity Well)
+						SpotifyTrackId = track.Id,
+						SpotifyAlbumId = track.Album?.Id,
+						SpotifyArtistId = track.Artists?.FirstOrDefault()?.Id,
+						AlbumArtUrl = track.Album?.Images?.FirstOrDefault()?.Url
 					});
 				}
 			}

@@ -28,6 +28,239 @@
 
 ---
 
+## 🌌 ANTIGRAVITY IMPLEMENTATION STRATEGY
+
+**Critical Decision**: Build Spotify Metadata Foundation FIRST to avoid 12+ hours of rework
+
+**Why**: Adding Spotify IDs later requires database migrations, import refactoring, and metadata backfill. Build the gravity well now, everything else orbits around it.
+
+---
+
+## Phase 0: Metadata Gravity Well (8-12 hours) 🔴⭐ FOUNDATION
+
+### 0.1 Database Schema Evolution (3 hours)
+**Priority**: ⭐⭐⭐ CRITICAL - LOAD BEARING
+
+**What to Build**:
+- [ ] Add `SpotifyTrackId` (string, nullable) to `PlaylistTrackEntity`
+- [ ] Add `SpotifyAlbumId` (string, nullable)
+- [ ] Add `SpotifyArtistId` (string, nullable)
+- [ ] Add `AlbumArtUrl` (string, nullable)
+- [ ] Add `ArtistImageUrl` (string, nullable)
+- [ ] Add `Genres` (string, JSON array)
+- [ ] Add `Popularity` (int, 0-100)
+- [ ] Add `CanonicalDuration` (int, milliseconds)
+- [ ] Add `ReleaseDate` (DateTime, nullable)
+- [ ] Create database migration script
+
+**Files to Modify**:
+- `Data/Entities/PlaylistTrackEntity.cs`
+- `Data/AppDbContext.cs` (add migration)
+- `Models/PlaylistTrack.cs` (add properties)
+
+**Implementation Steps**:
+1. Add new columns to entity (all nullable for backward compatibility)
+2. Create EF Core migration: `dotnet ef migrations add AddSpotifyMetadata`
+3. Test migration on copy of database
+4. Add properties to domain model
+5. Update ViewModels to display new fields
+
+**Risk Mitigation**:
+- Backup database before migration
+- Make all columns nullable (optional)
+- Test on development database first
+
+---
+
+### 0.2 Spotify Metadata Service (4 hours)
+**Priority**: ⭐⭐⭐ CRITICAL
+
+**What to Build**:
+- [ ] `SpotifyMetadataService` class
+- [ ] `GetTrackMetadata(artist, title)` - lookup by search
+- [ ] `GetTrackById(spotifyId)` - lookup by ID
+- [ ] `EnrichPlaylistTrack(track)` - attach metadata to track
+- [ ] Metadata cache (SQLite table)
+- [ ] Rate limiting (30 req/sec Spotify limit)
+- [ ] Batch requests (up to 50 tracks per call)
+
+**Files to Create**:
+- `Services/SpotifyMetadataService.cs` (new)
+- `Data/Entities/SpotifyMetadataCacheEntity.cs` (new)
+- `Models/SpotifyMetadata.cs` (new)
+
+**Implementation Steps**:
+1. Create metadata cache entity and migration
+2. Build `SpotifyMetadataService` with SpotifyAPI.Web
+3. Implement search endpoint wrapper
+4. Add cache lookup before API calls
+5. Implement rate limiting with `SemaphoreSlim`
+6. Add batch request support
+7. Test with real Spotify API
+
+**API Endpoints Used**:
+- `GET /search?q=artist:X track:Y&type=track` - Search for track
+- `GET /tracks/{id}` - Get track by ID
+- `GET /tracks?ids=X,Y,Z` - Batch get (up to 50)
+
+---
+
+### 0.3 Import Integration (3 hours)
+**Priority**: ⭐⭐⭐ HIGH
+
+**What to Build**:
+- [ ] Update `SpotifyImportProvider` to store Spotify IDs
+- [ ] Update `CsvImportProvider` to lookup metadata
+- [ ] Update `DownloadManager` to enrich post-download
+- [ ] Add "Fetching metadata..." status messages
+- [ ] Background metadata enrichment for existing tracks
+
+**Files to Modify**:
+- `Services/ImportProviders/SpotifyImportProvider.cs`
+- `Services/ImportProviders/CsvImportProvider.cs`
+- `Services/DownloadManager.cs`
+- `ViewModels/ImportPreviewViewModel.cs`
+
+**Implementation Steps**:
+1. Inject `SpotifyMetadataService` into import providers
+2. Call `EnrichPlaylistTrack()` during import
+3. Add progress indicator for metadata fetch
+4. Store Spotify IDs in database
+5. Test CSV import with metadata lookup
+6. Test Spotify import with ID preservation
+
+---
+
+### 0.4 Artwork Pipeline (2 hours)
+**Priority**: ⭐⭐ MEDIUM
+
+**What to Build**:
+- [ ] Download and cache album art from Spotify URLs
+- [ ] Store images in `%APPDATA%/QMUSICSLSK/artwork/`
+- [ ] Image cache service
+- [ ] Placeholder image for missing artwork
+
+**Files to Create**:
+- `Services/ArtworkCacheService.cs` (new)
+
+**Implementation Steps**:
+1. Create artwork cache directory
+2. Download images from `AlbumArtUrl`
+3. Save as `{spotifyAlbumId}.jpg`
+4. Return local file path for UI binding
+5. Add placeholder for missing artwork
+
+---
+
+## Phase 0B: OAuth UI Completion (3 hours) 🟡 HIGH
+
+### 0B.1 OAuth PKCE Core Service ✅ COMPLETE
+**Priority**: ⭐⭐⭐ CRITICAL
+
+**Status**: ✅ All core services implemented
+
+**Completed**:
+- [x] PKCE code verifier generation (128 chars, base64url)
+- [x] PKCE code challenge generation (SHA256)
+- [x] Authorization URL builder with scopes
+- [x] Token exchange endpoint integration
+- [x] Refresh token logic
+- [x] Token expiration detection
+
+**Files Created**:
+- ✅ `Utils/PKCEHelper.cs`
+- ✅ `Services/LocalHttpServer.cs`
+- ✅ `Services/SpotifyAuthService.cs`
+- ✅ `Services/ISecureTokenStorage.cs`
+- ✅ `Services/Platform/WindowsTokenStorage.cs`
+- ✅ `Services/Platform/MacOSTokenStorage.cs`
+- ✅ `Services/Platform/LinuxTokenStorage.cs`
+- ✅ `Services/SecureTokenStorageFactory.cs`
+
+---
+
+### 0B.2 UI Integration (3 hours)
+**Priority**: ⭐⭐⭐ HIGH
+
+**What to Build**:
+- [ ] "Sign In with Spotify" button in Settings
+- [ ] OAuth flow dialog with status messages
+- [ ] User profile display when authenticated
+- [ ] "Sign Out" button
+- [ ] "My Playlists" button in Import page
+- [ ] "My Saved Tracks" button in Import page
+
+**Files to Modify**:
+- `Views/Avalonia/SettingsPage.axaml` (add Spotify auth section)
+- `ViewModels/SpotifyImportViewModel.cs` (add auth commands)
+
+**Files to Create**:
+- `Views/Avalonia/SpotifySignInDialog.axaml` (new)
+
+**Implementation Steps**:
+1. Add Spotify section to Settings page
+2. Create `SpotifySignInDialog` with status messages
+3. Add `SignInCommand` to `SpotifyImportViewModel`
+4. Add `SignOutCommand` to `SpotifyImportViewModel`
+5. Add `IsAuthenticated` property with UI binding
+6. Add `UserDisplayName` property to show logged-in user
+7. Wire up "My Playlists" and "Saved Tracks" buttons
+8. Test sign-in/sign-out flow in UI
+
+---
+
+### 0.4 Spotify API Integration (2 hours)
+**Priority**: ⭐⭐⭐ HIGH
+
+**What to Build**:
+- [ ] User profile endpoint (`/me`)
+- [ ] User playlists endpoint (`/me/playlists`)
+- [ ] User saved tracks endpoint (`/me/tracks`)
+- [ ] Search endpoint with user context
+- [ ] Authenticated SpotifyClient factory
+
+**Files to Modify**:
+- `Services/InputParsers/SpotifyInputSource.cs` (add user endpoints)
+- `Services/ImportProviders/SpotifyImportProvider.cs` (use auth when available)
+
+**Implementation Steps**:
+1. Inject `SpotifyAuthService` into `SpotifyInputSource`
+2. Add `GetCurrentUserAsync()` method
+3. Add `GetUserPlaylistsAsync()` method
+4. Add `GetUserSavedTracksAsync()` method
+5. Update `CreateClientAsync()` to use auth tokens when available
+6. Add fallback to Client Credentials for public playlists
+7. Test with authenticated Spotify account
+
+---
+
+### 0.5 Configuration & Testing (1 hour)
+**Priority**: ⭐⭐
+
+**What to Build**:
+- [ ] Add OAuth settings to AppConfig
+- [ ] Update Settings UI with redirect URI config
+- [ ] Add Spotify Developer Dashboard setup docs
+- [ ] End-to-end testing checklist
+
+**Files to Modify**:
+- `Configuration/AppConfig.cs` (add OAuth properties)
+- `README.md` (add OAuth setup instructions)
+
+**Files to Create**:
+- `DOCS/SPOTIFY_OAUTH_SETUP.md` (new - setup guide)
+
+**Implementation Steps**:
+1. Add `SpotifyRedirectUri` to AppConfig (default: localhost:5000)
+2. Add `SpotifyCallbackPort` to AppConfig
+3. Add `SpotifyRememberAuth` toggle to AppConfig
+4. Create setup guide for Spotify Developer Dashboard
+5. Document redirect URI configuration
+6. Create testing checklist
+7. Test on Windows, macOS, and Linux
+
+---
+
 ## Phase 1: Critical Features (6 hours) 🔴
 
 ### 1.1 Queue Management (2 hours)

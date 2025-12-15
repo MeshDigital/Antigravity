@@ -23,6 +23,7 @@
         <converters:BoolToPlayPauseTextConverter x:Key="BoolToPlayPauseTextConverter"/>
         <converters:BoolToPlayPauseIconConverter x:Key="BoolToPlayPauseIconConverter"/>
         <converters:BoolToBackgroundConverter x:Key="BoolToBackgroundConverter"/>
+        <converters:BoolToFontWeightConverter x:Key="BoolToFontWeightConverter"/>
         
         <!-- Utility Converters -->
         <converters:RepeatModeIconConverter x:Key="RepeatModeIconConverter"/>
