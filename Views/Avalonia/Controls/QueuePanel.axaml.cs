@@ -91,21 +91,28 @@ public partial class QueuePanel : UserControl
 
     private void OnDragOver(object? sender, DragEventArgs e)
     {
-        // Validate data format
-        if (!e.Data.Contains(DragContext.QueueTrackFormat))
+        // Accept tracks from queue (for reordering) or library (for adding)
+        if (e.Data.Contains(DragContext.QueueTrackFormat) || e.Data.Contains(DragContext.LibraryTrackFormat))
+        {
+            e.DragEffects = e.Data.Contains(DragContext.QueueTrackFormat) 
+                ? DragDropEffects.Move 
+                : DragDropEffects.Copy;
+        }
+        else
         {
             e.DragEffects = DragDropEffects.None;
             return;
         }
-
-        e.DragEffects = DragDropEffects.Move;
         
-        // Calculate insertion point and show visual feedback
-        var listBox = this.FindDescendantOfType<ListBox>();
-        if (listBox != null)
+        // Calculate insertion point and show visual feedback (only for queue reordering)
+        if (e.Data.Contains(DragContext.QueueTrackFormat))
         {
-            var position = e.GetPosition(listBox);
-            ShowInsertionLine(listBox, position);
+            var listBox = this.FindDescendantOfType<ListBox>();
+            if (listBox != null)
+            {
+                var position = e.GetPosition(listBox);
+                ShowInsertionLine(listBox, position);
+            }
         }
         
         // Update ghost position
@@ -114,23 +121,49 @@ public partial class QueuePanel : UserControl
 
     private void OnDrop(object? sender, DragEventArgs e)
     {
-        if (!e.Data.Contains(DragContext.QueueTrackFormat))
-            return;
+        string? trackHash = null;
+        bool isFromLibrary = false;
+        
+        // Check if it's from library or queue
+        if (e.Data.Contains(DragContext.LibraryTrackFormat))
+        {
+            trackHash = e.Data.Get(DragContext.LibraryTrackFormat) as string;
+            isFromLibrary = true;
+        }
+        else if (e.Data.Contains(DragContext.QueueTrackFormat))
+        {
+            trackHash = e.Data.Get(DragContext.QueueTrackFormat) as string;
+            isFromLibrary = false;
+        }
 
-        var trackHash = e.Data.Get(DragContext.QueueTrackFormat) as string;
         if (string.IsNullOrEmpty(trackHash))
             return;
 
         var listBox = this.FindDescendantOfType<ListBox>();
-        if (listBox == null)
+        if (listBox == null || DataContext is not PlayerViewModel playerViewModel)
             return;
 
-        // Calculate target index
-        var targetIndex = CalculateDropIndex(listBox, e.GetPosition(listBox));
-        
-        // Execute move in ViewModel
-        if (DataContext is PlayerViewModel playerViewModel)
+        if (isFromLibrary)
         {
+            // Adding from library - find the track and add to queue
+            var mainWindow = this.VisualRoot as MainWindow;
+            var mainViewModel = mainWindow?.DataContext as MainViewModel;
+            var downloadManager = mainViewModel?.GetType()
+                .GetField("_downloadManager", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                ?.GetValue(mainViewModel) as DownloadManager;
+            
+            var track = downloadManager?.AllGlobalTracks
+                .FirstOrDefault(t => t.GlobalId == trackHash);
+            
+            if (track != null)
+            {
+                playerViewModel.AddToQueue(track);
+            }
+        }
+        else
+        {
+            // Reordering within queue
+            var targetIndex = CalculateDropIndex(listBox, e.GetPosition(listBox));
             playerViewModel.MoveTrack(trackHash, targetIndex);
         }
 

@@ -393,6 +393,16 @@
                                         <TextBlock Text="▶️" FontSize="12"/>
                                     </Button>
                                     
+                                    <Button Command="{Binding $parent[DataGrid].((vm:LibraryViewModel)DataContext).PlayerViewModel.AddToQueueCommand}"
+                                            CommandParameter="{Binding}"
+                                            Background="#1DB954"
+                                            Foreground="White"
+                                            Padding="6,4"
+                                            ToolTip.Tip="Add to Queue"
+                                            IsVisible="{Binding Model.ResolvedFilePath, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                                        <TextBlock Text="📋" FontSize="12"/>
+                                    </Button>
+                                    
                                     <Button Command="{Binding $parent[DataGrid].((vm:LibraryViewModel)DataContext).RemoveTrackCommand}"
                                             CommandParameter="{Binding}"
                                             Background="#F44336"
