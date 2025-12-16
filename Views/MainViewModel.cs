@@ -21,6 +21,7 @@ public class MainViewModel : INotifyPropertyChanged
     private readonly AppConfig _config;
     private readonly ConfigManager _configManager;
     private readonly SoulseekAdapter _soulseek;
+    private readonly ISoulseekCredentialService _credentialService;
     private readonly INavigationService _navigationService;
 
     // Child ViewModels
@@ -191,6 +192,7 @@ public class MainViewModel : INotifyPropertyChanged
         AppConfig config,
         ConfigManager configManager,
         SoulseekAdapter soulseek,
+        ISoulseekCredentialService credentialService,
         INavigationService navigationService,
         PlayerViewModel playerViewModel,
         LibraryViewModel libraryViewModel)
@@ -199,6 +201,7 @@ public class MainViewModel : INotifyPropertyChanged
         _config = config;
         _configManager = configManager;
         _soulseek = soulseek;
+        _credentialService = credentialService;
         _navigationService = navigationService;
 
         PlayerViewModel = playerViewModel;
@@ -211,6 +214,41 @@ public class MainViewModel : INotifyPropertyChanged
         
         // Show login overlay if not auto-connecting or if credentials missing
         IsLoginOverlayVisible = !_config.AutoConnectEnabled || string.IsNullOrEmpty(_config.Username);
+
+        // Attempt to load password and auto-connect if enabled
+        if (AutoConnectEnabled)
+        {
+            Dispatcher.UIThread.Post(async () => 
+            {
+                var creds = await _credentialService.LoadCredentialsAsync();
+                if (!string.IsNullOrEmpty(creds.Password))
+                {
+                    // Update username if stored one is different (or empty)
+                    if (!string.IsNullOrEmpty(creds.Username))
+                        Username = creds.Username;
+
+                    await LoginAsync(creds.Password);
+                }
+                else
+                {
+                    IsLoginOverlayVisible = true; // Auto-connect failed due to missing password
+                }
+            });
+        }
+        else if (RememberPassword)
+        {
+             Dispatcher.UIThread.Post(async () => 
+            {
+                var creds = await _credentialService.LoadCredentialsAsync();
+                if (!string.IsNullOrEmpty(creds.Username))
+                    Username = creds.Username;
+                
+                // We don't populate the PasswordBox directly for security, but we have it ready 
+                // if the user clicks Connect without typing. 
+                // However, PasswordBox usually requires user types or we bind to a property (bad).
+                // Better approach: If RememberPassword is true, and they click Login with empty password, we use stored one.
+            });
+        }
 
         // Initialize commands
         LoginCommand = new AsyncRelayCommand<string>(LoginAsync);
@@ -343,10 +381,22 @@ public class MainViewModel : INotifyPropertyChanged
         }
 
         // If password provided in UI, use it. Otherwise try to use stored password if remembering is enabled.
-        // For security, we don't store the password in a plain text field in ViewModel if possible for the UI binding,
-        // but here we accept it as a parameter from the View (PasswordBox).
-        
         string? passwordToUse = password;
+
+        if (string.IsNullOrEmpty(passwordToUse) && RememberPassword)
+        {
+             var creds = await _credentialService.LoadCredentialsAsync();
+             if (!string.IsNullOrEmpty(creds.Password))
+             {
+                 passwordToUse = creds.Password;
+             }
+        }
+
+        if (string.IsNullOrEmpty(passwordToUse))
+        {
+             StatusText = "Please enter a password";
+             return;
+        }
 
         IsInitializing = true;
         StatusText = "Connecting...";
@@ -357,12 +407,7 @@ public class MainViewModel : INotifyPropertyChanged
             _config.Username = Username;
             _config.RememberPassword = RememberPassword;
             _config.AutoConnectEnabled = AutoConnectEnabled;
-            // Password storage is handled by SoulseekAdapter/ConfigManager internally or we need to refactor it.
-            // For now, assuming SoulseekAdapter handles the actual connect using credentials.
-            
-            // NOTE: The previous implementation actually passed arguments to ConnectAsync.
-            // We need to verify how SoulseekAdapter.ConnectAsync is defined. Assuming it takes username/password.
-            
+
             await _soulseek.ConnectAsync(passwordToUse);
             // Internal event bus will trigger "Connected" state change which sets IsConnected = true
 
@@ -370,6 +415,16 @@ public class MainViewModel : INotifyPropertyChanged
             {
                 IsLoginOverlayVisible = false;
                 _configManager.Save(_config); // Save updated preferences
+                
+                // Save credentials securely if RememberPassword is checked
+                if (RememberPassword)
+                {
+                    await _credentialService.SaveCredentialsAsync(Username, passwordToUse);
+                }
+                else
+                {
+                    await _credentialService.DeleteCredentialsAsync();
+                }
             }
             else
             {

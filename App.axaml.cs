@@ -159,6 +159,7 @@ public partial class App : Application
         services.AddSingleton<SoulseekAdapter>();
         services.AddSingleton<FileNameFormatter>();
         services.AddSingleton<ProtectedDataService>();
+        services.AddSingleton<ISoulseekCredentialService, SoulseekCredentialService>();
 
         // Spotify services
         services.AddSingleton<SpotifyInputSource>();

@@ -58,7 +58,7 @@ public class ConfigManager
                 SoulseekServer = config["Soulseek:Server"] ?? "vps.slsknet.org",
                 SoulseekPort = int.TryParse(config["Soulseek:Port"], out var sPort) ? sPort : 2242,
                 Username = config["Soulseek:Username"] ?? "",
-                Password = config["Soulseek:Password"],
+                // Password is no longer stored in config.ini for security
                 ListenPort = int.TryParse(config["Soulseek:ListenPort"], out var port) ? port : 49998,
                 UseUPnP = bool.TryParse(config["Soulseek:UseUPnP"], out var upnp) && upnp,
                 ConnectTimeout = int.TryParse(config["Soulseek:ConnectTimeout"], out var ct) ? ct : 60000,
@@ -103,7 +103,7 @@ public class ConfigManager
         iniContent.AppendLine($"Server = {config.SoulseekServer}");
         iniContent.AppendLine($"Port = {config.SoulseekPort}");
         iniContent.AppendLine($"Username = {config.Username}");
-        iniContent.AppendLine($"Password = {(config.RememberPassword ? config.Password : "")}"); // Only save if Remember is true
+        // Password saved securely via SoulseekCredentialService instead
         iniContent.AppendLine($"ListenPort = {config.ListenPort}");
         iniContent.AppendLine($"UseUPnP = {config.UseUPnP}");
         iniContent.AppendLine($"ConnectTimeout = {config.ConnectTimeout}");
