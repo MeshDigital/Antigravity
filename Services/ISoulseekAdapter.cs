@@ -7,6 +7,7 @@ namespace SLSKDONET.Services;
 
 public interface ISoulseekAdapter
 {
+    bool IsConnected { get; }
     Task ConnectAsync(string? password = null, CancellationToken ct = default);
     Task DisconnectAsync();
     void Disconnect();

@@ -347,31 +347,48 @@ public class MainViewModel : INotifyPropertyChanged
     private void ZoomOut() => BaseFontSize -= 1;
     private void ResetZoom() => BaseFontSize = 14.0;
 
-    // Add missing properties for binding
-    public int SuccessfulCount => _downloadManager?.SuccessfulCount ?? 0;
-    public int FailedCount => _downloadManager?.FailedCount ?? 0;
-    public int TodoCount => _downloadManager?.TodoCount ?? 0;
-    public double DownloadProgressPercentage => _downloadManager?.DownloadProgressPercentage ?? 0;
-    
+    // Download Progress Properties (computed from AllGlobalTracks)
+    public int SuccessfulCount => _downloadManager?.AllGlobalTracks.Count(t => t.State == PlaylistTrackState.Completed) ?? 0;
+    public int FailedCount => _downloadManager?.AllGlobalTracks.Count(t => t.State == PlaylistTrackState.Failed) ?? 0;
+    public int TodoCount => _downloadManager?.AllGlobalTracks.Count(t => t.State == PlaylistTrackState.Pending || t.State == PlaylistTrackState.Searching) ?? 0;
+    public double DownloadProgressPercentage
+    {
+        get
+        {
+            var total = _downloadManager?.AllGlobalTracks.Count ?? 0;
+            if (total == 0) return 0;
+            var completed = _downloadManager?.AllGlobalTracks.Count(t => t.State == PlaylistTrackState.Completed) ?? 0;
+            return (double)completed / total * 100;
+        }
+    }
+
+    // Event Handlers for Global Status
     private void OnTrackUpdated(object? sender, PlaylistTrackViewModel track)
     {
-        // Trigger UI updates for aggregate stats
-        OnPropertyChanged(nameof(SuccessfulCount));
-        OnPropertyChanged(nameof(FailedCount));
-        OnPropertyChanged(nameof(TodoCount));
-        OnPropertyChanged(nameof(DownloadProgressPercentage));
+        // Trigger UI updates for aggregate stats on UI thread
+        global::Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => 
+        {
+            OnPropertyChanged(nameof(SuccessfulCount));
+            OnPropertyChanged(nameof(FailedCount));
+            OnPropertyChanged(nameof(TodoCount));
+            OnPropertyChanged(nameof(DownloadProgressPercentage));
+        });
     }
 
     private void HandleStateChange(string state)
     {
-         if (state == "Login failed")
-         {
-             StatusText = "Login failed";
-         }
-         else if (state == "Connected")
-         {
-             StatusText = "Ready";
-         }
+        // Update connection status on UI thread
+        global::Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => 
+        {
+            if (state.Contains("Login failed", StringComparison.OrdinalIgnoreCase))
+            {
+                StatusText = "Login failed";
+            }
+            else if (state.Contains("Connected", StringComparison.OrdinalIgnoreCase))
+            {
+                StatusText = "Ready";
+            }
+        });
     }
 
     protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
