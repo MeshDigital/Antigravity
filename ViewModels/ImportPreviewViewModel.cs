@@ -367,7 +367,11 @@ public class ImportPreviewViewModel : INotifyPropertyChanged
             _logger.LogInformation("Firing AddedToLibrary event for job {JobId}", job.Id);
             AddedToLibrary?.Invoke(this, job);
 
-            _logger.LogInformation("AddedToLibrary event fired. Updating status message.");
+            _logger.LogInformation("AddedToLibrary event fired. Now queuing to DownloadManager...");
+            
+            // Queue the project to DownloadManager and navigate to Library
+            await HandlePlaylistJobAddedAsync(job);
+            
             StatusMessage = $"✓ Added {selectedTracks.Count} tracks to library";
             _logger.LogInformation(
                 "Successfully added {Count} tracks to library. JobId: {JobId}, Thread: {ThreadId}",
