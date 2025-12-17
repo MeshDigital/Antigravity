@@ -17,7 +17,7 @@ public class TrackOperationsViewModel : INotifyPropertyChanged
 {
     private readonly ILogger<TrackOperationsViewModel> _logger;
     private readonly DownloadManager _downloadManager;
-    private readonly MainViewModel _mainViewModel;
+    private MainViewModel? _mainViewModel; // Injected post-construction
     private readonly PlayerViewModel _playerViewModel;
     private readonly IFileInteractionService _fileInteractionService;
 
@@ -37,13 +37,11 @@ public class TrackOperationsViewModel : INotifyPropertyChanged
     public TrackOperationsViewModel(
         ILogger<TrackOperationsViewModel> logger,
         DownloadManager downloadManager,
-        MainViewModel mainViewModel,
         PlayerViewModel playerViewModel,
         IFileInteractionService fileInteractionService)
     {
         _logger = logger;
         _downloadManager = downloadManager;
-        _mainViewModel = mainViewModel;
         _playerViewModel = playerViewModel;
         _fileInteractionService = fileInteractionService;
 
@@ -57,6 +55,11 @@ public class TrackOperationsViewModel : INotifyPropertyChanged
         RemoveTrackCommand = new AsyncRelayCommand<PlaylistTrackViewModel>(ExecuteRemoveTrack);
         RetryOfflineTracksCommand = new AsyncRelayCommand(ExecuteRetryOfflineTracks);
         OpenFolderCommand = new RelayCommand<PlaylistTrackViewModel>(ExecuteOpenFolder);
+    }
+
+    public void SetMainViewModel(MainViewModel mainViewModel)
+    {
+        _mainViewModel = mainViewModel;
     }
 
     private void ExecutePlayTrack(PlaylistTrackViewModel? track)
@@ -150,6 +153,8 @@ public class TrackOperationsViewModel : INotifyPropertyChanged
         try
         {
             _logger.LogInformation("Retrying all offline tracks");
+            
+            if (_mainViewModel == null) return;
             
             var offlineTracks = _mainViewModel.AllGlobalTracks
                 .Where(t => t.State == PlaylistTrackState.Failed)

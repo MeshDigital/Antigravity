@@ -86,6 +86,20 @@ public class DatabaseService
                 columnsToAdd.Add(("CanonicalDuration", "CanonicalDuration INTEGER NULL"));
             if (!existingColumns.Contains("ReleaseDate"))
                 columnsToAdd.Add(("ReleaseDate", "ReleaseDate TEXT NULL"));
+
+            // Phase 0.1: Musical Intelligence & Antigravity
+            if (!existingColumns.Contains("MusicalKey"))
+                columnsToAdd.Add(("MusicalKey", "MusicalKey TEXT NULL"));
+            if (!existingColumns.Contains("BPM"))
+                columnsToAdd.Add(("BPM", "BPM REAL NULL"));
+            if (!existingColumns.Contains("CuePointsJson"))
+                columnsToAdd.Add(("CuePointsJson", "CuePointsJson TEXT NULL"));
+            if (!existingColumns.Contains("AudioFingerprint"))
+                columnsToAdd.Add(("AudioFingerprint", "AudioFingerprint TEXT NULL"));
+            if (!existingColumns.Contains("BitrateScore"))
+                columnsToAdd.Add(("BitrateScore", "BitrateScore INTEGER NULL"));
+            if (!existingColumns.Contains("AnalysisOffset"))
+                columnsToAdd.Add(("AnalysisOffset", "AnalysisOffset REAL NULL"));
             
             foreach (var (name, definition) in columnsToAdd)
             {
@@ -202,6 +216,11 @@ public class DatabaseService
                     if (!libColumns.Contains("Popularity")) newCols.Add(("Popularity", "INTEGER NULL"));
                     if (!libColumns.Contains("CanonicalDuration")) newCols.Add(("CanonicalDuration", "INTEGER NULL"));
                     if (!libColumns.Contains("ReleaseDate")) newCols.Add(("ReleaseDate", "TEXT NULL"));
+
+                    // Phase 0.1: Musical Intelligence & Antigravity
+                    if (!libColumns.Contains("MusicalKey")) newCols.Add(("MusicalKey", "TEXT NULL"));
+                    if (!libColumns.Contains("BPM")) newCols.Add(("BPM", "REAL NULL"));
+                    if (!libColumns.Contains("AudioFingerprint")) newCols.Add(("AudioFingerprint", "TEXT NULL"));
 
                     foreach (var (col, def) in newCols)
                     {

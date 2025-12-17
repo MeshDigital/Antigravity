@@ -63,10 +63,40 @@ public class DownloadDiscoveryService
                 return null;
             }
 
-            // 3. Select Best Match
+            // 3. Select Best Match with "The Brain" (Smart Duration Matching)
+            var candidates = searchResult.Tracks.ToList();
+            
+            // Phase 0.3/0.4: Smart Match - Duration Gating
+            // We use a tolerance of 15 seconds to account for silence or slight version differences,
+            // but strict enough to separate Radio Edits from Extended Mixes.
+            if (track.Model.CanonicalDuration.HasValue && track.Model.CanonicalDuration.Value > 0)
+            {
+                var expectedDurationSec = track.Model.CanonicalDuration.Value / 1000.0;
+                var toleranceSec = 15.0; 
+                
+                var smartMatches = candidates
+                    .Where(t => t.Length.HasValue && Math.Abs(t.Length.Value - expectedDurationSec) <= toleranceSec)
+                    .ToList();
+
+                if (smartMatches.Any())
+                {
+                    _logger.LogInformation("🧠 BRAIN: Smart Match Active! Found {Count} candidates matching duration {Duration}s (+/- {Tolerance}s)", 
+                        smartMatches.Count, (int)expectedDurationSec, toleranceSec);
+                    
+                    // Promote smart matches, effectively filtering out the others from the top spot
+                    candidates = smartMatches;
+                }
+                else
+                {
+                     // Fallback strategy: If no track matches the duration, we warn but allow the "best available" logic to take over
+                     _logger.LogWarning("🧠 BRAIN: No candidates matched expected duration {Duration}s. Falling back to best available from {Total} results.", 
+                        (int)expectedDurationSec, candidates.Count);
+                }
+            }
+
             // Since SearchOrchestrator already ranks results using ResultSorter (which considers bitrate, completeness, etc.),
-            // the first result *should* be the best one according to our criteria.
-            var bestMatch = searchResult.Tracks.First();
+            // the first result of our filtered (or unfiltered) list *should* be the best one according to our criteria.
+            var bestMatch = candidates.First();
 
             _logger.LogInformation("Best match found: {Filename} ({Bitrate}kbps, {Length}s)", 
                 bestMatch.Filename, bestMatch.Bitrate, bestMatch.Length);

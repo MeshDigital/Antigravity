@@ -21,7 +21,7 @@ public class TrackListViewModel : INotifyPropertyChanged
     private readonly ILogger<TrackListViewModel> _logger;
     private readonly ILibraryService _libraryService;
     private readonly DownloadManager _downloadManager;
-    private readonly MainViewModel _mainViewModel; // Injected
+    private MainViewModel? _mainViewModel; // Injected post-construction
     private readonly ArtworkCacheService _artworkCache;
     private readonly IEventBus _eventBus;
 
@@ -120,20 +120,23 @@ public class TrackListViewModel : INotifyPropertyChanged
         ILogger<TrackListViewModel> logger,
         ILibraryService libraryService,
         DownloadManager downloadManager,
-        MainViewModel mainViewModel,
         ArtworkCacheService artworkCache,
         IEventBus eventBus)
     {
         _logger = logger;
         _libraryService = libraryService;
         _downloadManager = downloadManager;
-        _mainViewModel = mainViewModel;
         _artworkCache = artworkCache;
         _eventBus = eventBus;
 
         // Subscribe to global track updates
         // Subscribe to global track updates
         eventBus.GetEvent<TrackUpdatedEvent>().Subscribe(evt => OnGlobalTrackUpdated(this, evt.Track));
+    }
+
+    public void SetMainViewModel(MainViewModel mainViewModel)
+    {
+        _mainViewModel = mainViewModel;
     }
 
     /// <summary>
@@ -156,6 +159,7 @@ public class TrackListViewModel : INotifyPropertyChanged
             {
                 var all = await Task.Run(() =>
                 {
+                    if (_mainViewModel == null) return new List<PlaylistTrackViewModel>();
                     return _mainViewModel.AllGlobalTracks
                         .OrderByDescending(t => t.IsActive)
                         .ThenBy(t => t.Artist)
@@ -176,7 +180,7 @@ public class TrackListViewModel : INotifyPropertyChanged
 
                     // Sync with live MainViewModel state to get initial values
                     // Note: This is still useful for initial state (e.g. if download is 50% done when validation opens)
-                    var liveTrack = _mainViewModel.AllGlobalTracks
+                    var liveTrack = _mainViewModel?.AllGlobalTracks
                         .FirstOrDefault(t => t.GlobalId == track.TrackUniqueHash);
 
                     if (liveTrack != null)

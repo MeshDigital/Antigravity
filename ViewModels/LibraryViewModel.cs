@@ -113,6 +113,9 @@ public class LibraryViewModel : INotifyPropertyChanged
     public void SetMainViewModel(Views.MainViewModel mainViewModel)
     {
         _mainViewModel = mainViewModel;
+        Tracks.SetMainViewModel(mainViewModel);
+        Operations.SetMainViewModel(mainViewModel);
+        SmartPlaylists.SetMainViewModel(mainViewModel);
     }
 
     /// <summary>

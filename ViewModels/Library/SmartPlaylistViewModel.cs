@@ -17,7 +17,7 @@ namespace SLSKDONET.ViewModels.Library;
 public class SmartPlaylistViewModel : INotifyPropertyChanged
 {
     private readonly ILogger<SmartPlaylistViewModel> _logger;
-    private readonly MainViewModel _mainViewModel;
+    private MainViewModel? _mainViewModel; // Injected post-construction
 
     public ObservableCollection<SmartPlaylist> SmartPlaylists { get; } = new();
 
@@ -42,13 +42,16 @@ public class SmartPlaylistViewModel : INotifyPropertyChanged
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public SmartPlaylistViewModel(
-        ILogger<SmartPlaylistViewModel> logger,
-        MainViewModel mainViewModel)
+        ILogger<SmartPlaylistViewModel> logger)
     {
         _logger = logger;
-        _mainViewModel = mainViewModel;
 
         InitializeSmartPlaylists();
+    }
+
+    public void SetMainViewModel(MainViewModel mainViewModel)
+    {
+        _mainViewModel = mainViewModel;
     }
 
     /// <summary>
@@ -116,6 +119,7 @@ public class SmartPlaylistViewModel : INotifyPropertyChanged
 
         try
         {
+            if (_mainViewModel == null) return new ObservableCollection<PlaylistTrackViewModel>();
             var allTracks = _mainViewModel.AllGlobalTracks;
             var filtered = playlist.Filter(allTracks).ToList();
 
@@ -142,6 +146,7 @@ public class SmartPlaylistViewModel : INotifyPropertyChanged
     {
         try
         {
+            if (_mainViewModel == null) return new ObservableCollection<PlaylistTrackViewModel>();
             var likedTracks = _mainViewModel.AllGlobalTracks
                 .Where(t => t.Model?.IsLiked == true)
                 .OrderByDescending(t => t.Model?.AddedAt)

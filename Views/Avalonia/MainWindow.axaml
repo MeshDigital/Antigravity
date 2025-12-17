@@ -97,6 +97,20 @@
                                Foreground="#666666"
                                FontSize="11"
                                FontStyle="Italic"/>
+                               
+                    <!-- Phase 0.3: Brain Verification Button -->
+                    <Button Command="{Binding ExecuteBrainTestCommand}"
+                            Background="#2D2D30"
+                            BorderBrush="#3E3E3E"
+                            BorderThickness="1"
+                            Padding="8,2"
+                            ToolTip.Tip="Run Smart Logic Verification"
+                            VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="🧠" FontSize="12"/>
+                            <TextBlock Text="Test Brain" FontSize="11" Foreground="#A0A0A0"/>
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
 
                 <!-- Right: Download Progress + Player Toggle + Zoom Controls -->
