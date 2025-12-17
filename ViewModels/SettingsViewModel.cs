@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using SLSKDONET.Configuration;
 using SLSKDONET.Services;
 using SLSKDONET.Services.Platform;
+using SLSKDONET.Services.Ranking;
 using SLSKDONET.Views; // For AsyncRelayCommand
 
 namespace SLSKDONET.ViewModels;
@@ -91,6 +92,55 @@ public class SettingsViewModel : INotifyPropertyChanged
     {
         get => _config.SpotifyClientSecret;
         set { _config.SpotifyClientSecret = value; OnPropertyChanged(); }
+    }
+    
+    // Phase 2.4: Ranking Strategy Selection
+    public string SelectedRankingMode
+    {
+        get => _config.RankingPreset;
+        set
+        {
+            if (_config.RankingPreset != value)
+            {
+                _config.RankingPreset = value;
+                ApplyRankingStrategy(value);
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(RankingModeDescription));
+            }
+        }
+    }
+    
+    public List<string> RankingModes { get; } = new()
+    {
+        "Balanced",
+        "Quality First",
+        "DJ Mode"
+    };
+    
+    public string RankingModeDescription
+    {
+        get
+        {
+            return SelectedRankingMode switch
+            {
+                "Quality First" => "Prioritizes bitrate and format quality. BPM/Key are minor tiebreakers.",
+                "DJ Mode" => "Prioritizes BPM and Key matching. Quality is secondary.",
+                _ => "Equal weight to quality and musical intelligence. Default mode."
+            };
+        }
+    }
+    
+    private void ApplyRankingStrategy(string mode)
+    {
+        ISortingStrategy strategy = mode switch
+        {
+            "Quality First" => new QualityFirstStrategy(),
+            "DJ Mode" => new DJModeStrategy(),
+            _ => new BalancedStrategy()
+        };
+        
+        ResultSorter.SetStrategy(strategy);
+        _logger.LogInformation("Ranking strategy changed to: {Mode}", mode);
     }
 
     // SSO State

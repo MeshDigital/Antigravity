@@ -8,6 +8,7 @@ using Serilog.Extensions.Logging;
 using SLSKDONET.Configuration;
 using SLSKDONET.Services;
 using SLSKDONET.Services.InputParsers;
+using SLSKDONET.Services.Ranking;
 using SLSKDONET.ViewModels;
 using SLSKDONET.Views;
 using System;
@@ -55,6 +56,17 @@ public partial class App : Application
                 {
                      Serilog.Log.Error("CRITICAL: LibVLC directory NOT found at {Path}. Playback will fail.", libVlcDir);
                 }
+                
+                // Phase 2.4: Load ranking strategy from config
+                var config = Services.GetRequiredService<ConfigManager>().GetCurrent();
+                ISortingStrategy strategy = config.RankingPreset switch
+                {
+                    "Quality First" => new QualityFirstStrategy(),
+                    "DJ Mode" => new DJModeStrategy(),
+                    _ => new BalancedStrategy()
+                };
+                ResultSorter.SetStrategy(strategy);
+                Serilog.Log.Information("Loaded ranking strategy: {Strategy}", config.RankingPreset);
 
                 // Create main window and show it immediately
                 var mainVm = Services.GetRequiredService<MainViewModel>();
