@@ -19,6 +19,7 @@ public class LibraryViewModel : INotifyPropertyChanged
     private readonly ILogger<LibraryViewModel> _logger;
     private readonly INavigationService _navigationService;
     private readonly ImportHistoryViewModel _importHistoryViewModel;
+    private readonly ILibraryService _libraryService; // Session 1: Critical bug fixes
     private Views.MainViewModel? _mainViewModel;
 
     // Child ViewModels (Phase 0: ViewModel Refactoring)
@@ -75,6 +76,11 @@ public class LibraryViewModel : INotifyPropertyChanged
     public System.Windows.Input.ICommand ViewHistoryCommand { get; }
     public System.Windows.Input.ICommand ToggleEditModeCommand { get; }
     public System.Windows.Input.ICommand ToggleActiveDownloadsCommand { get; }
+    
+    // Session 1: Critical bug fixes (3 commands to unblock user)
+    public System.Windows.Input.ICommand PlayTrackCommand { get; }
+    public System.Windows.Input.ICommand RefreshLibraryCommand { get; }
+    public System.Windows.Input.ICommand DeleteProjectCommand { get; }
 
     public LibraryViewModel(
         ILogger<LibraryViewModel> logger,
@@ -83,11 +89,13 @@ public class LibraryViewModel : INotifyPropertyChanged
         Library.TrackOperationsViewModel operations,
         Library.SmartPlaylistViewModel smartPlaylists,
         INavigationService navigationService,
-        ImportHistoryViewModel importHistoryViewModel)
+        ImportHistoryViewModel importHistoryViewModel,
+        ILibraryService libraryService) // Session 1: Inject service
     {
         _logger = logger;
         _navigationService = navigationService;
         _importHistoryViewModel = importHistoryViewModel;
+        _libraryService = libraryService;
         
         // Assign child ViewModels
         Projects = projects;
@@ -99,6 +107,11 @@ public class LibraryViewModel : INotifyPropertyChanged
         ViewHistoryCommand = new AsyncRelayCommand(ExecuteViewHistoryAsync);
         ToggleEditModeCommand = new RelayCommand<object>(_ => IsEditMode = !IsEditMode);
         ToggleActiveDownloadsCommand = new RelayCommand<object>(_ => IsActiveDownloadsVisible = !IsActiveDownloadsVisible);
+        
+        // Session 1: Critical bug fixes
+        PlayTrackCommand = new AsyncRelayCommand<PlaylistTrackViewModel>(ExecutePlayTrackAsync);
+        RefreshLibraryCommand = new AsyncRelayCommand(ExecuteRefreshLibraryAsync);
+        DeleteProjectCommand = new AsyncRelayCommand<PlaylistJob>(ExecuteDeleteProjectAsync);
         
         // Wire up events between child ViewModels
         Projects.ProjectSelected += OnProjectSelected;
@@ -196,6 +209,105 @@ public class LibraryViewModel : INotifyPropertyChanged
             track?.Title, sourcePlaylist?.SourceTitle);
         // TODO: Implement playlist track addition logic
         // This would need to be coordinated with child ViewModels
+    }
+    
+    // Session 1: Critical command implementations
+    
+    /// <summary>
+    /// Plays a track from the library.
+    /// </summary>
+    private async Task ExecutePlayTrackAsync(PlaylistTrackViewModel? track)
+    {
+        if (track == null)
+        {
+            _logger.LogWarning("PlayTrack called with null track");
+            return;
+        }
+        
+        if (string.IsNullOrEmpty(track.Model.ResolvedFilePath))
+        {
+            _logger.LogWarning("Cannot play track without file path: {Title}", track.Title);
+            return;
+        }
+        
+        try
+        {
+            _logger.LogInformation("Playing track: {Title} from {Path}", track.Title, track.Model.ResolvedFilePath);
+            
+            if (_mainViewModel?.PlayerViewModel != null)
+            {
+                _mainViewModel.PlayerViewModel.PlayTrack(track.Model.ResolvedFilePath, track.Title ?? "Unknown", track.Artist ?? "Unknown");
+            }
+            else
+            {
+                _logger.LogError("PlayerViewModel not available");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to play track: {Title}", track.Title);
+        }
+    }
+    
+    /// <summary>
+    /// Refreshes the library by reloading projects from database.
+    /// </summary>
+    private async Task ExecuteRefreshLibraryAsync()
+    {
+        try
+        {
+            _logger.LogInformation("Refreshing library...");
+            await Projects.LoadProjectsAsync();
+            
+            // If a project is selected, reload its tracks
+            if (SelectedProject != null)
+            {
+                await Tracks.LoadProjectTracksAsync(SelectedProject);
+            }
+            
+            _logger.LogInformation("Library refreshed successfully");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to refresh library");
+        }
+    }
+    
+    /// <summary>
+    /// Deletes a project/playlist from the library.
+    /// </summary>
+    private async Task ExecuteDeleteProjectAsync(PlaylistJob? project)
+    {
+        if (project == null)
+        {
+            _logger.LogWarning("DeleteProject called with null project");
+            return;
+        }
+        
+        try
+        {
+            _logger.LogInformation("Deleting project: {Title}", project.SourceTitle);
+            
+            // TODO: Add confirmation dialog in Phase 6 redesign
+            // For now, delete directly
+            await _libraryService.DeletePlaylistJobAsync(project.Id);
+            
+            // Reload projects list
+            await Projects.LoadProjectsAsync();
+            
+            // Clear selected project if it was deleted
+            if (SelectedProject?.Id == project.Id)
+            {
+                SelectedProject = null;
+                Tracks.CurrentProjectTracks.Clear();
+            }
+            
+            _logger.LogInformation("Project deleted successfully: {Title}", project.SourceTitle);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to delete project: {Title}", project.SourceTitle);
+        }
     }
 
     protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
