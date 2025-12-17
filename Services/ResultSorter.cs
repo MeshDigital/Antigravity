@@ -37,6 +37,15 @@ public static class ResultSorter
                 .ThenBy(r => r.Length == null ? int.MaxValue : Math.Abs((r.Length.Value) - (searchTrack.Length ?? 0)))
                 .ToList();
         }
+        
+        // Phase 2.3: Create ScoringContext from search track
+        var context = ScoringContext.FromSearchQuery(
+            searchTrack.Artist ?? "",
+            searchTrack.Title ?? "",
+            searchTrack.BPM.HasValue ? (int)Math.Round(searchTrack.BPM.Value) : null,
+            searchTrack.Length,
+            searchTrack.MusicalKey
+        );
 
         var random = new Random();
 
@@ -50,7 +59,7 @@ public static class ResultSorter
             .ToList();
 
         return withOriginalIndices
-            .Select((track) => (track, criteria: GetSortingCriteria(track, searchTrack, fileConditionEvaluator, random)))
+            .Select((track) => (track, criteria: GetSortingCriteria(track, searchTrack, context, fileConditionEvaluator, random)))
             .OrderByDescending(x => x.criteria)
             .Select(x =>
             {
@@ -62,10 +71,12 @@ public static class ResultSorter
 
     /// <summary>
     /// Calculates comprehensive sorting criteria for a single result.
+    /// Phase 2.3: Now accepts ScoringContext parameter object.
     /// </summary>
     private static SortingCriteria GetSortingCriteria(
         Track result,
         Track searchTrack,
+        ScoringContext context,
         FileConditionEvaluator evaluator,
         Random random)
     {
@@ -90,8 +101,8 @@ public static class ResultSorter
             ArtistSimilarity = CalculateSimilarity(result.Artist ?? "", searchTrack.Artist ?? ""),
             AlbumSimilarity = CalculateSimilarity(result.Album ?? "", searchTrack.Album ?? ""),
             
-            // Phase 1: Musical Intelligence
-            BpmProximity = CalculateBpmProximity(result, searchTrack),
+            // Phase 1: Musical Intelligence (Phase 2.3: Using ScoringContext for BPM)
+            BpmProximity = CalculateBpmProximity(result, context),
             IsSuspicious = IsSuspiciousFile(result, searchTrack),
 
             // Tiebreaker
@@ -103,11 +114,12 @@ public static class ResultSorter
 
     /// <summary>
     /// Phase 1: Calculates BPM proximity score based on filename parsing.
+    /// Phase 2.3: Now uses ScoringContext parameter object.
     /// Returns neutral score if no BPM found (no penalty for casual files).
     /// </summary>
-    private static double CalculateBpmProximity(Track result, Track searchTrack)
+    private static double CalculateBpmProximity(Track result, ScoringContext context)
     {
-        if (!searchTrack.BPM.HasValue) return ScoringConstants.Musical.BpmNeutralScore;
+        if (!context.TargetBPM.HasValue) return ScoringConstants.Musical.BpmNeutralScore;
         
         // Phase 1.1: Use path-based extraction with confidence scoring
         string fullPath = $"{result.Directory}/{result.Filename}";
@@ -115,7 +127,7 @@ public static class ResultSorter
         
         if (!fileBpm.HasValue) return ScoringConstants.Musical.BpmNeutralScore;
         
-        double diff = Math.Abs(fileBpm.Value - searchTrack.BPM.Value);
+        double diff = Math.Abs(fileBpm.Value - context.TargetBPM.Value);
         
         // Base proximity score using thresholds from ScoringConstants
         double proximityScore;
