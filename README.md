@@ -1,19 +1,21 @@
-# 🎵 QMUSICSLSK – The AI-Powered Spotify Clone for Soulseek
+![Driftwave Banner](assets/driftwave_banner.png)
+
+# � DRIFTWAVE – The Self-Healing Offline Music Library
 
 > **"I'm not a developer. I'm a Project Manager guiding AI agents to build the ultimate music app."**  
 > *– A non-developer's journey to building complex software through AI direction*
 
-[![Platform](https://img.shields.io/badge/platform-Windows%20(in%20dev)%20%7C%20macOS%2FLinux%20(planned)-blue)](https://github.com/MeshDigital/QMUSICSLSK)
+[![Platform](https://img.shields.io/badge/platform-Windows%20(in%20dev)%20%7C%20macOS%2FLinux%20(planned)-blue)](https://github.com/MeshDigital/Driftwave)
 [![.NET](https://img.shields.io/badge/.NET-8.0-purple)](https://dotnet.microsoft.com/)
 [![UI](https://img.shields.io/badge/UI-Avalonia-orange)](https://avaloniaui.net/)
 [![License](https://img.shields.io/badge/license-GPL--3.0-green)](LICENSE)
-[![Status](https://img.shields.io/badge/status-Active%20Development-brightgreen)](https://github.com/MeshDigital/QMUSICSLSK)
+[![Status](https://img.shields.io/badge/status-Active%20Development-brightgreen)](https://github.com/MeshDigital/Driftwave)
 
 ---
 
 ## 🚀 What Is This?
 
-**QMUSICSLSK** is evolving into the world's first **Self-Healing Offline Music Library**. 
+**Driftwave** is evolving into the world's first **Self-Healing Offline Music Library**. 
 
 It started as a Soulseek client that looks like Spotify. Now, it's becoming an **Offline DJ Metadata Manager** that automatically upgrades your library quality (replacing 128kbps MP3s with FLACs) *without* losing your precious metadata.
 
@@ -58,7 +60,7 @@ I don't write code. I serve as the **Product Manager** guiding a team of advance
 
 ### Project Structure
 ```
-QMUSICSLSK/
+Driftwave/
 ├── Views/Avalonia/          # UI (XAML + code-behind)
 ├── ViewModels/              # Business logic & State
 ├── Services/                # Core engines (Download, Import, Player)
@@ -111,8 +113,8 @@ This project is a case study in **AI-Augmented Engineering**.
 
 ### Installation
 ```bash
-git clone https://github.com/MeshDigital/QMUSICSLSK.git
-cd QMUSICSLSK
+git clone https://github.com/MeshDigital/Driftwave.git
+cd Driftwave
 dotnet restore
 dotnet build
 dotnet run
@@ -136,7 +138,7 @@ GPL-3.0 - See [LICENSE](LICENSE) for details.
 ---
 
 ## 💬 Contact
-- **GitHub Issues**: [Report bugs](https://github.com/MeshDigital/QMUSICSLSK/issues)
-- **Discussions**: [Join the chat](https://github.com/MeshDigital/QMUSICSLSK/discussions)
+- **GitHub Issues**: [Report bugs](https://github.com/MeshDigital/Driftwave/issues)
+- **Discussions**: [Join the chat](https://github.com/MeshDigital/Driftwave/discussions)
 
 **Built with ❤️ and AI** | **Vibing since 2024**
