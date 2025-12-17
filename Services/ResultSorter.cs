@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using SLSKDONET.Configuration;
 using SLSKDONET.Models;
 using SLSKDONET.Utils;
 using Soulseek;
@@ -102,26 +103,30 @@ public static class ResultSorter
 
     /// <summary>
     /// Phase 1: Calculates BPM proximity score based on filename parsing.
-    /// Returns 0.5 (neutral) if no BPM found in filename (no penalty for casual files).
+    /// Returns neutral score if no BPM found (no penalty for casual files).
     /// </summary>
     private static double CalculateBpmProximity(Track result, Track searchTrack)
     {
-        if (!searchTrack.BPM.HasValue) return 0.5; // Neutral if target has no BPM
+        if (!searchTrack.BPM.HasValue) return ScoringConstants.Musical.BpmNeutralScore;
         
         // Phase 1.1: Use path-based extraction with confidence scoring
         string fullPath = $"{result.Directory}/{result.Filename}";
         double? fileBpm = FilenameNormalizer.ExtractBpmFromPath(fullPath, out double confidence);
         
-        if (!fileBpm.HasValue) return 0.5; // Neutral if no BPM in filename (common for casual music)
+        if (!fileBpm.HasValue) return ScoringConstants.Musical.BpmNeutralScore;
         
         double diff = Math.Abs(fileBpm.Value - searchTrack.BPM.Value);
         
-        // Base proximity score
+        // Base proximity score using thresholds from ScoringConstants
         double proximityScore;
-        if (diff < 2.0) proximityScore = 1.0;   // Perfect match
-        else if (diff < 5.0) proximityScore = 0.75;  // Close match
-        else if (diff < 10.0) proximityScore = 0.5;  // Acceptable
-        else proximityScore = 0.0;  // Mismatch
+        if (diff < ScoringConstants.Musical.BpmPerfectThreshold) 
+            proximityScore = 1.0;   // Perfect match
+        else if (diff < ScoringConstants.Musical.BpmCloseThreshold) 
+            proximityScore = 0.75;  // Close match
+        else if (diff < ScoringConstants.Musical.BpmAcceptableThreshold) 
+            proximityScore = 0.5;   // Acceptable
+        else 
+            proximityScore = 0.0;   // Mismatch
         
         // Apply confidence decay for path-based matches
         return proximityScore * confidence;
@@ -311,18 +316,19 @@ public class SortingCriteria : IComparable<SortingCriteria>
             double score = 0.0;
             
             // TIER 0: Availability (Speed - most critical for user experience)
-            if (HasFreeUploadSlot) score += 2000;
-            score -= QueueLength * 10; // Penalize long queues
-            if (QueueLength == 0) score += 10; // Bonus for empty queue
+            if (HasFreeUploadSlot) score += ScoringConstants.Availability.FreeSlotBonus;
+            score -= QueueLength * ScoringConstants.Availability.QueuePenaltyPerItem;
+            if (QueueLength == 0) score += ScoringConstants.Availability.EmptyQueueBonus;
             
             // Uploader Trust Modifier (from slsk-batchdl)
-            if (QueueLength > 50) score -= 500; // Heavy penalty for very long queues
+            if (QueueLength > ScoringConstants.Availability.LongQueueThreshold) 
+                score -= ScoringConstants.Availability.LongQueuePenalty;
 
             // TIER 1: Required conditions (must-have filters)
-            if (PassesRequired) score += 1000;
+            if (PassesRequired) score += ScoringConstants.Conditions.RequiredPassBonus;
 
             // TIER 2: Preferred conditions (nice-to-have filters)
-            score += PreferredScore * 500;
+            score += PreferredScore * ScoringConstants.Conditions.PreferredWeight;
             
             // TIER 3: QUALITY FLOOR (Primary discriminator)
             // This is the key fix: quality comes BEFORE musical intelligence
@@ -330,19 +336,19 @@ public class SortingCriteria : IComparable<SortingCriteria>
 
             // TIER 4: Musical Intelligence (Tiebreaker for equal quality)
             // BPM match can boost a file but NOT override quality tier
-            score += BpmProximity * 100; // Max 100 pts (reduced from 300)
+            score += BpmProximity * ScoringConstants.Musical.BpmMatchBonus;
 
             // TIER 5: Metadata quality
-            if (HasValidLength) score += 100;
-            score += LengthMatch * 100;
+            if (HasValidLength) score += ScoringConstants.Metadata.ValidLengthBonus;
+            score += LengthMatch * ScoringConstants.Metadata.LengthMatchWeight;
 
             // TIER 6: String matching
-            score += TitleSimilarity * 200;
-            score += ArtistSimilarity * 100;
-            score += AlbumSimilarity * 50;
+            score += TitleSimilarity * ScoringConstants.Metadata.TitleSimilarityWeight;
+            score += ArtistSimilarity * ScoringConstants.Metadata.ArtistSimilarityWeight;
+            score += AlbumSimilarity * ScoringConstants.Metadata.AlbumSimilarityWeight;
 
             // TIER 7: Tiebreaker
-            score += RandomTiebreaker / 1_000_000_000.0; // Small contribution
+            score += RandomTiebreaker / ScoringConstants.Tiebreaker.RandomDivisor;
 
             return score;
         }
@@ -368,7 +374,7 @@ public class SortingCriteria : IComparable<SortingCriteria>
         if (IsLosslessFormat())
         {
             // Lossless gets massive base score
-            double score = 450; // ScoringConstants.LosslessBase
+            double score = ScoringConstants.Quality.LosslessBase;
             
             // TODO: Add sample rate bonus when we have access to that data
             // if (sampleRate >= 96000) score += 25;
@@ -377,12 +383,14 @@ public class SortingCriteria : IComparable<SortingCriteria>
         }
         
         // Lossy formats: tiered by bitrate with buffer for VBR quirks
-        // Bitrate Buffer Trick: 315kbps threshold catches VBR V0 files
-        if (BitRateValue >= 315) return 300; // HighQualityBase (320kbps)
-        if (BitRateValue >= 192) return 150; // MediumQualityBase
+        // Bitrate Buffer Trick: catches VBR V0 files
+        if (BitRateValue >= ScoringConstants.Quality.HighQualityThreshold) 
+            return ScoringConstants.Quality.HighQualityBase;
+        if (BitRateValue >= ScoringConstants.Quality.MediumQualityThreshold) 
+            return ScoringConstants.Quality.MediumQualityBase;
         
         // Low quality: proportional scoring (prevents 128kbps from being competitive)
-        return BitRateValue * 0.5; // 128kbps = 64 pts (well below Medium tier)
+        return BitRateValue * ScoringConstants.Quality.LowQualityMultiplier;
     }
     
     /// <summary>
