@@ -189,6 +189,127 @@ public class RankingWeights
 **Impact**: Allows users to tune ranking for their use case (audiophile vs DJ)
 
 ---
+
+## Phase 2: Code Quality & Maintainability (Refactoring) (8-12 hours) ✨ NEW
+
+**Priority**: ⭐⭐ MEDIUM - Technical Debt Reduction
+
+### 2.1 Extract Method - ResultSorter (2 hours)
+**Reference**: [Refactoring.Guru - Extract Method](https://refactoring.guru/extract-method)
+
+**Files to Modify**:
+- `Services/ResultSorter.cs`
+- `Services/DownloadDiscoveryService.cs`
+
+**What to Extract**:
+- [ ] `CalculateBitrateScore(Track track)` - Isolate bitrate quality calculation
+- [ ] `CalculateDurationPenalty(Track result, Track target)` - Duration mismatch logic
+- [ ] `EvaluateUploaderTrust(Track track)` - Free slot + queue length scoring
+- [ ] `ExtractBpmFromFilename(string filename)` - Already exists, good example
+
+**Impact**: Each scoring component becomes independently testable
+
+---
+
+### 2.2 Replace Magic Numbers (1 hour)
+**Reference**: [Refactoring.Guru - Replace Magic Number](https://refactoring.guru/replace-magic-number-with-symbolic-constant)
+
+**Files to Create**:
+- `Configuration/ScoringConstants.cs` (new)
+
+**Constants to Define**:
+```csharp
+public static class ScoringConstants
+{
+    // Duration Gating
+    public const int DurationToleranceSeconds = 30;
+    public const int SmartDurationToleranceSeconds = 15;
+    
+    // Scoring Weights (configurable via AppConfig)
+    public const int BpmProximityWeight = 150;
+    public const int BitrateQualityWeight = 200;
+    public const int DurationMatchWeight = 100;
+    public const int TitleSimilarityWeight = 200;
+    
+    // Filesize Validation
+    public const int MinBytesPerSecond = 8000; // ~64kbps
+    public const double FilesizeSuspicionThreshold = 0.5; // 50% of expected
+}
+```
+
+---
+
+### 2.3 Replace Conditional with Polymorphism - Tagger (3 hours)
+**Reference**: [Refactoring.Guru - Replace Conditional](https://refactoring.guru/replace-conditional-with-polymorphism)
+
+**Files to Create**:
+- `Services/Tagging/IAudioTagger.cs` (interface)
+- `Services/Tagging/Id3Tagger.cs` (MP3, AAC)
+- `Services/Tagging/VorbisTagger.cs` (FLAC, OGG)
+- `Services/Tagging/TaggerFactory.cs` (factory pattern)
+
+**Files to Modify**:
+- `Services/MetadataTaggerService.cs` - Use factory instead of conditionals
+
+**Impact**: Easier to add new formats (WAV, ALAC, etc.)
+
+---
+
+### 2.4 Introduce Parameter Object (2 hours)
+**Reference**: [Refactoring.Guru - Introduce Parameter Object](https://refactoring.guru/introduce-parameter-object)
+
+**Files to Create**:
+- `Models/TrackIdentityProfile.cs` (new)
+
+**Schema**:
+```csharp
+public class TrackIdentityProfile
+{
+    public string Artist { get; set; }
+    public string Title { get; set; }
+    public string? Album { get; set; }
+    public double? BPM { get; set; }
+    public int? CanonicalDuration { get; set; }
+    public string? MusicalKey { get; set; }
+}
+```
+
+**Files to Modify**:
+- `Services/SpotifyMetadataService.cs` - Accept `TrackIdentityProfile` instead of 5+ parameters
+
+---
+
+### 2.5 Extract Class - Orchestrator Split (3 hours)
+**Reference**: [Refactoring.Guru - Extract Class](https://refactoring.guru/extract-class)
+
+**Files to Create**:
+- `Services/LibraryOrganizationService.cs` - File renaming and directory structure
+- `Services/ArtworkPipeline.cs` - Album art fetching and caching
+- `Services/MetadataPersistenceOrchestrator.cs` - DB + tag sync
+
+**Files to Modify**:
+- `Services/MetadataEnrichmentOrchestrator.cs` - Delegate to new services
+
+**Impact**: Single Responsibility Principle, easier testing
+
+---
+
+### 2.6 Strategy Pattern - Ranking Modes (2 hours)
+**Reference**: [Refactoring.Guru - Strategy](https://refactoring.guru/design-patterns/strategy)
+
+**Files to Create**:
+- `Services/Ranking/ISortingStrategy.cs` (interface)
+- `Services/Ranking/AudiophileStrategy.cs` - Bitrate-heavy
+- `Services/Ranking/DjStrategy.cs` - BPM/Key-heavy
+- `Services/Ranking/BalancedStrategy.cs` - Default weights
+
+**Files to Modify**:
+- `Services/ResultSorter.cs` - Accept `ISortingStrategy` parameter
+- `Configuration/AppConfig.cs` - Store selected strategy
+
+**Impact**: Runtime switching between ranking modes
+
+---
 5. Add placeholder for missing artwork
 
 ---

@@ -109,6 +109,44 @@
 - Better error recovery
 - **Impact**: Reliability
 
+### Phase 2: Code Quality & Maintainability (Refactoring) ✨ NEW
+
+#### 1. Extract Method - ResultSorter & DownloadDiscoveryService
+- **Problem**: Monolithic scoring methods mixing BPM, bitrate, and duration logic
+- **Solution**: Extract `CalculateBitrateScore()`, `CalculateDurationPenalty()`, `EvaluateUploaderTrust()`
+- **Impact**: Easier unit testing, clearer "Brain" logic
+- **Reference**: [Refactoring.Guru - Extract Method](https://refactoring.guru/extract-method)
+
+#### 2. Replace Magic Numbers - Scoring Constants
+- **Problem**: Hardcoded values (`15000` duration tolerance, `+10`/`-20` point values)
+- **Solution**: Create `ScoringConstants` class or move to `AppConfig`
+- **Impact**: Single source of truth for tuning sensitivity
+- **Reference**: [Refactoring.Guru - Replace Magic Number](https://refactoring.guru/replace-magic-number-with-symbolic-constant)
+
+#### 3. Replace Conditional with Polymorphism - MetadataTaggerService
+- **Problem**: Complex if/else for MP3 vs FLAC tagging logic
+- **Solution**: Base `AudioTagger` class with `Id3Tagger` and `VorbisTagger` subclasses
+- **Impact**: Cleaner format handling, easier to add new formats
+- **Reference**: [Refactoring.Guru - Replace Conditional](https://refactoring.guru/replace-conditional-with-polymorphism)
+
+#### 4. Introduce Parameter Object - SpotifyMetadataService
+- **Problem**: Long parameter lists (Artist, Title, BPM, Duration, etc.)
+- **Solution**: Create `TrackIdentityProfile` object wrapping search criteria
+- **Impact**: Prevents "Long Parameter List" smell, easier bulk operations
+- **Reference**: [Refactoring.Guru - Introduce Parameter Object](https://refactoring.guru/introduce-parameter-object)
+
+#### 5. Extract Class - MetadataEnrichmentOrchestrator
+- **Problem**: God Object handling renaming, artwork, and tag persistence
+- **Solution**: Split into `LibraryOrganizationService`, `ArtworkPipeline`, `MetadataPersistenceOrchestrator`
+- **Impact**: Single Responsibility Principle, better testability
+- **Reference**: [Refactoring.Guru - Extract Class](https://refactoring.guru/extract-class)
+
+#### 6. Strategy Pattern - Ranking Modes
+- **Problem**: Need different ranking behaviors (Audiophile vs DJ vs Fastest)
+- **Solution**: `ISortingStrategy` interface with mode implementations
+- **Impact**: Runtime switching between "Quality First" and "BPM Match" modes
+- **Reference**: [Refactoring.Guru - Strategy](https://refactoring.guru/design-patterns/strategy)
+
 ### Medium Priority
 
 #### 4. Advanced Filters
