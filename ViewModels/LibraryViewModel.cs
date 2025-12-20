@@ -173,6 +173,48 @@ public class LibraryViewModel : INotifyPropertyChanged
         
         // Subscribe to UpgradeScout close event
         UpgradeScout.CloseRequested += (s, e) => IsUpgradeScoutVisible = false;
+        
+        // Phase 3: Post-Import Navigation - Auto-navigate to Library and select imported album
+        _eventBus.GetEvent<ProjectAddedEvent>().Subscribe(OnProjectAdded);
+    }
+    
+    private async void OnProjectAdded(ProjectAddedEvent evt)
+    {
+        try
+        {
+            _logger.LogInformation("ProjectAddedEvent received for job {JobId}, navigating to library", evt.ProjectId);
+            
+            // Navigate to Library page
+            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                _navigationService.NavigateTo("Library");
+            });
+            
+            // Give the UI time to update
+            await Task.Delay(300);
+            
+            // Load projects to ensure the new one is in the list
+            await LoadProjectsAsync();
+            
+            // Select the newly added project
+            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                var addedProject = Projects.AllProjects.FirstOrDefault(p => p.Id == evt.ProjectId);
+                if (addedProject != null)
+                {
+                    Projects.SelectedProject = addedProject;
+                    _logger.LogInformation("Auto-selected imported project: {Title}", addedProject.SourceTitle);
+                }
+                else
+                {
+                    _logger.LogWarning("Could not find project {JobId} in AllProjects after import", evt.ProjectId);
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to handle post-import navigation for project {JobId}", evt.ProjectId);
+        }
     }
 
     private void OnTrackSelectionChanged(object? sender, EventArgs e)
