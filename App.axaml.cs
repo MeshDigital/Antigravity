@@ -340,7 +340,14 @@ public partial class App : Application
 
         // Utilities
         services.AddSingleton<SearchQueryNormalizer>();
-        // Views
+        
+        // Views - Register all page controls for NavigationService
+        services.AddTransient<Views.Avalonia.HomePage>();
+        services.AddTransient<Views.Avalonia.SearchPage>();
+        services.AddTransient<Views.Avalonia.LibraryPage>();
+        services.AddTransient<Views.Avalonia.DownloadsPage>();
+        services.AddTransient<Views.Avalonia.SettingsPage>();
+        services.AddTransient<Views.Avalonia.ImportPage>();
         services.AddTransient<Views.Avalonia.ImportPreviewPage>();
     }
 
