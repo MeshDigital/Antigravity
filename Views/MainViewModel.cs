@@ -177,6 +177,12 @@ public class MainViewModel : INotifyPropertyChanged
         };
 
         // Register pages for navigation service
+        _navigationService.RegisterPage("Home", typeof(Avalonia.HomePage));
+        _navigationService.RegisterPage("Search", typeof(Avalonia.SearchPage));
+        _navigationService.RegisterPage("Library", typeof(Avalonia.LibraryPage));
+        _navigationService.RegisterPage("Downloads", typeof(Avalonia.DownloadsPage));
+        _navigationService.RegisterPage("Settings", typeof(Avalonia.SettingsPage));
+        _navigationService.RegisterPage("Import", typeof(Avalonia.ImportPage));
         _navigationService.RegisterPage("ImportPreview", typeof(Avalonia.ImportPreviewPage));
         
         // Subscribe to navigation events
@@ -210,13 +216,7 @@ public class MainViewModel : INotifyPropertyChanged
 
     private void NavigateToSettings()
     {
-        if (_settingsPage == null)
-        {
-            _settingsPage = new Avalonia.SettingsPage { DataContext = SettingsViewModel };
-        }
-        CurrentPage = _settingsPage;
-        CurrentPageType = PageType.Settings;
-        _eventBus.Publish(new NavigationEvent(PageType.Settings));
+        _navigationService.NavigateTo("Settings");
     }
 
 
@@ -393,18 +393,28 @@ public class MainViewModel : INotifyPropertyChanged
 
     // Page instances (lazy-loaded)
     // Lazy-loaded page instances
-    private object? _homePage; // Phase 6D
-    private object? _searchPage;
-    private object? _libraryPage;
-    private object? _downloadsPage;
-    private object? _settingsPage;
-    private object? _importPage; // Phase 6D
+    // Page instances no longer needed here as they are managed by NavigationService
 
     private void OnNavigated(object? sender, global::Avalonia.Controls.UserControl page)
     {
         if (page != null)
         {
             CurrentPage = page;
+            
+            // Sync CurrentPageType based on the view type to keep UI highlights correct
+            CurrentPageType = page.GetType().Name switch
+            {
+                "HomePage" => PageType.Home,
+                "SearchPage" => PageType.Search,
+                "LibraryPage" => PageType.Library,
+                "DownloadsPage" => PageType.Downloads,
+                "SettingsPage" => PageType.Settings,
+                "ImportPage" => PageType.Import,
+                "ImportPreviewPage" => PageType.Import, // Map preview to Import category
+                _ => CurrentPageType
+            };
+            
+            _logger.LogInformation("Navigation sync: CurrentPage updated to {PageType}", CurrentPageType);
         }
     }
 
@@ -412,65 +422,27 @@ public class MainViewModel : INotifyPropertyChanged
 
     private void NavigateToHome()
     {
-        if (_homePage == null)
-        {
-            _homePage = new Avalonia.HomePage { DataContext = this };
-        }
-        CurrentPage = _homePage;
-        CurrentPageType = PageType.Home;
-        _eventBus.Publish(new NavigationEvent(PageType.Home));
+        _navigationService.NavigateTo("Home");
     }
 
     private void NavigateToSearch()
     {
-        if (_searchPage == null)
-        {
-            _searchPage = new Avalonia.SearchPage { DataContext = SearchViewModel };
-        }
-        CurrentPage = _searchPage;
-        CurrentPageType = PageType.Search;
-        _eventBus.Publish(new NavigationEvent(PageType.Search));
+        _navigationService.NavigateTo("Search");
     }
 
     private void NavigateToLibrary()
     {
-        try
-        {
-            if (_libraryPage == null)
-            {
-                _libraryPage = new Avalonia.LibraryPage { DataContext = LibraryViewModel };
-            }
-            CurrentPage = _libraryPage;
-            CurrentPageType = PageType.Library;
-            _eventBus.Publish(new NavigationEvent(PageType.Library));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to navigate to Library page");
-            StatusText = $"Error opening Library: {ex.Message}";
-        }
+        _navigationService.NavigateTo("Library");
     }
 
     private void NavigateToDownloads()
     {
-        if (_downloadsPage == null)
-        {
-            _downloadsPage = new Avalonia.DownloadsPage { DataContext = this };
-        }
-        CurrentPage = _downloadsPage;
-        CurrentPageType = PageType.Downloads;
-        _eventBus.Publish(new NavigationEvent(PageType.Downloads));
+        _navigationService.NavigateTo("Downloads");
     }
 
     private void NavigateToImport()
     {
-        if (_importPage == null)
-        {
-            _importPage = new Avalonia.ImportPage { DataContext = this };
-        }
-        CurrentPage = _importPage;
-        CurrentPageType = PageType.Import;
-        _eventBus.Publish(new NavigationEvent(PageType.Import));
+        _navigationService.NavigateTo("Import");
     }
 
 
