@@ -120,8 +120,19 @@ public class PlaylistJob : INotifyPropertyChanged
     public int ActiveDownloadsCount
     {
         get => _activeDownloadsCount;
-        set { SetProperty(ref _activeDownloadsCount, value); }
+        set 
+        { 
+            if (SetProperty(ref _activeDownloadsCount, value))
+            {
+                OnPropertyChanged(nameof(HasActiveDownloads));
+            }
+        }
     }
+
+    /// <summary>
+    /// Helper for XAML bindings to toggle visibility of download indicators.
+    /// </summary>
+    public bool HasActiveDownloads => ActiveDownloadsCount > 0;
 
     private string? _currentDownloadingTrack;
     /// <summary>

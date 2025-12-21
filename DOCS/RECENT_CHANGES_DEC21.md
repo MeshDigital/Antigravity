@@ -171,3 +171,23 @@ Search results invisible - Import Preview overlay covering entire search area.
 ---
 
 **Session Summary**: Fixed 3 critical issues (1 performance, 2 UI), cleaned up technical debt, verified media player stability. All changes committed and ready for production testing.
+
+---
+
+## Late Session Updates (Phase 0 & 11) 🚀
+
+### 1. Database Migration Synchronization (Phase 0) 🗄️
+- **Issue**: "Table already exists" error preventing `AddSpotifyMetadata` migration.
+- **Fix**: Manually synchronized migration history by applying empty `Up()` methods and then restoring original code.
+- **Status**: ✅ Database schema is now fully consistent with EF Core snapshot.
+
+### 2. Active Downloads Tracking (Phase 11) ⬇️
+- **Feature**: Real-time active download count in sidebar project cards.
+- **Technical Fix**: 
+    - Added `HasActiveDownloads` helper to `PlaylistJob` model.
+    - Updated `CompactPlaylistTemplate.axaml` to use robust boolean binding for visibility.
+- **Result**: Download indicators (blue arrow + count) now correctly toggle based on activity.
+
+### 3. Build Verification 🏗️
+- **Status**: Clean Build (0 Errors). All changes verified locally.
+
