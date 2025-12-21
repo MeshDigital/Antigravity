@@ -301,6 +301,8 @@ public class SettingsViewModel : INotifyPropertyChanged
     }
 
     private bool _isAuthenticating;
+    private DateTime _authStateSetAt = DateTime.MinValue;
+    private CancellationTokenSource? _authWatchdogCts;
     public bool IsAuthenticating
     {
         get => _isAuthenticating;
@@ -310,6 +312,16 @@ public class SettingsViewModel : INotifyPropertyChanged
                 _isAuthenticating, value, Environment.StackTrace);
             if (SetProperty(ref _isAuthenticating, value))
             {
+                if (value)
+                {
+                    _authStateSetAt = DateTime.UtcNow;
+                    StartAuthWatchdog();
+                }
+                else
+                {
+                    _authWatchdogCts?.Cancel();
+                    _authWatchdogCts = null;
+                }
                 // Notify all Spotify commands to re-evaluate their CanExecute state
                 (ConnectSpotifyCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
                 (DisconnectSpotifyCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
@@ -317,6 +329,38 @@ public class SettingsViewModel : INotifyPropertyChanged
                 (TestSpotifyConnectionCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
                 (RestartSpotifyAuthCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
             }
+        }
+    }
+
+    private void StartAuthWatchdog()
+    {
+        try
+        {
+            _authWatchdogCts?.Cancel();
+            _authWatchdogCts = new CancellationTokenSource();
+            var token = _authWatchdogCts.Token;
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(20), token);
+                    if (!token.IsCancellationRequested && IsAuthenticating)
+                    {
+                        _logger.LogWarning("Auth UI watchdog: clearing stuck IsAuthenticating after 20s");
+                        IsAuthenticating = false;
+                    }
+                }
+                catch (OperationCanceledException) { }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Auth UI watchdog encountered an error");
+                }
+            }, token);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to start auth watchdog");
         }
     }
 
