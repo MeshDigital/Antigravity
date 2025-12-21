@@ -174,6 +174,7 @@ public partial class SearchViewModel : ReactiveObject
         _fileInteractionService = fileInteractionService;
         _clipboardService = clipboardService;
         _searchOrchestration = searchOrchestration;
+        _isImportOverlayActive = false; // Initialize explicitly
 
         // --- Reactive Pipeline Setup ---
         // Connect SourceList -> Filter -> Sort -> Bind -> Public Collection
@@ -370,6 +371,7 @@ public partial class SearchViewModel : ReactiveObject
     {
         SearchQuery = "";
         IsSearching = false;
+        IsImportOverlayActive = false;
         _searchResults.Clear();
         AlbumResults.Clear();
         StatusText = "Ready";

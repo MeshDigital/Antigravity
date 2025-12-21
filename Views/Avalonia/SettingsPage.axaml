@@ -396,7 +396,7 @@
                     </Expander>
 
                     <!-- Connect/Disconnect Buttons -->
-                    <StackPanel Orientation="Horizontal" Spacing="12" Margin="180,0,0,0">
+                    <StackPanel Orientation="Horizontal" Spacing="12" Margin="180,0,0,0" IsVisible="{Binding IsAuthenticating, Converter={StaticResource BoolInverseConverter}}">
                         <Button Command="{Binding ConnectSpotifyCommand}"
                                 IsVisible="{Binding IsSpotifyConnected, Converter={StaticResource BoolInverseConverter}}"
                                 Background="#1DB954"
@@ -432,13 +432,15 @@
                                  <TextBlock Text="Test Connection" FontSize="13" Foreground="#AAA"/>
                              </StackPanel>
                         </Button>
-                        
-                        <ProgressBar IsIndeterminate="True" 
-                                     Width="40" Height="2"
-                                     VerticalAlignment="Center"
-                                     IsVisible="{Binding IsAuthenticating}"
-                                     Foreground="#1DB954"/>
                     </StackPanel>
+
+                    <!-- Progress Bar during Auth -->
+                    <ProgressBar IsIndeterminate="True" 
+                                 Width="400" Height="4"
+                                 Margin="180,0,0,0"
+                                 HorizontalAlignment="Left"
+                                 IsVisible="{Binding IsAuthenticating}"
+                                 Foreground="#1DB954"/>
                 </StackPanel>
             </Border>
 
