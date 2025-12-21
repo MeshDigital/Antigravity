@@ -328,56 +328,60 @@ public class ImportPreviewViewModel : INotifyPropertyChanged
     {
          if (queries == null || !queries.Any()) return;
 
+         var enrichedTracks = new List<SelectableTrack>();
+         foreach (var query in queries)
+         {
+             var track = new Track
+             {
+                Title = query.Title,
+                Artist = query.Artist,
+                Album = query.Album,
+                Length = query.Length,
+                SpotifyTrackId = query.SpotifyTrackId,
+                SpotifyAlbumId = query.SpotifyAlbumId,
+                SpotifyArtistId = query.SpotifyArtistId,
+                AlbumArtUrl = query.AlbumArtUrl,
+                ArtistImageUrl = query.ArtistImageUrl,
+                Genres = query.Genres,
+                Popularity = query.Popularity,
+                CanonicalDuration = query.CanonicalDuration,
+                ReleaseDate = query.ReleaseDate
+             };
+
+             // Check library status for deduplication feedback (OFF UI THREAD)
+             if (_libraryService != null)
+             {
+                 try 
+                 {
+                     var entry = await _libraryService.FindLibraryEntryAsync(track.UniqueHash);
+                     track.IsInLibrary = entry != null;
+                 }
+                 catch { /* Ignore DB errors during stream */ }
+             }
+
+             var selectable = new SelectableTrack(track);
+             enrichedTracks.Add(selectable);
+         }
+
          await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
          {
-             var newTracks = new List<SelectableTrack>();
-             foreach (var query in queries)
+             foreach (var selectable in enrichedTracks)
              {
-                 var track = new Track
-                 {
-                    Title = query.Title,
-                    Artist = query.Artist,
-                    Album = query.Album,
-                    Length = query.Length,
-                    SpotifyTrackId = query.SpotifyTrackId,
-                    SpotifyAlbumId = query.SpotifyAlbumId,
-                    SpotifyArtistId = query.SpotifyArtistId,
-                    AlbumArtUrl = query.AlbumArtUrl,
-                    ArtistImageUrl = query.ArtistImageUrl,
-                    Genres = query.Genres,
-                    Popularity = query.Popularity,
-                    CanonicalDuration = query.CanonicalDuration,
-                    ReleaseDate = query.ReleaseDate
-                 };
-
-                 // Check library status for deduplication feedback
-                 if (_libraryService != null)
-                 {
-                     try 
-                     {
-                         var entry = await _libraryService.FindLibraryEntryAsync(track.UniqueHash);
-                         track.IsInLibrary = entry != null;
-                     }
-                     catch { /* Ignore DB errors during stream */ }
-                 }
-
-                 var selectable = new SelectableTrack(track);
                  selectable.OnSelectionChanged = () => 
                  {
                      UpdateSelectedCount();
-                     ((AsyncRelayCommand)AddToLibraryCommand).RaiseCanExecuteChanged();
+                     if (AddToLibraryCommand is AsyncRelayCommand arc)
+                        arc.RaiseCanExecuteChanged();
                  };
-                 newTracks.Add(selectable);
                  ImportedTracks.Add(selectable);
              }
 
              // Efficiently update groups
-             // Re-grouping everything is expensive, but for 50 items it's okay.
-             // Ideally we just add to existing groups or create new ones.
-             UpdateAlbumGroupsIncremental(newTracks);
+             UpdateAlbumGroupsIncremental(enrichedTracks);
 
              StatusMessage = $"Loaded {ImportedTracks.Count} tracks...";
-             IsLoading = false; // Allow interaction while streaming? Yes.
+             IsLoading = false; 
+             UpdateSelectedCount();
          });
     }
 

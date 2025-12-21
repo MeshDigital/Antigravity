@@ -29,6 +29,12 @@ public interface ISpotifyMetadataService
     Task<bool> EnrichTrackAsync(PlaylistTrack track);
 
     /// <summary>
+    /// Enriches a SearchQuery with Spotify metadata.
+    /// Used by CSV and other input providers to improve track identification.
+    /// </summary>
+    Task<bool> EnrichQueryAsync(SearchQuery query);
+
+    /// <summary>
     /// Clears the internal metadata cache.
     /// </summary>
     Task ClearCacheAsync();

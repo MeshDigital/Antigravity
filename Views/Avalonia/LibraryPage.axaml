@@ -88,10 +88,34 @@
 
                         <Separator Height="1" Background="#333" Margin="12,8"/>
 
+                        <!-- Project Search -->
+                        <Border Background="#2D2D2D" 
+                                BorderBrush="#333" 
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Margin="8,8,8,12"
+                                Padding="10,2">
+                            <Grid ColumnDefinitions="Auto,*">
+                                <TextBlock Grid.Column="0" 
+                                          Text="🔍" 
+                                          FontSize="12" 
+                                          VerticalAlignment="Center"
+                                          Foreground="#666"/>
+                                <TextBox Grid.Column="1"
+                                        Text="{Binding Projects.SearchText, Mode=TwoWay}" 
+                                        Watermark="Filter projects..." 
+                                        Background="Transparent"
+                                        BorderThickness="0"
+                                        FontSize="12"
+                                        Padding="8,6"
+                                        Foreground="White"/>
+                            </Grid>
+                        </Border>
+
                         <!-- User Playlists -->
-                        <TextBlock Text="PLAYLISTS" FontSize="11" FontWeight="Bold" Foreground="#666" Margin="16,8"/>
+                        <TextBlock Text="PLAYLISTS" FontSize="11" FontWeight="Bold" Foreground="#666" Margin="16,0,16,8"/>
                         
-                        <ListBox ItemsSource="{Binding Projects.AllProjects}" 
+                        <ListBox ItemsSource="{Binding Projects.FilteredProjects}" 
                                  SelectedItem="{Binding Projects.SelectedProject, Mode=TwoWay}"
                                  Background="Transparent" BorderThickness="0" Padding="0">
                             <ListBox.Styles>
@@ -184,16 +208,16 @@
                     
                     <!-- Right: Icon Actions -->
                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
-                        <Button Command="{Binding SelectAllTracksCommand}"
+                        <Button Command="{Binding Tracks.SelectAllTracksCommand}"
                                 Classes="icon-button"
-                                IsVisible="{Binding !!FilteredTracks.Count}"
+                                IsVisible="{Binding Tracks.FilteredTracks.Count}"
                                 ToolTip.Tip="Select All">
                             <TextBlock Text="☑️" FontSize="16"/>
                         </Button>
                         
-                        <Button Command="{Binding DeselectAllTracksCommand}"
+                        <Button Command="{Binding Tracks.DeselectAllTracksCommand}"
                                 Classes="icon-button"
-                                IsVisible="{Binding HasSelectedTracks}"
+                                IsVisible="{Binding Tracks.HasSelectedTracks}"
                                 ToolTip.Tip="Deselect All">
                             <TextBlock Text="☐" FontSize="16"/>
                         </Button>
@@ -365,7 +389,56 @@
                         <Border Classes="skeleton" Height="24" CornerRadius="4"/>
                     </StackPanel>
                 </Border>
-            </Grid>
+                </Grid>
+
+            <!-- Floating Action Bar (Multi-Select) -->
+            <Border Grid.Row="2" 
+                    VerticalAlignment="Bottom" 
+                    HorizontalAlignment="Center" 
+                    Margin="0,0,0,32"
+                    Background="#252526"
+                    BorderBrush="#4EC9B0"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    BoxShadow="0 4 20 0 #A0000000"
+                    Padding="16,10"
+                    IsVisible="{Binding Tracks.HasMultiSelection}"
+                    ZIndex="50">
+                <StackPanel Orientation="Horizontal" Spacing="20">
+                    <TextBlock Text="{Binding Tracks.SelectedCountText}" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#4EC9B0"/>
+                    
+                    <Separator Width="1" Height="16" Background="#444"/>
+                    
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button Command="{Binding Tracks.BulkDownloadCommand}" Classes="accent" Theme="{StaticResource SimpleButton}">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <TextBlock Text="💾"/>
+                                <TextBlock Text="Download Selected"/>
+                            </StackPanel>
+                        </Button>
+                        
+                        <Button Command="{Binding Tracks.BulkRetryCommand}" Theme="{StaticResource SimpleButton}">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <TextBlock Text="🔄"/>
+                                <TextBlock Text="Retry Failed"/>
+                            </StackPanel>
+                        </Button>
+                        
+                        <Button Command="{Binding Tracks.BulkCancelCommand}" Classes="danger" Theme="{StaticResource SimpleButton}">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <TextBlock Text="✕"/>
+                                <TextBlock Text="Cancel Active"/>
+                            </StackPanel>
+                        </Button>
+                        
+                        <Separator Width="1" Height="16" Background="#444" Margin="8,0"/>
+                        
+                        <Button Command="{Binding Tracks.DeselectAllTracksCommand}" Background="Transparent" BorderThickness="0">
+                            <TextBlock Text="Clear Selection" Foreground="#888"/>
+                        </Button>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
         </Grid>
 
 

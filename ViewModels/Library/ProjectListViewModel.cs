@@ -34,6 +34,32 @@ public class ProjectListViewModel : INotifyPropertyChanged
         }
     }
 
+    private string _searchText = string.Empty;
+    public string SearchText
+    {
+        get => _searchText;
+        set
+        {
+            if (_searchText != value)
+            {
+                _searchText = value;
+                OnPropertyChanged();
+                RefreshFilteredProjects();
+            }
+        }
+    }
+
+    private ObservableCollection<PlaylistJob> _filteredProjects = new();
+    public ObservableCollection<PlaylistJob> FilteredProjects
+    {
+        get => _filteredProjects;
+        set
+        {
+            _filteredProjects = value;
+            OnPropertyChanged();
+        }
+    }
+
     // Selected project
     private PlaylistJob? _selectedProject;
     public PlaylistJob? SelectedProject
@@ -179,10 +205,9 @@ public class ProjectListViewModel : INotifyPropertyChanged
                 // Refresh ONLY the affected project's stats
                 project.RefreshStatusCounts();
                 
-                // TODO: Implement real active downloads tracking via DownloadManager
-                // For now, placeholder values
-                project.ActiveDownloadsCount = 0;
-                project.CurrentDownloadingTrack = null;
+                // Real tracking via DownloadManager
+                project.ActiveDownloadsCount = _downloadManager.GetActiveDownloadsCountForProject(project.Id);
+                project.CurrentDownloadingTrack = _downloadManager.GetCurrentlyDownloadingTrackName(project.Id);
             }
         });
     }
@@ -221,10 +246,12 @@ public class ProjectListViewModel : INotifyPropertyChanged
 
                 _logger.LogInformation("Loaded {Count} projects", AllProjects.Count);
                 
+                RefreshFilteredProjects();
+
                 // Select first project if available
-                if (AllProjects.Count > 0)
+                if (FilteredProjects.Count > 0)
                 {
-                    SelectedProject = AllProjects[0];
+                    SelectedProject = FilteredProjects[0];
                 }
             });
         }
@@ -232,6 +259,19 @@ public class ProjectListViewModel : INotifyPropertyChanged
         {
             _logger.LogError(ex, "Failed to load projects");
         }
+    }
+
+    private void RefreshFilteredProjects()
+    {
+        var filtered = string.IsNullOrWhiteSpace(SearchText) 
+            ? AllProjects.ToList()
+            : AllProjects.Where(p => 
+                (p.SourceTitle?.Contains(SearchText, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (p.SourceType?.Contains(SearchText, StringComparison.OrdinalIgnoreCase) ?? false)).ToList();
+
+        FilteredProjects.Clear();
+        foreach (var p in filtered)
+            FilteredProjects.Add(p);
     }
     // ... existing methods ...
 

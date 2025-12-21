@@ -18,13 +18,15 @@ public class HierarchicalLibraryViewModel
 {
     private readonly ObservableCollection<AlbumNode> _albums = new();
     public HierarchicalTreeDataGridSource<ILibraryNode> Source { get; }
+    public ITreeDataGridRowSelectionModel<ILibraryNode>? Selection => Source.RowSelection;
 
     public HierarchicalLibraryViewModel()
     {
-        Source = new HierarchicalTreeDataGridSource<ILibraryNode>(_albums)
+        Source = new HierarchicalTreeDataGridSource<ILibraryNode>(_albums);
+        Source.RowSelection!.SingleSelect = false;
+
+        Source.Columns.AddRange(new IColumn<ILibraryNode>[]
         {
-            Columns =
-            {
                 new TemplateColumn<ILibraryNode>(
                     "🎨",
                     new FuncDataTemplate<object>((item, _) => 
@@ -178,8 +180,7 @@ public class HierarchicalLibraryViewModel
 
                     }, false),
                     width: new GridLength(120)),
-            }
-        };
+        });
     }
 
     public void UpdateTracks(IEnumerable<PlaylistTrackViewModel> tracks)

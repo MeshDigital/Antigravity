@@ -75,6 +75,33 @@ public class TrackListViewModel : ReactiveObject
         set => this.RaiseAndSetIfChanged(ref _isFilterPending, value);
     }
 
+    private bool _hasMultiSelection;
+    public bool HasMultiSelection
+    {
+        get => _hasMultiSelection;
+        private set => this.RaiseAndSetIfChanged(ref _hasMultiSelection, value);
+    }
+
+    private bool _hasSelectedTracks;
+    public bool HasSelectedTracks
+    {
+        get => _hasSelectedTracks;
+        private set => this.RaiseAndSetIfChanged(ref _hasSelectedTracks, value);
+    }
+
+    private string _selectedCountText = string.Empty;
+    public string SelectedCountText
+    {
+        get => _selectedCountText;
+        private set => this.RaiseAndSetIfChanged(ref _selectedCountText, value);
+    }
+
+    public System.Windows.Input.ICommand SelectAllTracksCommand { get; }
+    public System.Windows.Input.ICommand DeselectAllTracksCommand { get; }
+    public System.Windows.Input.ICommand BulkDownloadCommand { get; }
+    public System.Windows.Input.ICommand BulkRetryCommand { get; }
+    public System.Windows.Input.ICommand BulkCancelCommand { get; }
+
     public TrackListViewModel(
         ILogger<TrackListViewModel> logger,
         ILibraryService libraryService,
@@ -87,6 +114,44 @@ public class TrackListViewModel : ReactiveObject
         _downloadManager = downloadManager;
         _artworkCache = artworkCache;
         _eventBus = eventBus;
+
+        // Commands
+        SelectAllTracksCommand = ReactiveCommand.Create(() => 
+        {
+            var selection = Hierarchical.Selection;
+            if (selection != null)
+            {
+                selection.BeginBatchUpdate();
+                try
+                {
+                    // Selection might not have SelectAll, so we iterate rows
+                    for (int i = 0; i < Hierarchical.Source.Rows.Count; i++)
+                    {
+                        var modelIndex = Hierarchical.Source.Rows.RowIndexToModelIndex(i);
+                        if (modelIndex != default)
+                            selection.Select(modelIndex);
+                    }
+                }
+                finally
+                {
+                    selection.EndBatchUpdate();
+                }
+                UpdateSelectionState();
+            }
+        });
+
+        DeselectAllTracksCommand = ReactiveCommand.Create(() => 
+        {
+            Hierarchical.Selection?.Clear();
+            UpdateSelectionState();
+        });
+
+        BulkDownloadCommand = ReactiveCommand.CreateFromTask(ExecuteBulkDownloadAsync);
+        BulkRetryCommand = ReactiveCommand.CreateFromTask(ExecuteBulkRetryAsync);
+        BulkCancelCommand = ReactiveCommand.CreateFromTask(ExecuteBulkCancelAsync);
+
+        // Selection Change Tracking
+        Hierarchical.Selection.SelectionChanged += (s, e) => UpdateSelectionState();
 
         // Throttled search and filter synchronization
         this.WhenAnyValue(
@@ -251,11 +316,66 @@ public class TrackListViewModel : ReactiveObject
                (track.Title?.Contains(search, StringComparison.OrdinalIgnoreCase) == true);
     }
 
+    private void UpdateSelectionState()
+    {
+        var count = Hierarchical.Selection.SelectedItems.Count;
+        HasSelectedTracks = count > 0;
+        HasMultiSelection = count > 1;
+        SelectedCountText = $"{count} tracks selected";
+    }
+
+    private async Task ExecuteBulkDownloadAsync()
+    {
+        var selectedTracks = Hierarchical.Selection.SelectedItems
+            .OfType<PlaylistTrackViewModel>()
+            .ToList();
+        
+        if (!selectedTracks.Any()) return;
+
+        _logger.LogInformation("Bulk download for {Count} tracks", selectedTracks.Count);
+        _downloadManager.QueueTracks(selectedTracks.Select(t => t.Model).ToList());
+        Hierarchical.Selection.Clear(); // Clear selection after action
+    }
+
+    private async Task ExecuteBulkRetryAsync()
+    {
+        var selectedTracks = Hierarchical.Selection.SelectedItems
+            .OfType<PlaylistTrackViewModel>()
+            .Where(t => t.State == PlaylistTrackState.Failed || t.State == PlaylistTrackState.Cancelled)
+            .ToList();
+        
+        if (!selectedTracks.Any()) return;
+
+        _logger.LogInformation("Bulk retry for {Count} tracks", selectedTracks.Count);
+        foreach (var track in selectedTracks)
+        {
+            track.Resume();
+        }
+        
+        // Ensure DownloadManager resumes if paused
+        _ = _downloadManager.StartAsync();
+        Hierarchical.Selection.Clear();
+    }
+    
+    private async Task ExecuteBulkCancelAsync()
+    {
+        var selectedTracks = Hierarchical.Selection.SelectedItems
+            .OfType<PlaylistTrackViewModel>()
+            .Where(t => t.IsActive)
+            .ToList();
+        
+        if (!selectedTracks.Any()) return;
+
+        _logger.LogInformation("Bulk cancel for {Count} tracks", selectedTracks.Count);
+        foreach (var track in selectedTracks)
+        {
+            track.Cancel();
+        }
+        Hierarchical.Selection.Clear();
+    }
+
     private void OnGlobalTrackUpdated(object? sender, PlaylistTrackViewModel e)
     {
         // Track updates are handled by the ViewModel itself via binding
-        // This is just for logging/debugging if needed
     }
-
-    // ReactiveObject already implements INotifyPropertyChanged
 }

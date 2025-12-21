@@ -141,6 +141,33 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
     }
 
     /// <summary>
+    /// Gets the number of actively downloading or queued tracks for a specific project.
+    /// Used for real-time UI updates in the library sidebar.
+    /// </summary>
+    public int GetActiveDownloadsCountForProject(Guid projectId)
+    {
+        lock (_collectionLock)
+        {
+            return _downloads.Count(d => d.Model.PlaylistId == projectId && d.IsActive);
+        }
+    }
+
+    /// <summary>
+    /// Gets the name of the track currently being downloaded for a project.
+    /// </summary>
+    public string? GetCurrentlyDownloadingTrackName(Guid projectId)
+    {
+        lock (_collectionLock)
+        {
+            var active = _downloads.FirstOrDefault(d => 
+                d.Model.PlaylistId == projectId && 
+                d.State == PlaylistTrackState.Downloading);
+            
+            return active != null ? $"{active.Model.Artist} - {active.Model.Title}" : null;
+        }
+    }
+
+    /// <summary>
     /// Checks if a track is already in the library or download queue.
     /// </summary>
     public bool IsTrackAlreadyQueued(string? spotifyTrackId, string artist, string title)
@@ -258,9 +285,11 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
                     // SKIP if already in this project
                     if (existingHashes.Contains(track.UniqueHash))
                     {
-                        _logger.LogDebug("Skipping track '{Title}' - already exists in this project", track.Title);
+                        _logger.LogDebug("Skipping track '{Title}' - already exists in this project (or already seen in this batch)", track.Title);
                         continue;
                     }
+
+                    existingHashes.Add(track.UniqueHash);
 
                     playlistTracks.Add(new PlaylistTrack
                     {

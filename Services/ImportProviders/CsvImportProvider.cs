@@ -93,12 +93,25 @@ public class CsvImportProvider : IStreamingImportProvider
         
         if (result.Success && result.Tracks.Any())
         {
-            yield return new ImportBatchResult
+            // Enrich in chunks to allow streaming progress and better UI responsiveness
+            const int batchSize = 10;
+            var total = result.Tracks.Count;
+            
+            for (int i = 0; i < total; i += batchSize)
             {
-                Tracks = result.Tracks,
-                SourceTitle = result.SourceTitle,
-                TotalEstimated = result.Tracks.Count
-            };
+                var chunk = result.Tracks.Skip(i).Take(batchSize).ToList();
+                
+                // Concurrent enrichment for the tracks in this chunk
+                var tasks = chunk.Select(t => _metadataService.EnrichQueryAsync(t));
+                await Task.WhenAll(tasks);
+
+                yield return new ImportBatchResult
+                {
+                    Tracks = chunk,
+                    SourceTitle = result.SourceTitle,
+                    TotalEstimated = total
+                };
+            }
         }
     }
 }

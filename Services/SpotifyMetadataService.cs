@@ -135,6 +135,38 @@ public class SpotifyMetadataService : ISpotifyMetadataService
         return true;
     }
 
+    public async Task<bool> EnrichQueryAsync(SearchQuery query)
+    {
+        if (string.IsNullOrEmpty(query.Artist) || string.IsNullOrEmpty(query.Title)) return false;
+
+        // Check if user is authenticated before attempting enrichment
+        if (!await _authService.IsAuthenticatedAsync())
+        {
+            _logger.LogDebug("Skipping query enrichment for {Artist} - {Title}: Not authenticated", query.Artist, query.Title);
+            return false;
+        }
+
+        var metadata = await FindTrackAsync(query.Artist, query.Title, query.Length * 1000);
+
+        if (metadata == null) return false;
+
+        query.SpotifyTrackId = metadata.Id;
+        query.SpotifyAlbumId = metadata.Album.Id;
+        query.SpotifyArtistId = metadata.Artists.FirstOrDefault()?.Id;
+        query.AlbumArtUrl = metadata.Album.Images.FirstOrDefault()?.Url;
+        query.ArtistImageUrl = null;
+        query.Genres = null;
+        query.Popularity = metadata.Popularity;
+        query.CanonicalDuration = metadata.DurationMs;
+        
+        if (DateTime.TryParse(metadata.Album.ReleaseDate, out var releaseDate))
+        {
+            query.ReleaseDate = releaseDate;
+        }
+
+        return true;
+    }
+
     public async Task<Dictionary<string, TrackAudioFeatures?>> GetAudioFeaturesBatchAsync(IEnumerable<string> spotifyIds)
     {
         var results = new Dictionary<string, TrackAudioFeatures?>();

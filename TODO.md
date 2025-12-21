@@ -7,10 +7,11 @@
 ## Current Status: 71% Complete ✅
 
 ### Recent Updates (December 21, 2025)
-- ✅ **Performance Optimization**: Event-to-project mapping eliminates O(n) update loop (500+ ops/sec → O(1))
-- ✅ Library-first design: Track state visualization with inline controls
-- ✅ Search performance: Streaming results with incremental ranking
-- ✅ **Library & Import 2.0**: Robust merging, deduplication, and auto-navigation fixes (Dec 21)
+### Recent Updates (December 21, 2025)
+- ✅ **Library & Import 2.0 Refinement**: Multi-select support, floating action bar (FAB), and sidebar project filtering.
+- ✅ **Performance**: Offloaded DB checks in import preview to background threads.
+- ✅ **Stability**: Fixed TreeDataGrid selection configuration and async compilation errors.
+- ✅ **Search performance**: Streaming results with incremental ranking.
 
 ### 🚨 Technical Debt & Stability (Pending FIX)
 - [ ] **Batch Duplicate Fix**: Update `DownloadManager.QueueProject` to check against `addedInBatch` set during hash check loop.

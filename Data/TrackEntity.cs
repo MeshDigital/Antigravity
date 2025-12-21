@@ -74,6 +74,7 @@ public class PlaylistJobEntity
     public int TotalTracks { get; set; }
     public int SuccessfulCount { get; set; }
     public int FailedCount { get; set; }
+    public int MissingCount { get; set; }
 
     // Phase 1C: Add Soft Delete Flag
     public bool IsDeleted { get; set; } = false;

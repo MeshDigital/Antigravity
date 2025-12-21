@@ -919,6 +919,7 @@ public class DatabaseService
                     TotalTracks = job.TotalTracks,
                     SuccessfulCount = job.SuccessfulCount,
                     FailedCount = job.FailedCount,
+                    MissingCount = job.MissingCount,
                     IsDeleted = false
                 };
                 context.PlaylistJobs.Add(jobEntity);
@@ -1033,6 +1034,22 @@ public class DatabaseService
             }
             
             await context.SaveChangesAsync();
+
+            // Phase 2: Recalculate and update header counts to ensure accuracy after merges/updates.
+            // This prevents "lost counts" when merging a small batch into a large existing playlist.
+            var consolidatedJob = await context.PlaylistJobs.FirstOrDefaultAsync(j => j.Id == job.Id);
+            if (consolidatedJob != null)
+            {
+                // Source of truth is now the aggregate of all tracks for this PlaylistId in the DB
+                consolidatedJob.TotalTracks = await context.PlaylistTracks.CountAsync(t => t.PlaylistId == job.Id);
+                consolidatedJob.SuccessfulCount = await context.PlaylistTracks.CountAsync(t => t.PlaylistId == job.Id && t.Status == TrackStatus.Downloaded);
+                consolidatedJob.FailedCount = await context.PlaylistTracks.CountAsync(t => t.PlaylistId == job.Id && (t.Status == TrackStatus.Failed || t.Status == TrackStatus.Skipped));
+                consolidatedJob.MissingCount = await context.PlaylistTracks.CountAsync(t => t.PlaylistId == job.Id && t.Status == TrackStatus.Missing);
+                
+                context.PlaylistJobs.Update(consolidatedJob);
+                await context.SaveChangesAsync();
+            }
+
             await transaction.CommitAsync();
             
             _logger.LogInformation(
