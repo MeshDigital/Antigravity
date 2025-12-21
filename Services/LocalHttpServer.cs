@@ -61,8 +61,8 @@ public class LocalHttpServer : IDisposable
 
                 if (timeoutCts.IsCancellationRequested)
                 {
-                    _logger.LogWarning("OAuth callback cancelled by user or timed out");
-                    return null;
+                    _logger.LogError("OAuth callback timed out after 2 minutes");
+                    throw new TimeoutException("Spotify authorization timed out. Please try again.");
                 }
 
                 var context = await contextTask;
@@ -78,7 +78,11 @@ public class LocalHttpServer : IDisposable
 
                 if (!isCallback && string.IsNullOrEmpty(request.QueryString["code"]))
                 {
-                    // Ignore favicon.ico or other stray requests
+                    // Ignore favicon.ico or other stray requests, but check if it's been too long
+                    if (request.Url?.AbsolutePath != "/favicon.ico")
+                    {
+                        _logger.LogWarning("Unexpected request path: {Path}", request.Url?.AbsolutePath);
+                    }
                     response.StatusCode = 404;
                     response.Close();
                     continue;
@@ -146,8 +150,20 @@ public class LocalHttpServer : IDisposable
     {
         if (_listener?.IsListening == true)
         {
-            _listener.Stop();
-            _logger.LogInformation("OAuth callback server stopped");
+            try
+            {
+                _listener.Stop();
+                _listener.Close();
+                _logger.LogInformation("OAuth callback server stopped");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error stopping OAuth callback server");
+            }
+            finally
+            {
+                _listener = null;
+            }
         }
     }
 

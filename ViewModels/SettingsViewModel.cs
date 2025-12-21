@@ -568,10 +568,23 @@ public class SettingsViewModel : INotifyPropertyChanged
                 _configManager.Save(_config); // Save the enabled state
             }
         }
+        catch (TimeoutException ex)
+        {
+            _logger.LogError(ex, "Spotify connection timed out");
+            SpotifyDisplayName = "Timeout - Try again";
+            IsSpotifyConnected = false;
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("Port") || ex.Message.Contains("port"))
+        {
+            _logger.LogError(ex, "Port conflict during Spotify connection");
+            SpotifyDisplayName = "Port conflict - Restart app";
+            IsSpotifyConnected = false;
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Spotify connection failed");
-            // TODO: Show error notification
+            SpotifyDisplayName = $"Error: {ex.Message.Substring(0, Math.Min(30, ex.Message.Length))}...";
+            IsSpotifyConnected = false;
         }
         finally
         {

@@ -218,6 +218,9 @@ public class SpotifyAuthService
             // Open browser
             OpenBrowser(authUrl.ToString());
 
+            // Ensure any previous listener is stopped
+            _httpServer.Stop();
+
             // Wait for callback with a 2-minute timeout
             string? authCode = null;
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
