@@ -2,7 +2,9 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 using Avalonia.Threading;
 using Microsoft.Extensions.Logging;
@@ -37,76 +39,86 @@ public class SearchOrchestrationService
     }
     
     /// <summary>
-    /// Execute a search with the given parameters and return ranked results.
-    /// Results are ranked incrementally as batches arrive for better UX.
+    /// Execute a search with the given parameters and stream ranked results.
     /// </summary>
-    public async Task<SearchResult> SearchAsync(
+    public async IAsyncEnumerable<Track> SearchAsync(
         string query,
         string preferredFormats,
         int minBitrate,
         int maxBitrate,
-        bool isAlbumSearch,
-        Action<IEnumerable<Track>>? onPartialResults,
-        CancellationToken cancellationToken)
+        bool isAlbumSearch, // Kept for API compatibility, but grouping is now consumer responsibility
+        [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Search started for: {Query}", query);
+        _logger.LogInformation("Streaming search started for: {Query}", query);
         
         var normalizedQuery = _searchQueryNormalizer.RemoveFeatArtists(query);
         normalizedQuery = _searchQueryNormalizer.RemoveYoutubeMarkers(normalizedQuery);
-        _logger.LogInformation("Normalized query: {Query}", normalizedQuery);
-
-        var formatFilter = preferredFormats.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        _logger.LogInformation("Format filter: {Formats}", string.Join(", ", formatFilter));
-        _logger.LogInformation("Bitrate filter: Min={Min}, Max={Max}", minBitrate, maxBitrate);
-
-        var allResults = new List<Track>();
         
-        // Execute the Soulseek search with incremental ranking
-        var actualCount = await _soulseek.SearchAsync(
-            normalizedQuery, 
-            formatFilter, 
-            (minBitrate, maxBitrate), 
-            DownloadMode.Normal, 
-            tracks =>
+        var formatFilter = preferredFormats.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        
+        // Channel to bridge callback-based Adapter to IAsyncEnumerable
+        var channel = System.Threading.Channels.Channel.CreateUnbounded<IList<Track>>();
+
+        // Start the search in a background task
+        var searchTask = Task.Run(async () =>
+        {
+            try
             {
-                // QUICK WIN: Rank each batch BEFORE sending to UI
-                var rankedBatch = RankTrackResults(
-                    tracks.ToList(),
+                await _soulseek.SearchAsync(
                     normalizedQuery,
                     formatFilter,
-                    minBitrate,
-                    maxBitrate);
+                    (minBitrate, maxBitrate),
+                    DownloadMode.Normal,
+                    batch =>
+                    {
+                        // Rank the batch immediately
+                        var rankedBatch = RankTrackResults(
+                            batch.ToList(),
+                            normalizedQuery,
+                            formatFilter,
+                            minBitrate,
+                            maxBitrate);
+
+                        if (rankedBatch.Any())
+                        {
+                            channel.Writer.TryWrite(rankedBatch);
+                        }
+                    },
+                    cancellationToken);
                 
-                // Add to total collection
-                allResults.AddRange(rankedBatch);
-                
-                // Send ranked batch to UI
-                onPartialResults?.Invoke(rankedBatch);
-            }, 
-            cancellationToken);
-        
-        _logger.LogInformation("Search completed with {Count} raw results", actualCount);
-        
-        // For album search, group at the end
-        if (isAlbumSearch)
-        {
-            var albums = GroupResultsByAlbum(allResults);
-            return new SearchResult
+                // Signal completion
+                channel.Writer.Complete();
+            }
+            catch (Exception ex)
             {
-                TotalCount = actualCount,
-                Albums = albums,
-                IsAlbumSearch = true
-            };
+                // Propagate error to channel
+                channel.Writer.Complete(ex);
+            }
+        }, cancellationToken);
+
+        // Yield results as they arrive
+        while (await channel.Reader.WaitToReadAsync(cancellationToken))
+        {
+            while (channel.Reader.TryRead(out var batch))
+            {
+                foreach (var track in batch)
+                {
+                    yield return track;
+                }
+            }
         }
-        else
+        
+        // Await the task to ensure any final exceptions are propagated (though Channel handles most)
+        // gracefully ignore cancellation exceptions during shutdown
+        try 
+        { 
+            await searchTask; 
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) 
         {
-            // Results already ranked incrementally
-            return new SearchResult
-            {
-                TotalCount = actualCount,
-                Tracks = allResults,
-                IsAlbumSearch = false
-            };
+             _logger.LogError(ex, "Background search task failed");
+             throw;
         }
     }
     

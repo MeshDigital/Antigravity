@@ -140,6 +140,25 @@
 **Status**: Packages 5-6 complete, ready for export UI and background worker  
 **Estimated**: 12-16 hours remaining (MVP scope)
 
+### Phase 12: Search Experience 2.0 (Search Page Overhaul) ✨ NEW
+**Goal**: Professional, reactive search interface with advanced filtering and batch actions.
+
+**Functional Improvements**:
+- **Streaming Results (Reactive Flow)**: `IAsyncEnumerable` integration for instant "pop-in" results.
+- **Advanced Filtering HUD**: 
+  - Bitrate Range Slider (e.g., >320kbps)
+  - User Trust Toggle (Hide locked/slow peers)
+  - Format Chips ([MP3] [FLAC] [WAV])
+- **Batch Actions**: Multi-select supported with floating action bar (Download All, Add to Playlist).
+
+**Technical Fixes**:
+- **Overlay Bug**: Explicit state management for Import Preview overlay to prevent UI blocking.
+- **DynamicData**: Replace ObservableCollection with SourceList for high-performance, throttled updates.
+- **Theming**: Standardize colors to DynamicResource for dark/light mode compatibility.
+
+**Status**: Planning ✅ - Detailed analysis complete.
+
+
 **Completed** ✅:
 - Package 5: Architectural Foundations (Producer-Consumer, Xabe.FFmpeg, Maintenance)
 - Package 6: Dependency Validation (FFmpeg checker with timeout and fallback paths)

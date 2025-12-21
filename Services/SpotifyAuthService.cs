@@ -24,6 +24,8 @@ public class SpotifyAuthService
     private SpotifyClient? _authenticatedClient;
     private PKCETokenResponse? _currentTokenResponse;
     private DateTime _tokenExpiresAt;
+    private readonly SemaphoreSlim _authLock = new(1, 1);
+    private Task? _refreshTask;
 
     public event EventHandler<bool>? AuthenticationChanged;
 
@@ -127,12 +129,19 @@ public class SpotifyAuthService
             // Open browser
             OpenBrowser(authUrl.ToString());
 
-            // Wait for callback
-            // Wait for callback with better error handling
+            // Wait for callback with a 2-minute timeout
             string? authCode = null;
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(TimeSpan.FromMinutes(2));
+
             try 
             {
-                authCode = await _httpServer.WaitForCallbackAsync(_config.SpotifyRedirectUri, cancellationToken);
+                authCode = await _httpServer.WaitForCallbackAsync(_config.SpotifyRedirectUri, timeoutCts.Token);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                _logger.LogWarning("Spotify authorization timed out after 2 minutes");
+                throw new TimeoutException("Spotify authorization timed out. Please try again.");
             }
             catch (InvalidOperationException)
             {
@@ -194,13 +203,36 @@ public class SpotifyAuthService
 
     /// <summary>
     /// Refreshes the access token using the stored refresh token.
+    /// Thread-safe: concurrent calls will wait for the same refresh operation.
     /// </summary>
     public async Task RefreshAccessTokenAsync()
+    {
+        await _authLock.WaitAsync();
+        try
+        {
+            if (_refreshTask != null)
+            {
+                await _refreshTask;
+                return;
+            }
+
+            _refreshTask = RefreshAccessTokenInternalAsync();
+            await _refreshTask;
+        }
+        finally
+        {
+            _refreshTask = null;
+            _authLock.Release();
+        }
+    }
+
+    private async Task RefreshAccessTokenInternalAsync()
     {
         var refreshToken = await _tokenStorage.LoadRefreshTokenAsync();
         if (string.IsNullOrEmpty(refreshToken))
         {
             _logger.LogWarning("No refresh token available");
+            IsAuthenticated = false;
             throw new InvalidOperationException("No refresh token available. Please sign in again.");
         }
 
@@ -232,6 +264,7 @@ public class SpotifyAuthService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to refresh access token");
+            IsAuthenticated = false;
             throw new InvalidOperationException("Failed to refresh access token. Please sign in again.", ex);
         }
     }

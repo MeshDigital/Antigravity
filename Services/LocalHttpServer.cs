@@ -69,7 +69,7 @@ public class LocalHttpServer : IDisposable
 
                 // 2. Filter for legitimate callback path
                 // Accept /callback, /callback/, or just check if it contains the code
-                if (!request.Url.AbsolutePath.Contains("/callback") && string.IsNullOrEmpty(request.QueryString["code"]))
+                if (request.Url == null || (!request.Url.AbsolutePath.Contains("/callback") && string.IsNullOrEmpty(request.QueryString["code"])))
                 {
                     // Ignore favicon.ico or other stray requests
                     response.StatusCode = 404;

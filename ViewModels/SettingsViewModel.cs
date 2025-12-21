@@ -393,6 +393,14 @@ public class SettingsViewModel : INotifyPropertyChanged
         });
 
         _ = CheckFfmpegAsync(); // Phase 8: Check FFmpeg on startup
+        
+        // Subscribe to auth changes to update UI automatically
+        _spotifyAuthService.AuthenticationChanged += (s, isAuthenticated) => 
+        {
+            // Re-run status check to update User Profile/Display Name
+             Avalonia.Threading.Dispatcher.UIThread.Post(async () => await CheckSpotifyConnectionStatusAsync());
+        };
+
         UpdateLivePreview();
     }
 

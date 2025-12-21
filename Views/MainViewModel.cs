@@ -117,11 +117,6 @@ public class MainViewModel : INotifyPropertyChanged
         ResetZoomCommand = new RelayCommand(ResetZoom);
 
         // Spotify Hub Initialization (TODO: Phase 7 - Implement when needed)
-        LoadSpotifyPlaylistsCommand = new AsyncRelayCommand(LoadSpotifyPlaylistsAsync);
-        // ImportSpotifyPlaylistCommand = new AsyncRelayCommand<SimplePlaylist>(ImportSpotifyPlaylistAsync);
-        ImportLikedSongsCommand = new AsyncRelayCommand(ImportLikedSongsAsync);
-        SelectCsvFileCommand = new AsyncRelayCommand(SelectCsvFileAsync);
-
         // Downloads Page Commands
         PauseAllDownloadsCommand = new RelayCommand(PauseAllDownloads);
         ResumeAllDownloadsCommand = new RelayCommand(ResumeAllDownloads);
@@ -175,7 +170,6 @@ public class MainViewModel : INotifyPropertyChanged
         IsSpotifyAuthenticated = _spotifyAuth.IsAuthenticated;
         _spotifyAuth.AuthenticationChanged += (s, e) => {
             IsSpotifyAuthenticated = e;
-            if (e) _ = LoadSpotifyPlaylistsAsync();
         };
 
         // Register pages for navigation service
@@ -209,7 +203,6 @@ public class MainViewModel : INotifyPropertyChanged
             if (_config.SpotifyUseApi && await _spotifyAuth.IsAuthenticatedAsync())
             {
                 _logger.LogInformation("Spotify silent session refresh successful");
-                await LoadSpotifyPlaylistsAsync();
             }
         }
         catch (Exception ex)
@@ -312,22 +305,8 @@ public class MainViewModel : INotifyPropertyChanged
         set => SetProperty(ref _isSpotifyAuthenticated, value);
     }
 
-    // TODO: Phase 7 - Spotify Hub (Currently disabled due to SimplePlaylist type)
-    /*
-    private System.Collections.ObjectModel.ObservableCollection<SimplePlaylist> _spotifyPlaylists = new();
-    public System.Collections.ObjectModel.ObservableCollection<SimplePlaylist> SpotifyPlaylists
-    {
-        get => _spotifyPlaylists;
-        set => SetProperty(ref _spotifyPlaylists, value);
-    }
-    */
+    // TODO: Phase 7 - Spotify Hub
 
-    private bool _isLoadingPlaylists;
-    public bool IsLoadingPlaylists
-    {
-        get => _isLoadingPlaylists;
-        set => SetProperty(ref _isLoadingPlaylists, value);
-    }
 
     // Event-Driven Collection
     public System.Collections.ObjectModel.ObservableCollection<PlaylistTrackViewModel> AllGlobalTracks { get; } = new();
@@ -383,13 +362,6 @@ public class MainViewModel : INotifyPropertyChanged
     public ICommand ZoomOutCommand { get; }
     public ICommand ResetZoomCommand { get; }
     public ICommand ExecuteBrainTestCommand { get; }
-    
-    // Spotify Hub Commands
-    public ICommand LoadSpotifyPlaylistsCommand { get; }
-    // public ICommand ImportSpotifyPlaylistCommand { get; } // TODO: Phase 7
-    // public ICommand ImportSpotifyPlaylistCommand { get; } // TODO: Phase 7
-    public ICommand ImportLikedSongsCommand { get; }
-    public ICommand SelectCsvFileCommand { get; }
     
     // Downloads Page Commands
     public ICommand PauseAllDownloadsCommand { get; }
@@ -611,87 +583,6 @@ public class MainViewModel : INotifyPropertyChanged
         }
     }
 
-    // TODO: Phase 7 - Spotify Hub
-    private async Task LoadSpotifyPlaylistsAsync()
-    {
-        if (!IsSpotifyAuthenticated) return;
-        
-        try
-        {
-            IsLoadingPlaylists = true;
-            var client = await _spotifyAuth.GetAuthenticatedClientAsync();
-            // var playlists = await client.Playlists.CurrentUsers();
-            
-            // await Dispatcher.UIThread.InvokeAsync(() => 
-            // {
-            //     SpotifyPlaylists.Clear();
-            //     foreach (var p in playlists.Items ?? new List<SimplePlaylist>())
-            //     {
-            //         SpotifyPlaylists.Add(p);
-            //     }
-            // });
-
-            _logger.LogInformation("Spotify playlists feature not yet implemented");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to load Spotify playlists");
-        }
-        finally
-        {
-            IsLoadingPlaylists = false;
-        }
-    }
-
-    /*
-    private async Task ImportSpotifyPlaylistAsync(SimplePlaylist? playlist)
-    {
-        if (playlist == null) return;
-        
-        var orchestrator = Services.GetRequiredService<ImportOrchestrator>();
-        var provider = Services.GetRequiredService<SpotifyLikedSongsImportProvider>(); // Need common Spotify provider? 
-        // For now using existing provider but it might need to handle playlists too
-        
-        await orchestrator.StartImportWithPreviewAsync(provider, $"https://open.spotify.com/playlist/{playlist.Id}");
-    }
-    */
-
-    private async Task ImportLikedSongsAsync()
-    {
-        var services = (App.Current as App)?.Services ?? throw new InvalidOperationException("App.Services not initialized");
-        var orchestrator = services.GetRequiredService<ImportOrchestrator>();
-        var provider = services.GetRequiredService<SpotifyLikedSongsImportProvider>();
-        
-        await orchestrator.StartImportWithPreviewAsync(provider, "liked");
-    }
-
-    private async Task SelectCsvFileAsync()
-    {
-        var services = (App.Current as App)?.Services ?? throw new InvalidOperationException("App.Services not initialized");
-        var orchestrator = services.GetRequiredService<ImportOrchestrator>();
-        var provider = services.GetRequiredService<Services.ImportProviders.CsvImportProvider>();
-
-        try
-        {
-            var filters = new List<FileDialogFilter>
-            {
-                new FileDialogFilter("CSV Files", new List<string> { "csv" }),
-                new FileDialogFilter("All Files", new List<string> { "*" })
-            };
-
-            var filePath = await _fileInteractionService.OpenFileDialogAsync("Select CSV File", filters);
-
-            if (!string.IsNullOrWhiteSpace(filePath))
-            {
-                await orchestrator.StartImportWithPreviewAsync(provider, filePath);
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to select CSV file");
-            StatusText = $"Error selecting file: {ex.Message}";
-        }
-    }
     private void UpdateDownloadsFilter()
     {
         var search = DownloadsSearchText.Trim();

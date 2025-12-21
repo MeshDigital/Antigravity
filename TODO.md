@@ -156,6 +156,35 @@
 
 ---
 
+## Phase 12: Search Experience 2.0 (Technical Breakdown) 🟡 NEW
+
+### 12.1 Reactive Search (Streaming) (4 hours)
+- [ ] Refactor `SearchOrchestrationService` to return `IAsyncEnumerable<AlbumResultViewModel>`
+- [ ] Implement incremental results "pop-in" (500ms first paint)
+- [ ] Use `SourceList<T>` (DynamicData) for thread-safe UI updates
+- [ ] Search throttling (100ms buffer) to prevent UI stutter
+
+### 12.2 Advanced Filtering HUD (3 hours)
+- [ ] Create `SearchFilterViewModel`
+- [ ] Add **Bitrate Slider** (range selector)
+- [ ] Add **Format Chips** (MP3/FLAC/WAV toggles)
+- [ ] Add **User Trust Toggle** (filter locked/slow peers)
+- [ ] Bind filter logic to `DynamicData` filter pipeline
+
+### 12.3 Batch Actions & Selection (3 hours)
+- [ ] Enable `SelectionMode="Multiple"` in Search Grid
+- [ ] Implement "Floating Action Bar" (appears on selection > 1)
+- [ ] Add `DownloadSelectedCommand` (batch download)
+- [ ] Add `AddToPlaylistCommand` (batch add)
+
+### 12.4 Critical Fixes (2 hours)
+- [ ] **Overlay Bug**: Replace `GetType().Name` calculation with explicit `IsImportOverlayActive` flags
+- [ ] **Theming**: Replace `#1A1A1A` with `{DynamicResource RegionColor}`
+- [ ] **Reflection Removal**: Replace `GetType().GetProperty("PlayerViewModel")` with properly injected `IPlayerService`
+
+---
+
+
 ## Phase 1.5: Advanced Ranking Configuration (4 hours) ✨ NEW
 
 **Priority**: ⭐⭐ MEDIUM - User Control
