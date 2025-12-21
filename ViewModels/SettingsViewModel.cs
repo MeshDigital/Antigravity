@@ -302,6 +302,7 @@ public class SettingsViewModel : INotifyPropertyChanged
             {
                 // notify commands if needed, or rely on command manager
                 (ConnectSpotifyCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+                (TestSpotifyConnectionCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
             }
         }
     }
