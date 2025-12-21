@@ -286,7 +286,12 @@ public class SpotifyAuthService
             _logger.LogInformation("Refresh token stored securely");
         }
 
-    // Create authenticated client
+        // Save the successful callback port to config for deterministic RedirectUri
+        // This ensures future auth attempts use the same port that worked
+        _config.SpotifyCallbackPort = new Uri(_config.SpotifyRedirectUri).Port;
+        _logger.LogInformation("Saved Spotify callback port {Port} for future auth attempts", _config.SpotifyCallbackPort);
+
+        // Create authenticated client
         _authenticatedClient = new SpotifyClient(tokenResponse.AccessToken);
         IsAuthenticated = true;
 
