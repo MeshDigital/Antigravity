@@ -26,6 +26,7 @@ public class SpotifyMetadataService : ISpotifyMetadataService
     private readonly ILogger<SpotifyMetadataService> _logger;
     private readonly SpotifyAuthService _authService;
     private readonly SpotifyBatchClient _batchClient;
+    private readonly Configuration.AppConfig _config;
 
     // Negative cache duration for "Not Found" results
     private static readonly TimeSpan NegativeCacheDuration = TimeSpan.FromDays(7);
@@ -36,11 +37,13 @@ public class SpotifyMetadataService : ISpotifyMetadataService
     public SpotifyMetadataService(
         ILogger<SpotifyMetadataService> logger,
         SpotifyAuthService authService,
-        SpotifyBatchClient batchClient)
+        SpotifyBatchClient batchClient,
+        Configuration.AppConfig config)
     {
         _logger = logger;
         _authService = authService;
         _batchClient = batchClient;
+        _config = config;
     }
 
 
@@ -97,6 +100,13 @@ public class SpotifyMetadataService : ISpotifyMetadataService
 
     public async Task<bool> EnrichTrackAsync(PlaylistTrack track)
     {
+        // Check if Spotify API is enabled
+        if (!_config.SpotifyUseApi)
+        {
+            _logger.LogDebug("Skipping enrichment for {Artist} - {Title}: Spotify API disabled in settings", track.Artist, track.Title);
+            return false;
+        }
+
         // Check if user is authenticated before attempting enrichment
         if (!await _authService.IsAuthenticatedAsync())
         {
@@ -174,6 +184,13 @@ public class SpotifyMetadataService : ISpotifyMetadataService
         var idList = spotifyIds.Distinct().ToList();
         
         if (!idList.Any()) return results;
+
+        // Check if Spotify API is enabled
+        if (!_config.SpotifyUseApi)
+        {
+            _logger.LogDebug("Skipping audio features batch: Spotify API disabled in settings");
+            return results;
+        }
 
         try
         {

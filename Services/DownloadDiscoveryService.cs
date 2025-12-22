@@ -99,10 +99,16 @@ public class DownloadDiscoveryService
                 return bestMatch;
             }
 
-            // 4. Relaxation Strategy (Phase 2.0)
-            if (_config.EnableRelaxationStrategy)
+            // 4. Adaptive Relaxation Strategy (Phase 2.0) - WITH TIMEOUT
+            if (_config.EnableRelaxationStrategy && allTracks.Any())
             {
-                _logger.LogInformation("🧠 BRAIN: Strict match failed. Starting relaxation strategy...");
+                _logger.LogInformation("🧠 BRAIN: Strict match failed. Waiting {Timeout}s before relaxation...", 
+                    _config.RelaxationTimeoutSeconds);
+                
+                // Wait for the configured timeout before relaxing criteria
+                await Task.Delay(TimeSpan.FromSeconds(_config.RelaxationTimeoutSeconds), ct);
+                
+                _logger.LogInformation("🧠 BRAIN: Timeout reached. Starting relaxation strategy...");
                 
                 // Relaxation Tier 1: Lower bitrate floor (e.g. 320 -> 256)
                 if (minBitrate > 256)
@@ -110,12 +116,23 @@ public class DownloadDiscoveryService
                     _logger.LogInformation("🧠 BRAIN: Relaxation Tier 1: Lowering bitrate floor to 256kbps");
                     var relaxedTracks = allTracks.Where(t => t.Bitrate >= 256).ToList();
                     bestMatch = _matcher.FindBestMatch(track, relaxedTracks);
-                    if (bestMatch != null) return bestMatch;
+                    if (bestMatch != null)
+                    {
+                        _logger.LogInformation("🧠 BRAIN: Tier 1 match found: {Filename}", bestMatch.Filename);
+                        return bestMatch;
+                    }
                 }
 
-                // Relaxation Tier 2: Accept lower formats or even more permissive bitrate
-                _logger.LogInformation("🧠 BRAIN: Relaxation Tier 2: Highly permissive quality fallback");
+                // Relaxation Tier 2: Accept any quality (highest available)
+                _logger.LogInformation("🧠 BRAIN: Relaxation Tier 2: Accepting highest available quality");
                 bestMatch = allTracks.OrderByDescending(t => t.Bitrate).FirstOrDefault();
+                
+                if (bestMatch != null)
+                {
+                    _logger.LogInformation("🧠 BRAIN: Tier 2 fallback: {Filename} ({Bitrate}kbps)", 
+                        bestMatch.Filename, bestMatch.Bitrate);
+                    return bestMatch;
+                }
             }
 
             if (bestMatch != null)

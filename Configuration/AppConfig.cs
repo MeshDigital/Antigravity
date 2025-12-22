@@ -25,9 +25,9 @@ public class AppConfig
     public int SoulseekPort { get; set; } = 2242;
     
     // File preference conditions
-    public List<string> PreferredFormats { get; set; } = new() { "mp3", "flac" };
-    public int PreferredMinBitrate { get; set; } = 128; // kbps (more permissive default)
-    public int PreferredMaxBitrate { get; set; } = 2500; // kbps
+    public List<string>? PreferredFormats { get; set; } = new() { "mp3", "flac" };
+    public int PreferredMinBitrate { get; set; } = 96; // Lowered from 128 to reduce rejections
+    public int PreferredMaxBitrate { get; set; } = 0; // 0 = no limit
     public int PreferredMaxSampleRate { get; set; } = 48000; // Hz
     public string? PreferredLengthTolerance { get; set; } = "3"; // seconds
     
