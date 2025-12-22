@@ -100,7 +100,7 @@
                                 <Border Width="180" Background="#121214" CornerRadius="12" Padding="12" BorderBrush="#1F1F23" BorderThickness="1">
                                     <StackPanel Spacing="8">
                                         <Border CornerRadius="8" ClipToBounds="True" Background="#262629">
-                                            <Image Source="/Assets/album_placeholder.png" Height="156" Stretch="UniformToFill"/>
+                                            <Rectangle Fill="#1A1A1D" Height="156"/>
                                         </Border>
                                         <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13" TextTrimming="CharacterEllipsis"/>
                                         <TextBlock Text="{Binding SuccessfulCount, StringFormat='{}{0} tracks'}" FontSize="11" Foreground="#808080"/>
