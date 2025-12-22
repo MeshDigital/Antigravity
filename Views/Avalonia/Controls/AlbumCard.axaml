@@ -39,7 +39,7 @@
             </Border>
             
             <!-- Details -->
-            <StackPanel Grid.Row="1" Padding="12">
+            <StackPanel Grid.Row="1" Margin="12">
                 <TextBlock Text="{Binding AlbumTitle}" FontWeight="Bold" FontSize="14" TextTrimming="CharacterEllipsis"/>
                 <TextBlock Text="{Binding Artist}" FontSize="12" Foreground="#AAA" TextTrimming="CharacterEllipsis" Margin="0,2,0,0"/>
                 

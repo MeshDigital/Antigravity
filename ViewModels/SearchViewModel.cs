@@ -409,8 +409,8 @@ public partial class SearchViewModel : ReactiveObject
 
         Dispatcher.UIThread.InvokeAsync(() =>
         {
-            var status = evt.State == PlaylistTrackState.Completed ? TrackStatus.Downloaded : 
-                         evt.State == PlaylistTrackState.Failed ? TrackStatus.Failed : TrackStatus.Missing;
+            var status = evt.NewState == PlaylistTrackState.Completed ? TrackStatus.Downloaded : 
+                         evt.NewState == PlaylistTrackState.Failed ? TrackStatus.Failed : TrackStatus.Missing;
 
             // Note: We use global ID (hash) to match.
             // SourceList access is thread-safe for reading but we need to modify the ViewModel which is bound.
