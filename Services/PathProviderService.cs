@@ -122,4 +122,62 @@ public class PathProviderService
             safeAlbum
         );
     }
+
+    /// <summary>
+    /// Phase 2.5: Deletes .part files older than 24 hours that have no corresponding track in Pending state.
+    /// Prevents disk bloat from deleted or failed downloads.
+    /// </summary>
+    /// <param name="activePartPaths">Set of .part file paths currently in use (case-insensitive on Windows)</param>
+    /// <returns>Number of orphaned files deleted</returns>
+    public async Task<int> CleanupOrphanedPartFilesAsync(HashSet<string> activePartPaths)
+    {
+        var downloadDir = _config.DownloadDirectory ?? "Downloads";
+        if (!Directory.Exists(downloadDir))
+        {
+            _logger.LogDebug("Download directory does not exist, skipping cleanup: {Dir}", downloadDir);
+            return 0;
+        }
+
+        var cutoffTime = DateTime.Now.AddHours(-24);
+        var deletedCount = 0;
+        
+        try
+        {
+            var allPartFiles = Directory.GetFiles(downloadDir, "*.part", SearchOption.AllDirectories);
+            
+            foreach (var partFile in allPartFiles)
+            {
+                var fileInfo = new FileInfo(partFile);
+                
+                // Skip if recently modified OR if it's actively being used
+                if (fileInfo.LastWriteTime > cutoffTime || activePartPaths.Contains(partFile))
+                    continue;
+                
+                try
+                {
+                    File.Delete(partFile);
+                    deletedCount++;
+                    _logger.LogInformation("🗑️ Deleted orphaned .part file: {File} (age: {Age:F1} hours)", 
+                        Path.GetFileName(partFile), 
+                        (DateTime.Now - fileInfo.LastWriteTime).TotalHours);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to delete orphaned .part file: {File}", partFile);
+                }
+            }
+            
+            if (deletedCount > 0)
+            {
+                _logger.LogInformation("✅ Cleanup complete: Deleted {Count} orphaned .part files", deletedCount);
+            }
+            
+            return deletedCount;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to cleanup orphaned .part files");
+            return 0;
+        }
+    }
 }

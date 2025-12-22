@@ -80,6 +80,11 @@ public class PlaylistJobEntity
     public bool IsDeleted { get; set; } = false;
     public DateTime? DeletedAt { get; set; }
 
+    // Phase 2.5: Crash Recovery & Hydration
+    public bool IsUserPaused { get; set; } = false;         // User manually paused (don't auto-resume)
+    public DateTime? DateStarted { get; set; }              // When first track started downloading
+    public DateTime DateUpdated { get; set; } = DateTime.UtcNow;  // Last orchestrator touch
+
     /// <summary>
     /// URL for the playlist/album cover art.
     /// </summary>

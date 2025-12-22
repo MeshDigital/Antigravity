@@ -231,6 +231,22 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
             }
             _logger.LogInformation("Hydrated {Count} tracks from database.", tracks.Count);
             
+            // Phase 2.5: Crash Recovery - Detect orphaned downloads and resume with .part files
+            await HydrateFromCrashAsync();
+            
+            // Phase 2.5: Zombie Cleanup - Delete orphaned .part files older than 24 hours
+            // Pro-tip from user: Use case-insensitive HashSet for Windows paths
+            var activePartPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            lock (_collectionLock)
+            {
+                foreach (var ctx in _downloads.Where(t => t.State == PlaylistTrackState.Pending || t.State == PlaylistTrackState.Downloading))
+                {
+                    var partPath = _pathProvider.GetTrackPath(ctx.Model.Artist, ctx.Model.Album ?? "Unknown", ctx.Model.Title, "mp3") + ".part";
+                    activePartPaths.Add(partPath);
+                }
+            }
+            await _pathProvider.CleanupOrphanedPartFilesAsync(activePartPaths);
+            
             // Start the Enrichment Orchestrator
             _enrichmentOrchestrator.Start();
         }
@@ -512,20 +528,46 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
         }
     }
 
-    public void PauseTrack(string globalId)
+    /// <summary>
+    /// Phase 2.5: Enhanced pause with immediate cancellation and IsUserPaused tracking.
+    /// </summary>
+    public async Task PauseTrackAsync(string globalId)
     {
         DownloadContext? ctx;
         lock (_collectionLock) ctx = _downloads.FirstOrDefault(t => t.GlobalId == globalId);
         
-        if (ctx != null)
+        if (ctx == null)
         {
-            ctx.CancellationTokenSource?.Cancel();
-            _ = UpdateStateAsync(ctx, PlaylistTrackState.Paused);
-            _logger.LogInformation("Paused track: {Artist} - {Title}", ctx.Model.Artist, ctx.Model.Title);
+            _logger.LogWarning("Cannot pause track {Id}: not found", globalId);
+            return;
         }
+        
+        // CRITICAL: Cancel the CancellationTokenSource immediately
+        // This ensures the download stops mid-transfer and preserves the .part file
+        ctx.CancellationTokenSource?.Cancel();
+        ctx.CancellationTokenSource = new CancellationTokenSource(); // Reset for resume
+        
+        await UpdateStateAsync(ctx, PlaylistTrackState.Paused);
+        
+        // Mark as user-paused in DB so hydration knows not to auto-resume
+        try
+        {
+            var job = await _libraryService.FindPlaylistJobAsync(ctx.Model.PlaylistId);
+            if (job != null)
+            {
+                job.IsUserPaused = true;
+                await _libraryService.UpdatePlaylistJobAsync(job);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to mark job as user-paused in DB (non-fatal)");
+        }
+        
+        _logger.LogInformation("⏸️ Paused track: {Artist} - {Title} (user-initiated)", ctx.Model.Artist, ctx.Model.Title);
     }
 
-    public void ResumeTrack(string globalId)
+    public async Task ResumeTrackAsync(string globalId)
     {
         DownloadContext? ctx;
         lock (_collectionLock) ctx = _downloads.FirstOrDefault(t => t.GlobalId == globalId);
@@ -585,6 +627,75 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
         };
         
         QueueTracks(new List<PlaylistTrack> { playlistTrack });
+    }
+
+    /// <summary>
+    /// Phase 2.5: Hydration - Detects and resumes orphaned downloads from crashed/closed sessions.
+    /// Scans for tracks stuck in Downloading/Searching state and checks for existing .part files.
+    /// </summary>
+    private async Task HydrateFromCrashAsync()
+    {
+        var orphanedTracks = new List<DownloadContext>();
+        
+        lock (_collectionLock)
+        {
+            orphanedTracks = _downloads.Where(t => 
+                t.State == PlaylistTrackState.Downloading || 
+                t.State == PlaylistTrackState.Searching).ToList();
+        }
+        
+        if (!orphanedTracks.Any())
+        {
+            _logger.LogInformation("✅ No orphaned downloads detected. Clean startup.");
+            return;
+        }
+
+        _logger.LogWarning("🔍 Detected {Count} orphaned downloads. Hydrating...", orphanedTracks.Count);
+        
+        int resumedCount = 0;
+        foreach (var ctx in orphanedTracks)
+        {
+            // Check for existing .part file to resume
+            var partPath = _pathProvider.GetTrackPath(
+                ctx.Model.Artist, 
+                ctx.Model.Album ?? "Unknown Album", 
+                ctx.Model.Title, 
+                "mp3") + ".part";
+            
+            if (File.Exists(partPath))
+            {
+                var partSize = new FileInfo(partPath).Length;
+                ctx.BytesReceived = partSize;
+                ctx.IsResuming = true;
+                resumedCount++;
+                
+                _logger.LogInformation("📁 Found .part file ({Size:N0} bytes) for {Track}. Will resume.", 
+                    partSize, ctx.Model.Title);
+            }
+            
+            // Reset to Pending so ProcessQueueLoop picks it up
+            // Pro-tip from user: Avoid firing too many UI events during startup
+            ctx.State = PlaylistTrackState.Pending;
+        }
+        
+        // Batch DB update (more efficient than individual updates)
+        foreach (var ctx in orphanedTracks)
+        {
+            await UpdateStateAsync(ctx, PlaylistTrackState.Pending);
+        }
+        
+        // UX: Notify via logs (UI notification event can be added in Step 4: Download Center UI)
+        if (orphanedTracks.Count > 0)
+        {
+            var message = orphanedTracks.Count == 1 
+                ? "Resuming 1 interrupted download."
+                : $"Resuming {orphanedTracks.Count} interrupted downloads.";
+                
+            _logger.LogInformation("📢 {Message}", message);
+        }
+        
+        _logger.LogInformation("✅ Hydration complete: {Total} orphaned, {Resumed} with .part files", 
+            orphanedTracks.Count, resumedCount);
     }
 
     public async Task StartAsync(CancellationToken ct = default)
