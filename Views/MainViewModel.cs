@@ -469,7 +469,7 @@ public class MainViewModel : INotifyPropertyChanged
     // Download Progress Properties (computed from AllGlobalTracks)
     public int SuccessfulCount => AllGlobalTracks.Count(t => t.State == PlaylistTrackState.Completed);
     public int FailedCount => AllGlobalTracks.Count(t => t.State == PlaylistTrackState.Failed);
-    public int TodoCount => AllGlobalTracks.Count(t => t.State == PlaylistTrackState.Pending || t.State == PlaylistTrackState.Searching);
+    public int TodoCount => AllGlobalTracks.Count(t => t.State == PlaylistTrackState.Pending);
     public double DownloadProgressPercentage
     {
         get

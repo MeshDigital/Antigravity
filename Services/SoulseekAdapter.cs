@@ -550,6 +550,7 @@ public class SoulseekAdapter : ISoulseekAdapter, IDisposable
             while (!downloadTask.IsCompleted)
             {
                 // Check if we should time out
+                // Modified: Only timeout if NOT queued and no activity for 60s
                 if (!isQueued && (DateTime.UtcNow - lastActivity).TotalSeconds > 60)
                 {
                     // STALLED: Not queued, but no bytes moved for 60s

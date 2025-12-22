@@ -309,11 +309,18 @@ public class SpotifyAuthService
         _config.SpotifyCallbackPort = new Uri(_config.SpotifyRedirectUri).Port;
         _logger.LogInformation("Saved Spotify callback port {Port} for future auth attempts", _config.SpotifyCallbackPort);
 
-        // Create authenticated client
-        _authenticatedClient = new SpotifyClient(tokenResponse.AccessToken);
+        // Create authenticated client with PKCEAuthenticator for immediate auto-refresh support
+        // This ensures the very first client instance can handle long-running imports/enrichment
+        var authenticator = new PKCEAuthenticator(_config.SpotifyClientId, tokenResponse);
+        var configWithAuth = SpotifyClientConfig
+            .CreateDefault()
+            .WithAuthenticator(authenticator)
+            .WithRetryHandler(new SimpleRetryHandler());
+            
+        _authenticatedClient = new SpotifyClient(configWithAuth);
         IsAuthenticated = true;
 
-        _logger.LogInformation("Successfully exchanged authorization code for tokens");
+        _logger.LogInformation("Successfully exchanged authorization code for tokens and initialized client with PKCE auto-refresh");
     }
 
     /// <summary>

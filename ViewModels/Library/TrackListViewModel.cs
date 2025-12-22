@@ -17,7 +17,6 @@ namespace SLSKDONET.ViewModels.Library;
 /// <summary>
 /// Manages track lists, filtering, and search functionality.
 /// Handles track display state and filtering logic.
-/// </summary>
 public class TrackListViewModel : ReactiveObject
 {
     private readonly ILogger<TrackListViewModel> _logger;
@@ -26,8 +25,9 @@ public class TrackListViewModel : ReactiveObject
     private MainViewModel? _mainViewModel; // Injected post-construction
     private readonly ArtworkCacheService _artworkCache;
     private readonly IEventBus _eventBus;
+    private readonly AppConfig _config;
 
-    public HierarchicalLibraryViewModel Hierarchical { get; } = new();
+    public HierarchicalLibraryViewModel Hierarchical { get; }
 
     private ObservableCollection<PlaylistTrackViewModel> _currentProjectTracks = new();
     public ObservableCollection<PlaylistTrackViewModel> CurrentProjectTracks
@@ -107,15 +107,17 @@ public class TrackListViewModel : ReactiveObject
         ILibraryService libraryService,
         DownloadManager downloadManager,
         ArtworkCacheService artworkCache,
-        IEventBus eventBus)
+        IEventBus eventBus,
+        AppConfig config)
     {
         _logger = logger;
         _libraryService = libraryService;
         _downloadManager = downloadManager;
         _artworkCache = artworkCache;
         _eventBus = eventBus;
+        _config = config;
 
-        // Commands
+        Hierarchical = new HierarchicalLibraryViewModel(config);
         SelectAllTracksCommand = ReactiveCommand.Create(() => 
         {
             var selection = Hierarchical.Selection;
