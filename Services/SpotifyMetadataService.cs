@@ -192,42 +192,79 @@ public class SpotifyMetadataService : ISpotifyMetadataService
             return results;
         }
 
-        try
+        int retryCount = 0;
+        const int maxRetries = 1;
+
+        while (retryCount <= maxRetries)
         {
-            // Get authenticated client
-            var client = await _authService.GetAuthenticatedClientAsync();
-            
-            // Spotify API limit: 100 IDs per request
-            var chunks = idList.Chunk(100);
-            
-            foreach (var chunk in chunks)
+            try
             {
-                var request = new TracksAudioFeaturesRequest(chunk.ToList());
-                var response = await client.Tracks.GetSeveralAudioFeatures(request);
+                // Get authenticated client
+                var client = await _authService.GetAuthenticatedClientAsync();
                 
-                if (response?.AudioFeatures != null)
+                // Spotify API limit: 100 IDs per request
+                var chunks = idList.Chunk(100);
+                
+                foreach (var chunk in chunks)
                 {
-                    foreach (var feature in response.AudioFeatures)
+                    var request = new TracksAudioFeaturesRequest(chunk.ToList());
+                    var response = await client.Tracks.GetSeveralAudioFeatures(request);
+                    
+                    if (response?.AudioFeatures != null)
                     {
-                        if (feature != null && !string.IsNullOrEmpty(feature.Id))
+                        foreach (var feature in response.AudioFeatures)
                         {
-                            results[feature.Id] = feature;
+                            if (feature != null && !string.IsNullOrEmpty(feature.Id))
+                            {
+                                results[feature.Id] = feature;
+                            }
                         }
                     }
                 }
+                
+                // Success - break loop
+                break;
             }
-        }
-        catch (APIException apiEx)
-        {
-            // Log detailed API error information
-            _logger.LogError(apiEx, 
-                "Spotify API error in GetAudioFeaturesBatchAsync. Status: {Status}, Response: {Response}", 
-                apiEx.Response?.StatusCode, 
-                apiEx.Response?.Body);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to batch fetch audio features");
+            catch (APIException apiEx) when (apiEx.Response?.StatusCode == System.Net.HttpStatusCode.Forbidden)
+            {
+                // 403 Forbidden - Token likely expired or invalid despite local check
+                _logger.LogWarning("Spotify API 403 Forbidden in GetAudioFeaturesBatchAsync. Attempting force refresh. Retry {Retry}/{Max}", retryCount + 1, maxRetries);
+                
+                if (retryCount < maxRetries)
+                {
+                    try 
+                    {
+                        // Force refresh - bypass throttle
+                        await _authService.RefreshAccessTokenAsync(force: true);
+                        retryCount++;
+                        continue; // Retry loop
+                    }
+                    catch (Exception refreshEx)
+                    {
+                        _logger.LogError(refreshEx, "Failed to refresh token during 403 recovery");
+                        throw; // Stop retrying
+                    }
+                }
+                else
+                {
+                    _logger.LogError(apiEx, "Spotify API 403 Forbidden persists after refresh.");
+                    break; // Give up
+                }
+            }
+            catch (APIException apiEx)
+            {
+                // Other API validation errors
+                _logger.LogError(apiEx, 
+                    "Spotify API error in GetAudioFeaturesBatchAsync. Status: {Status}, Response: {Response}", 
+                    apiEx.Response?.StatusCode, 
+                    apiEx.Response?.Body);
+                break;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to batch fetch audio features");
+                break;
+            }
         }
         
         return results;

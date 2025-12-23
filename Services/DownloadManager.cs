@@ -357,7 +357,7 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to persist PlaylistJob and its tracks");
-                return;
+                throw; // CRITICAL: Propagate error so caller (ImportPreview) knows it failed
             }
 
             // 3. Queue the tracks using the internal method

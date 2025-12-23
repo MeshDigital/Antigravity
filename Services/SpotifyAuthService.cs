@@ -331,7 +331,7 @@ public class SpotifyAuthService
     /// Refreshes the access token using the stored refresh token.
     /// Thread-safe: concurrent calls will wait for the same refresh operation.
     /// </summary>
-    public async Task RefreshAccessTokenAsync()
+    public async Task RefreshAccessTokenAsync(bool force = false)
     {
         Task? taskToWait = null;
 
@@ -346,7 +346,7 @@ public class SpotifyAuthService
             else
             {
                 // Start a new refresh task
-                _refreshTask = RefreshAccessTokenInternalAsync();
+                _refreshTask = RefreshAccessTokenInternalAsync(force);
                 taskToWait = _refreshTask;
             }
         }
@@ -375,13 +375,13 @@ public class SpotifyAuthService
         }
     }
 
-    private async Task RefreshAccessTokenInternalAsync()
+    private async Task RefreshAccessTokenInternalAsync(bool force = false)
     {
         // Throttle: Don't refresh if we just refreshed less than 5 minutes ago
         // This prevents "double refresh" glitch when both InitializeAsync and VerifyConnectionAsync trigger refreshes
         const int throttleMinutes = 5;
         var timeSinceLastRefresh = DateTime.UtcNow - _lastTokenRefreshTime;
-        if (timeSinceLastRefresh.TotalMinutes < throttleMinutes && _currentTokenResponse != null)
+        if (!force && timeSinceLastRefresh.TotalMinutes < throttleMinutes && _currentTokenResponse != null)
         {
             _logger.LogInformation("Token refresh throttled: last refresh was {Seconds} seconds ago", timeSinceLastRefresh.TotalSeconds);
             return;

@@ -1054,49 +1054,82 @@ public class DatabaseService
     /// </summary>
     public async Task SavePlaylistJobWithTracksAsync(PlaylistJob job)
     {
-        using var context = new AppDbContext();
-        using var transaction = await context.Database.BeginTransactionAsync();
-        
+        // Prevent race conditions with other DB writes
+        await _writeSemaphore.WaitAsync();
         try
         {
+            using var context = new AppDbContext();
+            using var transaction = await context.Database.BeginTransactionAsync();
+            
+            try
+            {
             // Convert model to entity
             // 2. Handle Job Header (Add or Update)
+            // 2. Robust Upserter Strategy
+            // Even with semaphore, we check first. If missing, we TRY ADD.
+            // If that fails with Unique Constraint, we CATCH and UPDATE (Upsert).
+            
             var existingJob = await context.PlaylistJobs.FirstOrDefaultAsync(j => j.Id == job.Id);
+            bool jobExists = existingJob != null;
 
-            if (existingJob != null)
+            if (jobExists)
             {
-                // UPDATE existing job: Only update TotalTracks and potentially header info
-                // Do NOT reset SuccessfulCount/FailedCount to 0 if the 'job' model is fresh
-                existingJob.TotalTracks = Math.Max(existingJob.TotalTracks, job.TotalTracks);
-                existingJob.SourceTitle = job.SourceTitle;
-                existingJob.SourceType = job.SourceType;
-                existingJob.IsDeleted = false;
-                // Add more updates if needed (e.g. DestinationFolder if it changed)
-                context.PlaylistJobs.Update(existingJob);
+                 // Update existing job logic
+                 existingJob.TotalTracks = Math.Max(existingJob.TotalTracks, job.TotalTracks);
+                 existingJob.SourceTitle = job.SourceTitle;
+                 existingJob.SourceType = job.SourceType;
+                 existingJob.IsDeleted = false;
+                 context.PlaylistJobs.Update(existingJob);
             }
             else
             {
-                // INSERT new job
-                var jobEntity = new PlaylistJobEntity
-                {
-                    Id = job.Id,
-                    SourceTitle = job.SourceTitle,
-                    SourceType = job.SourceType,
-                    DestinationFolder = job.DestinationFolder,
-                    CreatedAt = job.CreatedAt,
-                    TotalTracks = job.TotalTracks,
-                    SuccessfulCount = job.SuccessfulCount,
-                    FailedCount = job.FailedCount,
-                    MissingCount = job.MissingCount,
-                    IsDeleted = false
-                };
-                context.PlaylistJobs.Add(jobEntity);
+                 // Attempt Insert
+                 var jobEntity = new PlaylistJobEntity
+                 {
+                     Id = job.Id,
+                     SourceTitle = job.SourceTitle,
+                     SourceType = job.SourceType,
+                     DestinationFolder = job.DestinationFolder,
+                     CreatedAt = job.CreatedAt,
+                     TotalTracks = job.TotalTracks,
+                     SuccessfulCount = job.SuccessfulCount,
+                     FailedCount = job.FailedCount,
+                     MissingCount = job.MissingCount,
+                     IsDeleted = false
+                 };
+                 context.PlaylistJobs.Add(jobEntity);
+                 
+                 // Immediate save to catch Unique Constraint violation NOW
+                 try
+                 {
+                     await context.SaveChangesAsync();
+                     jobExists = true; // Mark as exists for track handling
+                 }
+                 catch (DbUpdateException dbEx) when (dbEx.InnerException?.Message.Contains("UNIQUE constraint failed") == true)
+                 {
+                     _logger.LogWarning("Caught Race Condition in PlaylistJob Insert! Switching to Update strategy for JobId {Id}", job.Id);
+                     
+                     // Detach the failed entity to clear context state
+                     context.Entry(jobEntity).State = EntityState.Detached;
+
+                     // Re-fetch the phantom existing job
+                     existingJob = await context.PlaylistJobs.FirstOrDefaultAsync(j => j.Id == job.Id);
+                     if (existingJob != null)
+                     {
+                         existingJob.TotalTracks = Math.Max(existingJob.TotalTracks, job.TotalTracks);
+                         existingJob.IsDeleted = false;
+                         context.PlaylistJobs.Update(existingJob);
+                         jobExists = true; 
+                     }
+                     else
+                     {
+                         throw; // Should be impossible
+                     }
+                 }
             }
             
-            bool exists = existingJob != null;
-            
             // For tracks, we also need to handle Add vs Update. 
-            if (!exists)
+            if (!jobExists) // This branch is only taken if we successfully added a NEW job and it stayed new
             {
                 var trackEntities = job.PlaylistTracks.Select(track => new PlaylistTrackEntity
                 {
@@ -1237,10 +1270,13 @@ public class DatabaseService
         }
         catch (Exception ex)
         {
-            await transaction.RollbackAsync();
-            _logger.LogError(ex, "Failed to save PlaylistJob and tracks - transaction rolled back");
             throw;
         }
+    }
+    finally
+    {
+        _writeSemaphore.Release();
+    }
     }
 
     public async Task LogPlaylistJobDiagnostic(Guid jobId)
