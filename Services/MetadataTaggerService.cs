@@ -151,6 +151,12 @@ public class MetadataTaggerService : ITaggerService
                     }
                 }
 
+                // Embed album art if available
+                if (track.Metadata != null && track.Metadata.TryGetValue("AlbumArtUrl", out var artUrlObj) && artUrlObj is string artUrl)
+                {
+                    await TryAddAlbumArtAsync(file, artUrl);
+                }
+
                 // Save the file
                 file.Save();
                 _logger.LogInformation("Successfully tagged file: {FilePath} ({Artist} - {Title})",
