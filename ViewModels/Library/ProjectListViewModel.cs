@@ -198,16 +198,28 @@ public class ProjectListViewModel : INotifyPropertyChanged
         // PERFORMANCE FIX: Target specific project instead of looping through all
         Dispatcher.UIThread.InvokeAsync(() =>
         {
-            // Find the specific project that changed
-            var project = AllProjects.FirstOrDefault(p => p.Id == evt.ProjectId);
-            if (project != null)
+            try
             {
-                // Refresh ONLY the affected project's stats
-                project.RefreshStatusCounts();
+                // Fix 5: Threading Race Condition Safety
+                // Ensure AllProjects isn't null or being modified by another thread (though UI thread marshaling helps)
+                if (AllProjects == null) return;
                 
-                // Real tracking via DownloadManager
-                project.ActiveDownloadsCount = _downloadManager.GetActiveDownloadsCountForProject(project.Id);
-                project.CurrentDownloadingTrack = _downloadManager.GetCurrentlyDownloadingTrackName(project.Id);
+                // Find the specific project that changed
+                var project = AllProjects.FirstOrDefault(p => p.Id == evt.ProjectId);
+                if (project != null)
+                {
+                    // Refresh ONLY the affected project's stats
+                    project.RefreshStatusCounts();
+                    
+                    // Real tracking via DownloadManager
+                    project.ActiveDownloadsCount = _downloadManager.GetActiveDownloadsCountForProject(project.Id);
+                    project.CurrentDownloadingTrack = _downloadManager.GetCurrentlyDownloadingTrackName(project.Id);
+                }
+            }
+            catch (Exception ex)
+            {
+                // Prevent crash if collection is modified during read or other race condition
+                _logger.LogWarning(ex, "Race condition avoided in OnTrackStateChanged for project {Id}", evt.ProjectId);
             }
         });
     }
@@ -335,30 +347,41 @@ public class ProjectListViewModel : INotifyPropertyChanged
 
     private async void OnPlaylistAdded(object? sender, PlaylistJob job)
     {
-        _logger.LogInformation("OnPlaylistAdded event received for job {JobId}", job.Id);
+        _logger.LogInformation("[UI TRACE] OnPlaylistAdded event received for job {JobId}. Source: {SourceType}", job.Id, job.SourceType);
 
         await Dispatcher.UIThread.InvokeAsync(() =>
         {
             var existingProject = AllProjects.FirstOrDefault(j => j.Id == job.Id);
             if (existingProject != null)
             {
-                _logger.LogInformation("Project {JobId} already exists, selecting existing one", job.Id);
+                _logger.LogInformation("[UI TRACE] Project {JobId} already exists in AllProjects, selecting existing one", job.Id);
                 SelectedProject = existingProject;
                 return;
             }
 
             // 1. Add to Master List (Insert at top for Newest First)
+            _logger.LogInformation("[UI TRACE] Adding job {JobId} to AllProjects. Current Count: {Count}", job.Id, AllProjects.Count);
             AllProjects.Insert(0, job);
             
             // 2. Conditionally add to Filtered List
             // Only show if no filter active OR if it matches the current filter
-            bool matchesFilter = string.IsNullOrWhiteSpace(SearchText) || 
-                                 (job.SourceTitle?.Contains(SearchText, StringComparison.OrdinalIgnoreCase) ?? false) ||
-                                 (job.SourceType?.Contains(SearchText, StringComparison.OrdinalIgnoreCase) ?? false);
+            bool emptyFilter = string.IsNullOrWhiteSpace(SearchText);
+            bool titleMatch = job.SourceTitle?.Contains(SearchText, StringComparison.OrdinalIgnoreCase) ?? false;
+            bool typeMatch = job.SourceType?.Contains(SearchText, StringComparison.OrdinalIgnoreCase) ?? false;
+            
+            bool matchesFilter = emptyFilter || titleMatch || typeMatch;
+
+            _logger.LogInformation("[UI TRACE] Filter check for {JobId}: Empty={Empty}, TitleMatch={TitleMatch}, TypeMatch={TypeMatch} => Included={Result}. SourceTitle='{SourceTitle}'", 
+                job.Id, emptyFilter, titleMatch, typeMatch, matchesFilter, job.SourceTitle);
 
             if (matchesFilter)
             {
                 FilteredProjects.Insert(0, job);
+                _logger.LogInformation("[UI TRACE] Added job {JobId} to FilteredProjects", job.Id);
+            }
+            else 
+            {
+                 _logger.LogInformation("[UI TRACE] Job {JobId} excluded from FilteredProjects due to filter '{Filter}'", job.Id, SearchText);
             }
 
             SelectedProject = job; // Auto-select new project

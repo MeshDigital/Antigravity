@@ -27,11 +27,7 @@ public class LibraryService : ILibraryService
 
     // Events now published via IEventBus (ProjectDeletedEvent, ProjectUpdatedEvent)
 
-    /// <summary>
-    /// Reactive observable collection of all playlists - single source of truth.
-    /// Auto-syncs with SQLite database.
-    /// </summary>
-    public ObservableCollection<PlaylistJob> Playlists { get; } = new();
+
 
     public LibraryService(
         ILogger<LibraryService> logger, 
@@ -254,7 +250,8 @@ public class LibraryService : ILibraryService
             _cache.InvalidateProject(playlistId);
             _logger.LogInformation("Deleted playlist job: {Id}, cache invalidated", playlistId);
 
-            // REACTIVE: Auto-remove from observable collection
+            // REACTIVE: Auto-remove from observable collection - REMOVED: Managed by ProjectListViewModel via EventBus
+            /*
             Dispatcher.UIThread.Post(() =>
             {
                 var jobToRemove = Playlists.FirstOrDefault(p => p.Id == playlistId);
@@ -264,6 +261,7 @@ public class LibraryService : ILibraryService
                     _logger.LogInformation("Removed playlist '{Title}' from reactive collection", jobToRemove.SourceTitle);
                 }
             });
+            */
 
             // Emit the event so subscribers (like LibraryViewModel) can react.
             _eventBus.Publish(new ProjectDeletedEvent(playlistId));

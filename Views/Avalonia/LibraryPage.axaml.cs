@@ -39,10 +39,18 @@ public partial class LibraryPage : UserControl
         {
             try
             {
-                _logger?.LogInformation("[DIAGNOSTIC] LibraryPage.OnLoaded: Starting LoadProjectsAsync");
-                _logger?.LogInformation("[DIAGNOSTIC] Current AllProjects count BEFORE load: {Count}", vm.Projects.AllProjects.Count);
-                
-                await vm.LoadProjectsAsync();
+                // FIX: Check if projects are already loaded to prevent aggressive reloading on tab switch
+                if (!vm.Projects.AllProjects.Any())
+                {
+                    _logger?.LogInformation("[DIAGNOSTIC] LibraryPage.OnLoaded: Starting LoadProjectsAsync");
+                    _logger?.LogInformation("[DIAGNOSTIC] Current AllProjects count BEFORE load: {Count}", vm.Projects.AllProjects.Count);
+                    
+                    await vm.LoadProjectsAsync();
+                }
+                else
+                {
+                    _logger?.LogInformation("[DIAGNOSTIC] LibraryPage.OnLoaded: Projects already loaded ({Count} items). Skipping re-load.", vm.Projects.AllProjects.Count);
+                }
                 
                 _logger?.LogInformation("[DIAGNOSTIC] LoadProjectsAsync completed. AllProjects count AFTER load: {Count}", vm.Projects.AllProjects.Count);
                 

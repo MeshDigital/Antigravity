@@ -165,7 +165,9 @@ public class DownloadCenterViewModel : INotifyPropertyChanged, IDisposable
                     
                     OnPropertyChanged(nameof(ActiveCount));
                 }
-                // Smart Re-sort: When track starts downloading, move to top
+                /* 
+                // REMOVED: Aggressive sorting causes UI jumps. 
+                // Allow the list to maintain its natural sort order (e.g. by Added Date).
                 else if ((e.NewState == Models.PlaylistTrackState.Downloading || e.NewState == Models.PlaylistTrackState.Searching) && 
                          oldState != e.NewState)
                 {
@@ -173,6 +175,7 @@ public class DownloadCenterViewModel : INotifyPropertyChanged, IDisposable
                     ActiveDownloads.Remove(item);
                     ActiveDownloads.Insert(0, item);
                 }
+                */
             }
             else
             {
