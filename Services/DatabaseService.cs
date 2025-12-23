@@ -1530,6 +1530,27 @@ public class DatabaseService
             _logger.LogWarning(ex, "Failed to update library health cache during track update");
         }
     }
+
+    /// <summary>
+    /// Closes all database connections and disposes resources during application shutdown.
+    /// Prevents orphaned connections and ensures clean process termination.
+    /// Note: DatabaseService uses 'using var context' pattern, so no persistent context to dispose.
+    /// </summary>
+    public Task CloseConnectionsAsync()
+    {
+        try
+        {
+            _logger.LogInformation("Database service shutdown - all contexts are self-disposing");
+            // No-op: Each method creates and disposes its own AppDbContext via 'using'
+            // This ensures connections are always cleaned up properly
+            return Task.CompletedTask;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during database service shutdown");
+            return Task.CompletedTask;
+        }
+    }
 }
 
 

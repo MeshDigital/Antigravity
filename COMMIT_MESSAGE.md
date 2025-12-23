@@ -1,22 +1,47 @@
-feat: Library UI Polish, Event Bus Consolidation, and Spotify Enhancements
+# Fix: Download count, emoji parsing, and app shutdown cleanup
 
-## Library UI Refinements
-- **Smart Grouping**: Flatten single-track albums to avoid unnecessary nested views
-- **Filter Mutual Exclusion**: "All", "Downloaded", "Pending" now behave like radio buttons
-- **Fixed Album Download Regression**: Added `DownloadAlbumCommand` to `AlbumNode` and injected `DownloadManager` dependency chain
+## 🐛 Bug Fixes
 
-## Event Bus Consolidation
-- Enhanced `TrackAddedEvent` record with optional `InitialState` parameter
-- Removed duplicate event definitions from `Events/TrackEvents.cs`
-- Standardized on `Models/Events.cs` for all event records
-- Prevents "zombie pending" tracks during database hydration
+### Download Count Excludes Deleted Albums
+**Problem:** Download count showed all in-progress downloads, including those from soft-deleted albums.
 
-## Spotify Enhancements
-- Added `Scopes.UserTopRead` to authorization request
-- Enables `GetRecommendations` feature (requires re-authentication)
-- Fixed null safety in event references
+**Root Cause:** `DownloadManager.InitAsync()` was loading from legacy `Tracks` table (TrackEntity) which lacks `PlaylistId` field and couldn't filter deleted playlists.
 
-## Technical Improvements
-- Proper dependency injection for `AlbumNode` via `HierarchicalLibraryViewModel`
-- Type-safe event records with C# record syntax
-- Cleaner command bindings in XAML views
+**Solution:** Updated DownloadManager to load from `PlaylistTracks` table (PlaylistTrackEntity) via `GetAllPlaylistTracksAsync()`:
+- ✅ Has `PlaylistId` field for filtering
+- ✅ Automatically excludes soft-deleted playlists (`IsDeleted = true`)
+- ✅ Provides richer metadata (Album, Bitrate, Format)
+
+**Impact:** Download counts now accurately reflect only active album downloads.
+
+### Emoji Removal in Tracklist Parser
+**Problem:** Emojis in YouTube/SoundCloud tracklists caused parsing failures (e.g., `❎`, `❌`, `‼️`).
+
+**Solution:** Added `RemoveEmojis()` method to `CommentTracklistParser` that strips emoji characters before timestamp parsing.
+
+**Impact:** Tracklists with emojis now parse correctly.
+
+## 🔧 Improvements
+
+### Application Shutdown Cleanup
+**Problem:** When app crashed or closed, orphaned `.NET Host` processes remained in Task Manager due to background services not cleaning up.
+
+**Solution:** Enhanced `App.axaml.cs` Exit event handler to gracefully shutdown:
+- Disconnect Soulseek client
+- Close database connections
+- Clear Spotify credentials (if configured)
+- **Flush Serilog logs** (critical - prevents log loss)
+
+**Impact:** Clean process termination, no orphaned processes.
+
+## 📝 Files Changed
+
+### Modified
+- `Services/DownloadManager.cs` - Load from PlaylistTracks instead of Tracks table
+- `Services/InputParsers/CommentTracklistParser.cs` - Add emoji removal
+- `Services/DatabaseService.cs` - Add CloseConnectionsAsync() for shutdown
+- `App.axaml.cs` - Enhanced Exit handler with comprehensive cleanup
+
+### Database Schema
+- Using `PlaylistTracks` table (has PlaylistId) instead of legacy `Tracks` table
+- No schema changes required

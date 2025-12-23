@@ -35,22 +35,72 @@ public partial class App : Application
             // Configure services
             Services = ConfigureServices();
 
-            // Register exit hook to clear Spotify credentials if diagnostic flag is enabled
-            desktop.Exit += (_, __) =>
+            // Register shutdown handler to prevent orphaned processes
+            desktop.Exit += async (_, __) =>
             {
+                Serilog.Log.Information("Application shutdown initiated - cleaning up services...");
+                
                 try
                 {
-                    var config = Services?.GetService<ConfigManager>()?.GetCurrent();
-                    if (config?.ClearSpotifyOnExit ?? false)
+                    // Disconnect Soulseek client
+                    try
                     {
-                        var spotifyAuthService = Services?.GetService<SpotifyAuthService>();
-                        spotifyAuthService?.ClearCachedCredentialsAsync().Wait();
-                        Serilog.Log.Information("Cleared Spotify credentials on exit (ClearSpotifyOnExit enabled)");
+                        var soulseekAdapter = Services?.GetService<ISoulseekAdapter>();
+                        if (soulseekAdapter != null)
+                        {
+                            Serilog.Log.Information("Disconnecting Soulseek client...");
+                            await soulseekAdapter.DisconnectAsync();
+                        }
                     }
+                    catch (Exception ex)
+                    {
+                        Serilog.Log.Warning(ex, "Failed to disconnect Soulseek client");
+                    }
+
+                    // Clear Spotify credentials if configured
+                    try
+                    {
+                        var config = Services?.GetService<ConfigManager>()?.GetCurrent();
+                        if (config?.ClearSpotifyOnExit ?? false)
+                        {
+                            var spotifyAuthService = Services?.GetService<SpotifyAuthService>();
+                            if (spotifyAuthService != null)
+                            {
+                                Serilog.Log.Information("Clearing Spotify credentials...");
+                                await spotifyAuthService.ClearCachedCredentialsAsync();
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Serilog.Log.Warning(ex, "Failed to clear Spotify credentials");
+                    }
+
+                    // Close database connections
+                    try
+                    {
+                        var databaseService = Services?.GetService<DatabaseService>();
+                        if (databaseService != null)
+                        {
+                            Serilog.Log.Information("Closing database connections...");
+                            await databaseService.CloseConnectionsAsync();
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Serilog.Log.Warning(ex, "Failed to close database connections");
+                    }
+
+                    Serilog.Log.Information("Application shutdown completed");
                 }
                 catch (Exception ex)
                 {
-                    Serilog.Log.Warning(ex, "Failed to clear Spotify credentials on exit");
+                    Serilog.Log.Error(ex, "Error during application shutdown");
+                }
+                finally
+                {
+                    // Ensure Serilog is flushed before process terminates
+                    Serilog.Log.CloseAndFlush();
                 }
             };
 

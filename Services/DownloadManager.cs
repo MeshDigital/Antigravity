@@ -208,27 +208,40 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
         try
         {
             await _databaseService.InitAsync();
-            var tracks = await _databaseService.LoadTracksAsync();
+            
+            // BUGFIX: Load from PlaylistTracks (has PlaylistId, filters deleted) instead of legacy Tracks table
+            var playlistTracks = await _databaseService.GetAllPlaylistTracksAsync();
             
             lock (_collectionLock)
             {
-                foreach (var t in tracks)
+                foreach (var t in playlistTracks)
                 {
-                    // Map Entity -> Model
+                    // Map PlaylistTrackEntity -> PlaylistTrack Model
                     var model = new PlaylistTrack 
                     { 
+                        Id = t.Id,
+                        PlaylistId = t.PlaylistId,
                         Artist = t.Artist, 
-                        Title = t.Title, 
-                        TrackUniqueHash = t.GlobalId,
-                        Status = t.State == "Completed" ? TrackStatus.Downloaded : TrackStatus.Missing,
-                        ResolvedFilePath = t.Filename,
+                        Title = t.Title,
+                        Album = t.Album,
+                        TrackUniqueHash = t.TrackUniqueHash,
+                        Status = t.Status,
+                        ResolvedFilePath = t.ResolvedFilePath,
                         SpotifyTrackId = t.SpotifyTrackId,
-                        AlbumArtUrl = t.AlbumArtUrl
+                        AlbumArtUrl = t.AlbumArtUrl,
+                        Format = t.Format,
+                        Bitrate = t.Bitrate
                     };
                     
+                    // Map status to download state
                     var ctx = new DownloadContext(model);
-                    ctx.State = Enum.TryParse<PlaylistTrackState>(t.State, out var s) ? s : PlaylistTrackState.Pending;
-                    ctx.ErrorMessage = t.ErrorMessage;
+                    ctx.State = t.Status switch
+                    {
+                        TrackStatus.Downloaded => PlaylistTrackState.Completed,
+                        TrackStatus.Failed => PlaylistTrackState.Failed,
+                        TrackStatus.Skipped => PlaylistTrackState.Cancelled,
+                        _ => PlaylistTrackState.Pending
+                    };
                     
                     // Reset transient states
                     if (ctx.State == PlaylistTrackState.Downloading || ctx.State == PlaylistTrackState.Searching)
@@ -240,7 +253,7 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
                     _eventBus.Publish(new TrackAddedEvent(model, ctx.State));
                 }
             }
-            _logger.LogInformation("Hydrated {Count} tracks from database.", tracks.Count);
+            _logger.LogInformation("Hydrated {Count} tracks from PlaylistTracks (excludes deleted albums)", playlistTracks.Count);
             
             // Phase 2.5: Crash Recovery - Detect orphaned downloads and resume with .part files
             await HydrateFromCrashAsync();

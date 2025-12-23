@@ -111,8 +111,11 @@ public static class CommentTracklistParser
     /// </summary>
     private static (string Artist, string Title) SplitArtistTitle(string line)
     {
+        // Remove emojis and special icons (❎, ❌, ‼, ❗, etc.)
+        var cleaned = RemoveEmojis(line);
+        
         // Split on first separator only (to handle titles with hyphens)
-        var parts = SeparatorRegex.Split(line, 2);
+        var parts = SeparatorRegex.Split(cleaned, 2);
         
         if (parts.Length == 2)
         {
@@ -125,5 +128,39 @@ public static class CommentTracklistParser
         }
         
         return (string.Empty, string.Empty);
+    }
+
+    /// <summary>
+    /// Remove emojis and special Unicode icons from text.
+    /// This includes common markers like ❎, ❌, ❗, ‼, and other visual symbols.
+    /// Uses a conservative approach to avoid removing legitimate text.
+    /// </summary>
+    private static string RemoveEmojis(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return text;
+
+        // Remove specific problematic emoji/symbols only
+        // This is more conservative to avoid removing legitimate text
+        var cleaned = text;
+        
+        // Remove common status markers and visual symbols
+        string[] emojiToRemove = new[]
+        {
+            "❎", "❌", "✅", "✓", "✔", "✗", "✘", "⭐", "⚡", 
+            "🎵", "🎶", "🎧", "🎤", "🎸", "🥁", "🎹", "🎺", "🎷",
+            "😀", "😃", "😄", "😁", "😆", "😅", "🤣", "😂", "🙂", "🙃", "😉", "😊",
+            "❗", "❕", "❓", "❔", "‼", "⁉",
+            "🔥", "💯", "💪", "👍", "👎", "🙏", "👏", "🎉", "🎊",
+            "📈", "📉", "📊", "🔴", "🟢", "🟡", "🟠", "🔵", "🟣",
+            "▶", "⏸", "⏹", "⏺", "⏭", "⏮", "⏯", "🔀", "🔁", "🔂"
+        };
+        
+        foreach (var emoji in emojiToRemove)
+        {
+            cleaned = cleaned.Replace(emoji, string.Empty);
+        }
+        
+        return cleaned.Trim();
     }
 }
