@@ -17,277 +17,162 @@
 │        │              MainViewModel (Coordinator)        │   │
 │        │  - Coordinates navigation & global state        │   │
 │        │  - Delegates to child ViewModels                │   │
-│        │    ├─ PlayerViewModel (Playback)                │   │
-│        │    └─ LibraryViewModel (Library Management)     │   │
 │        └───────────────┬─────────────────────────────────┘   │
 └────────────────────────┼──────────────────────────────────────┘
                          │
         ┌────────────────▼────────────────┐
         │   Application Services          │
-        │  DownloadManager                │
-        │  LibraryService                 │
-        │  AudioPlayerService (LibVLC)    │
-        │  ImportOrchestrator             │
-        │  MetadataService                │
+        │  DownloadManager 🛡️             │
+        │  CrashRecoveryService 🛡️        │
         │  SonicIntegrityService ✨       │
+        │  SearchOrchestrator 🧠          │
+        │  LibraryService                 │
         └────────────┬────────────────────┘
                      │
         ┌────────────▼────────────────┐
         │ Infrastructure Layer        │
         │  SoulseekAdapter            │
+        │  CrashRecoveryJournal 🛡️    │
         │  DatabaseService (EF Core)  │
-        │  ConfigManager (INI)        │
-        │  Import Providers           │
-        │   ├─ SpotifyImportProvider  │
-        │   ├─ CsvImportProvider      │
-        │   └─ ManualImportProvider   │
+        │  ConfigManager              │
         └─────────────────────────────┘
 ```
 
-✨ **Phase 8 (Dec 2025)**: Added `SonicIntegrityService` for spectral analysis and quality validation.
-
-The application uses `Microsoft.Extensions.DependencyInjection` for service wiring in `App.axaml.cs` (Avalonia). All services are singletons unless otherwise specified.
-
-## Phase 8: Sonic Integrity Architecture
-
-### Producer-Consumer Pattern for Batch Analysis
-
-```
-User Downloads Track
-        │
-        ▼
-MetadataEnrichmentOrchestrator
-        │
-        ▼
-┌───────────────────────────────┐
-│ SonicIntegrityService         │
-│  - Channel<string> queue      │
-│  - 2 concurrent workers       │
-│  - FFmpeg validation          │
-└──────────────┬────────────────┘
-               │
-               ▼
-        FFmpeg Process
-        (spectral analysis)
-               │
-               ▼
-┌───────────────────────────────┐
-│ SonicAnalysisResult           │
-│  - IsTrustworthy (bool)       │
-│  - SpectralHash (string)      │
-│  - FrequencyCutoff (int)      │
-│  - QualityConfidence (0-1)    │
-└──────────────┬────────────────┘
-               │
-               ▼
-     DatabaseService.UpdateTrack()
-        (Persists to TrackEntity)
-```
-
-**Key Features**:
-- **Non-Blocking**: Channel<T> queue prevents UI freezes during batch analysis
-- **Concurrency Limit**: Max 2 workers prevent CPU thrashing
-- **Graceful Degradation**: If FFmpeg missing, service returns safe defaults
-- **Atomic Updates**: Results persisted only after successful analysis
-
-### Maintenance Task Architecture
-
-```
-App Startup
-     │
-     ▼
-RunMaintenanceTasksAsync()
-     │
-     ├─ Wait 5 minutes (initial delay)
-     │
-     └─ Loop (every 24 hours)
-            │
-            ▼
-     PerformMaintenanceAsync()
-            │
-            ├─ Clean .backup files >7 days
-            │  (from File.Replace operations)
-            │
-            └─ VacuumDatabaseAsync()
-               (Reclaim space, optimize indexes)
-```
-
-**Design Decisions**:
-- **5-Minute Delay**: Prevents interference with startup performance
-- **24-Hour Interval**: Balances freshness vs. overhead
-- **Non-Blocking**: Fire-and-forget with full error handling
-- **Graceful Failures**: Never crashes app, only logs warnings
-
-## ViewModel Composition Pattern
-
-To maintain separation of concerns and reduce complexity (avoiding "God Objects"), the application uses a **ViewModel Composition** pattern:
-
-### 1. Coordinator ViewModels
-Top-level ViewModels like `MainViewModel` and `LibraryViewModel` act as simple **Coordinators**.
-- **Role**: Wire up events, manage high-level state (Navigation, Connection), and delegate work.
-- **Size Target**: < 400 lines.
-- **Dependencies**: Injected with child ViewModels.
-
-### 2. Child ViewModels
-Specialized ViewModels handle specific feature areas.
-- **Role**: Contain actual business logic and command implementations.
-- **Examples**:
-  - `ProjectListViewModel`: Manages the sidebar playlist list.
-  - `TrackListViewModel`: Manages the main track grid and filtering.
-  - `SmartPlaylistViewModel`: Handles logic for "Most Played", "Recently Added", etc.
-  - `TrackOperationsViewModel`: Handles Play/Pause/Download commands.
-
-### 3. Service Interactions
-Child ViewModels interact directly with services (`ILibraryService`, `DownloadManager`), keeping the Coordinators clean.
+🛡️ **Phase 2A (Recovery)** | ✨ **Phase 8 (Sonic Integrity)** | 🧠 **Phase 1 (The Brain)**
 
 ---
 
-## Navigation Shell
+## 🧠 The Brain: Intelligent Ranking Strategy
 
-- `MainWindow` hosts a left-hand navigation rail with `Frame` navigation managed by `NavigationService`
-- Pages share the same `MainViewModel` instance for cross-page state
-- Global status bar shows connection state, download progress, and version number
-- Player sidebar (collapsible) for audio playback control
+ORBIT replaces the standard "sort by bitrate" logic with a sophisticated **Strategy Pattern** implementation.
 
-## Import Pipeline
+### Ranking Components
+1.  **SearchOrchestrator**: Manages search sessions and results.
+2.  **ISortingStrategy**: Interface for swapping ranking logic.
+    *   `BalancedSortingStrategy`: (Default) Quality > Speed > Metadata.
+    *   *Upcoming*: `AudiophileStrategy` (FLAC only), `SpeedStrategy` (Fastest only).
+3.  **ScoringConstants**: Centralized configuration for weights (e.g., `FLAC_SCORE = 450`).
+
+### The Scoring Pipeline
+Every search result flows through a weighted scoring system:
+```
+Total Score = (BitrateScore * Weight) 
+            + (AvailabilityScore * Weight) 
+            + (MusicalMatchScore * Weight) 
+            - (PenaltyScore)
+```
+*   **Tier 1 (Quality)**: Prioritizes 320kbps/FLAC.
+*   **Tier 2 (Intelligence)**: Boosts matches for BPM/Key (if Spotify enrichment active).
+*   **Tier 3 (Gating)**: Hides "Fake" files (VBR detected) or duration mismatches.
+
+---
+
+## 🛡️ Ironclad Recovery Architecture
+
+Phase 2A introduced a database-journaled recovery system to ensure **zero data loss**.
+
+### Journal-First Pattern
+All destructive operations follow the **Prepare → Log → Execute → Commit** lifecycle:
+1.  **Prepare**: Gather state (target paths, timestamps).
+2.  **Log**: Write serialized intent to `CrashRecoveryJournal` (SQLite).
+3.  **Execute**: Perform volatile I/O (Download, File.Move).
+4.  **Commit**: Delete journal entry upon success.
+
+### Components
+*   **CrashRecoveryJournal**:
+    *   Backed by a dedicated `Microsoft.Data.Sqlite` connection.
+    *   Runs in **WAL (Write-Ahead Logging)** mode for non-blocking writes.
+    *   Uses **Prepared Statements** for <1ms latency.
+*   **DownloadHeartbeat**:
+    *   `DownloadManager` runs a `PeriodicTimer` (15s) for active downloads.
+    *   Updates journal with bytes received using **Interlocked** thread safety.
+    *   **Stall Detection**: Flags downloads with 0 progress over 60s.
+*   **SafeWriteService**:
+    *   Wraps tag writing in atomic transactions.
+    *   Ensures timestamps are preserved even after crash recovery.
+
+---
+
+## 💾 Persistence Layer
+
+### Database Strategy
+ORBIT uses a dual-connection strategy to separate high-frequency journaling from standard metadata queries.
+
+1.  **AppDbContext (EF Core)**:
+    *   Manages Library, Playlists, and History.
+    *   Optimized for complex LINQ queries.
+2.  **CrashRecoveryJournal (Valid ADO.NET)**:
+    *   Manages `RecoveryCheckpoints`.
+    *   Optimized for raw write speed and concurrency.
+
+### Configuration
+*   **Mode**: `JournalMode=WAL` (Write-Ahead Logging).
+*   **Sync**: `Synchronous=NORMAL` (Balances safety with speed).
+*   **Cache**: 10MB shared cache.
+*   **Auto-Checkpoint**: Triggered at 1000 pages.
+
+---
+
+## 🎧 Phase 8: Sonic Integrity Architecture
+
+### Producer-Consumer Pattern
+```
+Search Result
+    │
+    ▼
+SonicIntegrityService
+    │ (Channel<T> Queue)
+    ▼
+[Worker 1] [Worker 2] ...
+    │
+    ▼
+FFmpeg Process (Spectral Analysis)
+    │
+    ▼
+Trust Score Update (DB)
+```
+*   **Non-Blocking**: UI remains responsive while background workers analyze files.
+*   **Graceful Degradation**: If FFmpeg is missing, analysis is skipped without crashing.
+
+---
+
+## 🔄 Import Pipeline
 
 ```
-User action (Spotify URL / CSV file / manual query)
-                │
-                ▼
-┌────────────────────────────┐
-│ Import Providers           │
-│  - SpotifyImportProvider   │
-│  - CsvImportProvider       │
-│  - ManualImportProvider    │
-└──────────────┬─────────────┘
-               │ ImportResult
-               ▼
-┌────────────────────────────┐
-│ ImportOrchestrator         │
-│  - Validates tracks        │
-│  - Creates PlaylistJob     │
-│  - Persists to database    │
-└──────────────┬─────────────┘
-               │
-               ▼
-DownloadManager.QueueProject → global processing loop
+User Action
+    │
+    ▼
+ImportOrchestrator
+    │
+    ├─ SpotifyImportProvider (PKCE Auth)
+    ├─ CsvImportProvider
+    └─ ManualImportProvider
+    │
+    ▼
+DownloadManager.QueueProject
 ```
 
-## Download Orchestration
+---
 
-- `DownloadManager` maintains `ObservableCollection<PlaylistTrackViewModel>` (`AllGlobalTracks`)
-- Tracks flow through states: Pending → Searching → Downloading → Completed/Failed
-- `SemaphoreSlim` enforces `MaxConcurrentDownloads` from configuration
-- Metadata enrichment (album art, tagging) runs asynchronously via `IMetadataService`
-- Events: `TrackUpdated`, `ProjectAdded`, `ProjectUpdated` notify ViewModels
+## 🔊 Audio Playback System
 
-## Audio Playback System
+*   **LibVLCSharp**: Core engine for playback (MP3, FLAC, WAV).
+*   **PlayerViewModel**: Manages transport controls (Play/Pause/Seek).
+*   **State Machine**: Handles transition between `Stopped` → `Buffering` → `Playing`.
 
-```
-User action (double-click track / drag to player)
-                │
-                ▼
-┌────────────────────────────┐
-│ PlayerViewModel            │
-│  - PlayTrack(path)         │
-│  - Pause/Resume/Stop       │
-│  - Volume control          │
-└──────────────┬─────────────┘
-               │
-               ▼
-┌────────────────────────────┐
-│ IAudioPlayerService        │
-│  (AudioPlayerService)      │
-│  - LibVLC wrapper          │
-│  - IsInitialized check     │
-│  - Media player instance   │
-└────────────────────────────┘
-```
+---
 
-**LibVLC Integration**:
-- Native libraries loaded from `libvlc/` folder in output directory
-- Initialization checked on startup; UI shows error if libraries missing
-- Supports MP3, FLAC, WAV, and other common formats
+## 📱 Navigation & ViewModels
 
-## Drag-and-Drop System
+*   **Coordinator Pattern**: `MainViewModel` coordinates global state.
+*   **Composition**: Feature-specific logic lives in child ViewModels (`LibraryViewModel`, `DownloadViewModel`).
+*   **EventBus**: Decoupled communication using typed events (`TrackUpdatedEvent`, `RecoveryCompletedEvent`).
 
-```
-User drags track from DataGrid
-                │
-                ▼
-┌────────────────────────────┐
-│ LibraryPage.xaml.cs        │
-│  - MouseDown handler       │
-│  - DragAdorner creation    │
-│  - DoDragDrop call         │
-└──────────────┬─────────────┘
-               │
-               ▼
-┌────────────────────────────┐
-│ Drop Targets               │
-│  - Playlist ListBox        │
-│  - Player sidebar          │
-└──────────────┬─────────────┘
-               │
-               ▼
-┌────────────────────────────┐
-│ LibraryViewModel           │
-│  - AddToPlaylist()         │
-│  - Resolves file paths     │
-│  - Persists to database    │
-│  - Reloads UI              │
-└────────────────────────────┘
-```
+---
 
-**Visual Feedback**:
-- `DragAdorner` shows track info during drag
-- Console logging (`[DRAG]` prefix) for diagnostics
+## 🔍 Diagnostics
 
-## Persistence Layer
-
-- `DatabaseService` wraps `AppDbContext` (EF Core + SQLite):
-  - `LibraryEntryEntity`: Global library index by `UniqueHash`
-  - `PlaylistJobEntity`: Playlist/job headers with soft delete
-  - `PlaylistTrackEntity`: Per-track status and file metadata
-  - `PlaylistActivityLogEntity`: Activity history for playlists
-- Database: `%AppData%\SLSKDONET\library.db`
-- Schema created automatically on startup with migration support
-- `LibraryService` provides domain-friendly conversions
-
-## Configuration & Secrets
-
-- `ConfigManager` manages `%AppData%\SLSKDONET\config.ini`
-- `AppConfig` injected into services
-- `ProtectedDataService` encrypts passwords using Windows DPAPI
-- Runtime settings changes persist immediately via `SaveSettingsCommand`
-
-## Diagnostics System
-
-### Console Output (Debug Builds)
-- Debug builds (`OutputType=Exe`) show console window
-- Release builds (`OutputType=WinExe`) hide console
-- All `Console.WriteLine()` and `Debug.WriteLine()` visible in console
-- Prefixes: `[DRAG]`, `[PLAYBACK]`, `info:`, `warn:`, `fail:`
-
-### UI Diagnostics
-- Version number displayed in status bar
-- Player initialization status shown in player sidebar
-- Connection status in status bar
-- Download progress with real-time counters
-
-## Eventing & Status Propagation
-
-- `SoulseekAdapter` exposes `EventBus` (Reactive `Subject<>`) for network events
-- `MainViewModel` maps adapter state to UI properties (`IsConnected`, `StatusText`)
-- `DownloadManager` fires `TrackUpdated` for progress updates
-- `LibraryService` fires `ProjectDeleted`, `ProjectUpdated` for library changes
-
-## Extensibility Points
-
-- **Import Providers**: Implement `IImportProvider` and register with `ImportOrchestrator`
-- **Metadata Services**: Add alternative `IMetadataService` implementations
-- **Audio Backends**: Replace `IAudioPlayerService` implementation
-- **UI Pages**: Register additional pages via `NavigationService.RegisterPage`
-
-This architecture follows MVVM best practices, centralizes orchestration in ViewModels, and uses SQLite for persistence to support large-scale batch operations across sessions.
+*   **Dead-Letter Queue**:
+    *   Failed recovery operations are retried 3 times.
+    *   After 3 strikes, they are moved to `%AppData%/SLSKDONET/dead_letters.log`.
+*   **Logging**: Serilog writes to both Console (Debug) and Rolling File (Release).
