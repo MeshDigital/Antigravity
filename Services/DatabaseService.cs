@@ -34,11 +34,35 @@ public class DatabaseService
         await context.Database.EnsureCreatedAsync();
         _logger.LogInformation("[{Ms}ms] Database Init: EnsureCreated completed", sw.ElapsedMilliseconds);
 
+        // Phase 1B: Configure WAL mode for better concurrency
+        var connection = context.Database.GetDbConnection() as SqliteConnection;
+        if (connection != null)
+        {
+            context.ConfigureSqliteOptimizations(connection);
+        }
+
+        // Phase 1B: Run index audit (DEBUG builds only)
+        #if DEBUG
+        try
+        {
+            var auditReport = await AuditDatabaseIndexesAsync();
+            if (auditReport.MissingIndexes.Any())
+            {
+                _logger.LogWarning("⚠️ Found {Count} missing indexes. Auto-applying...", 
+                    auditReport.MissingIndexes.Count);
+                await ApplyIndexRecommendationsAsync(auditReport);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Index audit failed (non-fatal)");
+        }
+        #endif
+
         // Manual Schema Migration for existing databases
         try 
         {
             // Optimize: Check all columns at once using PRAGMA table_info
-            var connection = context.Database.GetDbConnection();
             await connection.OpenAsync();
             
             using var cmd = connection.CreateCommand();
@@ -1528,6 +1552,221 @@ public class DatabaseService
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to update library health cache during track update");
+        }
+    }
+
+    // ===== Phase 1B: WAL Mode & Index Optimization Methods =====
+
+    /// <summary>
+    /// Phase 1B: Manually triggers a WAL checkpoint to merge .wal file into main database.
+    /// Useful during low-activity periods or before backups.
+    /// </summary>
+    public async Task CheckpointWalAsync()
+    {
+        try
+        {
+            using var context = new AppDbContext();
+            var connection = context.Database.GetDbConnection() as SqliteConnection;
+            await connection!.OpenAsync();
+
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = "PRAGMA wal_checkpoint(TRUNCATE);";
+            
+            var result = await cmd.ExecuteScalarAsync();
+            _logger.LogInformation("WAL checkpoint completed: {Result}", result);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "WAL checkpoint failed (non-fatal)");
+        }
+    }
+
+    /// <summary>
+    /// Phase 1B: Audits database indexes and provides optimization recommendations.
+    /// Analyzes which indexes exist, which are missing, and which queries are slow.
+    /// </summary>
+    public async Task<IndexAuditReport> AuditDatabaseIndexesAsync()
+    {
+        var report = new IndexAuditReport
+        {
+            AuditDate = DateTime.Now,
+            ExistingIndexes = new List<string>(),
+            MissingIndexes = new List<IndexRecommendation>(),
+            UnusedIndexes = new List<string>()
+        };
+
+        try
+        {
+            using var context = new AppDbContext();
+            var connection = context.Database.GetDbConnection() as SqliteConnection;
+            await connection!.OpenAsync();
+
+            // STEP 1: Query existing indexes
+            using (var cmd = connection.CreateCommand())
+            {
+                cmd.CommandText = @"
+                    SELECT name, tbl_name, sql 
+                    FROM sqlite_master 
+                    WHERE type='index' AND sql IS NOT NULL
+                    ORDER BY tbl_name, name;";
+
+                using var reader = await cmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    var indexName = reader.GetString(0);
+                    var tableName = reader.GetString(1);
+                    
+                    report.ExistingIndexes.Add($"{tableName}.{indexName}");
+                    _logger.LogDebug("Found index: {IndexName} on {TableName}", indexName, tableName);
+                }
+            }
+
+            // STEP 2: Define recommended indexes based on common query patterns
+            var recommendations = new List<IndexRecommendation>
+            {
+                new()
+                {
+                    TableName = "PlaylistTracks",
+                    ColumnNames = new[] { "PlaylistId", "Status" },
+                    Reason = "Composite index for filtered playlist queries (WHERE PlaylistId = X AND Status = Y)",
+                    EstimatedImpact = "High - Used in library sidebar and download manager",
+                    CreateIndexSql = "CREATE INDEX IF NOT EXISTS IX_PlaylistTrack_PlaylistId_Status ON PlaylistTracks(PlaylistId, Status);"
+                },
+                new()
+                {
+                    TableName = "LibraryEntries",
+                    ColumnNames = new[] { "UniqueHash" },
+                    Reason = "Global library lookups for cross-project deduplication",
+                    EstimatedImpact = "High - Used on every download to check existing files",
+                    CreateIndexSql = "CREATE INDEX IF NOT EXISTS IX_LibraryEntry_UniqueHash ON LibraryEntries(UniqueHash);"
+                },
+                new()
+                {
+                    TableName = "LibraryEntries",
+                    ColumnNames = new[] { "Artist", "Title" },
+                    Reason = "Search and filtering in All Tracks view",
+                    EstimatedImpact = "Medium - Used in library search",
+                    CreateIndexSql = "CREATE INDEX IF NOT EXISTS IX_LibraryEntry_Artist_Title ON LibraryEntries(Artist, Title);"
+                },
+                new()
+                {
+                    TableName = "PlaylistJobs",
+                    ColumnNames = new[] { "IsDeleted", "CreatedAt" },
+                    Reason = "Filtered project listing (excludes deleted, sorted by date)",
+                    EstimatedImpact = "Medium - Used in sidebar project list",
+                    CreateIndexSql = "CREATE INDEX IF NOT EXISTS IX_PlaylistJob_IsDeleted_CreatedAt ON PlaylistJobs(IsDeleted, CreatedAt);"
+                }
+            };
+
+            // STEP 3: Check which recommended indexes are missing
+            foreach (var rec in recommendations)
+            {
+                var indexKey = $"{rec.TableName}.{string.Join("_", rec.ColumnNames)}";
+                
+                // Check if index exists (approximate match)
+                var exists = report.ExistingIndexes.Any(idx => 
+                    idx.Contains(rec.TableName, StringComparison.OrdinalIgnoreCase) && 
+                    rec.ColumnNames.All(col => idx.Contains(col, StringComparison.OrdinalIgnoreCase)));
+
+                if (!exists)
+                {
+                    report.MissingIndexes.Add(rec);
+                    _logger.LogWarning("Missing recommended index: {Index} - {Reason}", indexKey, rec.Reason);
+                }
+                else
+                {
+                    _logger.LogInformation("✅ Index exists: {Index}", indexKey);
+                }
+            }
+
+            _logger.LogInformation(
+                "Index Audit Complete: {Existing} existing, {Missing} missing, {Recommendations} total recommendations",
+                report.ExistingIndexes.Count,
+                report.MissingIndexes.Count,
+                recommendations.Count);
+
+            return report;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Index audit failed");
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Applies all recommended indexes from the audit report.
+    /// </summary>
+    public async Task ApplyIndexRecommendationsAsync(IndexAuditReport report)
+    {
+        using var context = new AppDbContext();
+        var connection = context.Database.GetDbConnection() as SqliteConnection;
+        await connection!.OpenAsync();
+
+        foreach (var rec in report.MissingIndexes)
+        {
+            try
+            {
+                _logger.LogInformation("Creating index: {Sql}", rec.CreateIndexSql);
+                
+                using var cmd = connection.CreateCommand();
+                cmd.CommandText = rec.CreateIndexSql;
+                await cmd.ExecuteNonQueryAsync();
+                
+                _logger.LogInformation("✅ Created index for {Table}.{Columns}", 
+                    rec.TableName, string.Join(", ", rec.ColumnNames));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to create index: {Sql}", rec.CreateIndexSql);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Phase 1B: Benchmarks database performance before/after WAL mode.
+    /// </summary>
+    public async Task<PerformanceBenchmark> BenchmarkDatabaseAsync()
+    {
+        var benchmark = new PerformanceBenchmark();
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+        try
+        {
+            using var context = new AppDbContext();
+            
+            // Test 1: Read 1000 tracks
+            stopwatch.Restart();
+            var tracks = await context.PlaylistTracks.Take(1000).ToListAsync();
+            benchmark.Read1000TracksMs = stopwatch.ElapsedMilliseconds;
+            
+            // Test 2: Filtered query (common pattern)
+            stopwatch.Restart();
+            var filtered = await context.PlaylistTracks
+                .Where(t => t.Status == TrackStatus.Downloaded)
+                .Take(100)
+                .ToListAsync();
+            benchmark.FilteredQueryMs = stopwatch.ElapsedMilliseconds;
+            
+            // Test 3: Join query (library entries)
+            stopwatch.Restart();
+            var joined = await context.LibraryEntries
+                .Take(100)
+                .ToListAsync();
+            benchmark.JoinQueryMs = stopwatch.ElapsedMilliseconds;
+            
+            _logger.LogInformation(
+                "Benchmark: Read={Read}ms, Filter={Filter}ms, Join={Join}ms",
+                benchmark.Read1000TracksMs,
+                benchmark.FilteredQueryMs,
+                benchmark.JoinQueryMs);
+            
+            return benchmark;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Benchmark failed");
+            throw;
         }
     }
 

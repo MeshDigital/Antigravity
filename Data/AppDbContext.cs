@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using System.IO;
 using SLSKDONET.Models;
+using Microsoft.Data.Sqlite; // Phase 1B
 
 namespace SLSKDONET.Data;
 
@@ -21,7 +22,49 @@ public class AppDbContext : DbContext
         var dbPath = Path.Combine(appData, "SLSKDONET", "library.db");
         Directory.CreateDirectory(Path.GetDirectoryName(dbPath)!);
         
-        optionsBuilder.UseSqlite($"Data Source={dbPath}");
+        // Phase 1B: Enable WAL Mode for better concurrency
+        var connectionString = new SqliteConnectionStringBuilder
+        {
+            DataSource = dbPath,
+            Mode = SqliteOpenMode.ReadWriteCreate,
+            Cache = SqliteCacheMode.Shared // Enable shared cache for better concurrency
+        }.ToString();
+        
+        optionsBuilder.UseSqlite(connectionString, options =>
+        {
+            options.CommandTimeout(30); // 30 second timeout for long operations
+        });
+    }
+
+    /// <summary>
+    /// Phase 1B: Configures SQLite connection with WAL mode and optimal settings.
+    /// Called by DatabaseService.InitAsync during startup.
+    /// </summary>
+    public void ConfigureSqliteOptimizations(SqliteConnection connection)
+    {
+        if (connection.State != System.Data.ConnectionState.Open)
+            connection.Open();
+
+        using var command = connection.CreateCommand();
+        
+        // Phase 1B: Enable Write-Ahead Logging
+        command.CommandText = "PRAGMA journal_mode=WAL;";
+        var result = command.ExecuteScalar()?.ToString();
+        System.Console.WriteLine($"[Phase 1B] Journal mode set to: {result}");
+        
+        // Set synchronous mode to NORMAL (safe with WAL, much faster than FULL)
+        command.CommandText = "PRAGMA synchronous=NORMAL;";
+        command.ExecuteNonQuery();
+        
+        // Increase cache size to 10MB (default is ~2MB)
+        command.CommandText = "PRAGMA cache_size=-10000;"; // Negative = KB
+        command.ExecuteNonQuery();
+        
+        // Auto-checkpoint at 1000 pages (~4MB)
+        command.CommandText = "PRAGMA wal_autocheckpoint=1000;";
+        command.ExecuteNonQuery();
+        
+        System.Console.WriteLine("[Phase 1B] SQLite WAL mode enabled successfully");
     }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
