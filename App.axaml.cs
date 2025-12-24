@@ -197,6 +197,33 @@ public partial class App : Application
                             Serilog.Log.Warning(ffmpegEx, "FFmpeg validation failed (non-critical)");
                         }
 
+                        // Phase 2A: Initialize Crash Recovery Journal
+                        try
+                        {
+                            var crashJournal = Services.GetRequiredService<CrashRecoveryJournal>();
+                            await crashJournal.InitAsync();
+                            Serilog.Log.Information("✅ Crash Recovery Journal initialized");
+
+                            // Phase 2A: Run crash recovery with delay for UI breathing room
+                            _ = Task.Run(async () =>
+                            {
+                                await Task.Delay(1000); // Let UI fully render first
+                                try
+                                {
+                                    var crashRecovery = Services.GetRequiredService<CrashRecoveryService>();
+                                    await crashRecovery.RecoverAsync();
+                                }
+                                catch (Exception recoveryEx)
+                                {
+                                    Serilog.Log.Error(recoveryEx, "Crash recovery failed (non-critical)");
+                                }
+                            });
+                        }
+                        catch (Exception journalEx)
+                        {
+                            Serilog.Log.Warning(journalEx, "Crash recovery journal initialization failed (non-critical)");
+                        }
+
                         // Initialize DownloadManager
                         var downloadManager = Services.GetRequiredService<DownloadManager>();
                         await downloadManager.InitAsync();

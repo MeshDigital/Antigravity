@@ -52,3 +52,11 @@ public record TrackMetadataUpdatedEvent(string TrackGlobalId);
 public record AutoDownloadTrackEvent(string TrackGlobalId, Track BestMatch);
 public record AutoDownloadUpgradeEvent(string TrackGlobalId, Track BestMatch);
 public record UpgradeAvailableEvent(string TrackGlobalId, Track BestMatch);
+
+// Phase 2A: Crash Recovery Events
+public record RecoveryCompletedEvent(
+    int ResumedCount,
+    int CleanedCount,
+    int FailureCount,
+    int DeadLetterCount,
+    TimeSpan RecoveryDuration);

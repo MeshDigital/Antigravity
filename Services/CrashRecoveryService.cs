@@ -27,16 +27,19 @@ public class CrashRecoveryService
     private readonly ILogger<CrashRecoveryService> _logger;
     private readonly CrashRecoveryJournal _journal;
     private readonly DatabaseService _databaseService;
+    private readonly IEventBus _eventBus; // Phase 2A
     // Note: DownloadManager will be added later to avoid circular dependency
 
     public CrashRecoveryService(
         ILogger<CrashRecoveryService> logger,
         CrashRecoveryJournal journal,
-        DatabaseService databaseService)
+        DatabaseService databaseService,
+        IEventBus eventBus) // Phase 2A
     {
         _logger = logger;
         _journal = journal;
         _databaseService = databaseService;
+        _eventBus = eventBus; // Phase 2A
     }
 
     /// <summary>
@@ -50,6 +53,7 @@ public class CrashRecoveryService
         // ASYNC TRAP FIX: Run recovery on background thread
         await Task.Run(async () =>
         {
+            var startTime = DateTime.UtcNow; // Track recovery duration
             try
             {
                 // STEP 1: Clear truly stale checkpoints (>24 hours)
@@ -117,11 +121,22 @@ public class CrashRecoveryService
                     }
                 }
 
+                var recoveryDuration = DateTime.UtcNow - startTime;
+                
                 _logger.LogInformation(
-                    "✅ Recovery complete: {Resumed} resumed, {Cleaned} cleaned, {Failed} failed, {DeadLetters} dead-letters",
-                    stats.Resumed, stats.Cleaned, stats.Failures, stats.DeadLetters);
+                    "✅ Recovery complete: {Resumed} resumed, {Cleaned} cleaned, {Failed} failed, {DeadLetters} dead-letters (Duration: {Duration}ms)",
+                    stats.Resumed, stats.Cleaned, stats.Failures, stats.DeadLetters, recoveryDuration.TotalMilliseconds);
 
-                // TODO: Phase 2A Step 6 - Publish RecoveryCompletedEvent for UX
+                // Phase 2A: Publish RecoveryCompletedEvent for UX (non-intrusive)
+                if (stats.Resumed > 0 || stats.DeadLetters > 0)
+                {
+                    _eventBus.Publish(new SLSKDONET.Models.RecoveryCompletedEvent(
+                        stats.Resumed,
+                        stats.Cleaned,
+                        stats.Failures,
+                        stats.DeadLetters,
+                        recoveryDuration));
+                }
             }
             catch (Exception ex)
             {
@@ -234,9 +249,56 @@ public class CrashRecoveryService
 
         _logger.LogInformation("Recovering tag write: {Path}", state.FilePath);
 
-        // Clean up orphaned temp file if it exists
+        // IDEMPOTENT CHECK 1: If temp is gone and target exists, assume success
+        if (!File.Exists(state.TempPath) && File.Exists(state.FilePath))
+        {
+            _logger.LogInformation("✅ Tag write appears complete (target exists, temp gone). Completing checkpoint.");
+            await _journal.CompleteCheckpointAsync(checkpoint.Id);
+            stats.Resumed++;
+            return;
+        }
+
+        // IDEMPOTENT CHECK 2: If temp exists but target is missing, perform the move now
+        // This means crash happened after original was deleted but before temp was moved
+        if (File.Exists(state.TempPath) && !File.Exists(state.FilePath))
+        {
+            try
+            {
+                _logger.LogInformation("🔧 Target missing but temp exists. Performing delayed atomic move: {Temp} → {Target}",
+                    state.TempPath, state.FilePath);
+                
+                File.Move(state.TempPath, state.FilePath);
+                
+                // Restore original timestamps if available
+                if (state.OriginalCreationTime.HasValue)
+                {
+                    var fileInfo = new FileInfo(state.FilePath);
+                    fileInfo.CreationTime = state.OriginalCreationTime.Value;
+                    fileInfo.LastWriteTime = state.OriginalTimestamp;
+                }
+                
+                _logger.LogInformation("✅ Completed delayed atomic move successfully");
+                await _journal.CompleteCheckpointAsync(checkpoint.Id);
+                stats.Resumed++;
+                return;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to complete delayed atomic move");
+                throw;
+            }
+        }
+
+        // Clean up orphaned temp file if it exists (both target and temp exist = incomplete)
         if (!string.IsNullOrEmpty(state.TempPath) && File.Exists(state.TempPath))
         {
+            // Verify temp file isn't empty before deleting
+            var tempInfo = new FileInfo(state.TempPath);
+            if (tempInfo.Length == 0)
+            {
+                _logger.LogWarning("Temp file is empty, safe to delete: {Path}", state.TempPath);
+            }
+
             try
             {
                 File.Delete(state.TempPath);
