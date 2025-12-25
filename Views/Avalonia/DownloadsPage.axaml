@@ -9,16 +9,57 @@
              x:DataType="vm:DownloadCenterViewModel"
              Background="#1E1E1E" Foreground="White">
     
+    <UserControl.Styles>
+        <!-- Pulsing Animation for Silver/Speculative Badge -->
+        <Style Selector="Border.pulsing">
+            <Style.Animations>
+                <Animation Duration="0:0:1.5" IterationCount="Infinite">
+                    <KeyFrame KeyTime="0:0:0">
+                        <Setter Property="Opacity" Value="0.6"/>
+                        <Setter Property="ScaleTransform.ScaleX" Value="0.95"/>
+                        <Setter Property="ScaleTransform.ScaleY" Value="0.95"/>
+                    </KeyFrame>
+                    <KeyFrame KeyTime="0:0:0.75">
+                        <Setter Property="Opacity" Value="1.0"/>
+                        <Setter Property="ScaleTransform.ScaleX" Value="1.1"/>
+                        <Setter Property="ScaleTransform.ScaleY" Value="1.1"/>
+                    </KeyFrame>
+                    <KeyFrame KeyTime="0:0:1.5">
+                        <Setter Property="Opacity" Value="0.6"/>
+                        <Setter Property="ScaleTransform.ScaleX" Value="0.95"/>
+                        <Setter Property="ScaleTransform.ScaleY" Value="0.95"/>
+                    </KeyFrame>
+                </Animation>
+            </Style.Animations>
+        </Style>
+
+        <!-- Express Lane Item Style (Golden Border) -->
+        <Style Selector="Border.express">
+             <Setter Property="BorderBrush" Value="#FFD700"/>
+             <Setter Property="BorderThickness" Value="1"/>
+             <Setter Property="Background" Value="#2A2A22"/>
+        </Style>
+    </UserControl.Styles>
+
     <UserControl.Resources>
         <DataTemplate x:Key="DownloadItemTemplate" DataType="vm:DownloadItemViewModel">
             <!-- Download Item Card -->
             <Border Background="#252526" 
                     BorderBrush="#3E3E3E" 
                     BorderThickness="0,0,0,1"
-                    Padding="20,16">
+                    Padding="20,16"
+                    Classes.express="{Binding IsExpress}">
                 <ToolTip.Tip>
-                    <TextBlock Text="{Binding GlobalId}"/>
-                </ToolTip.Tip>
+                    <ToolTip ShowDelay="0">
+                         <TextBlock Text="{Binding ScoreBreakdown}"/>
+                    </ToolTip>
+                </ToolTip>
+                <Border.Transitions>
+                    <Transitions>
+                        <BrushTransition Property="BorderBrush" Duration="0:0:0.3"/>
+                        <BrushTransition Property="Background" Duration="0:0:0.3"/>
+                    </Transitions>
+                </Border.Transitions>
                 <Border.ContextMenu>
                     <ContextMenu>
                         <MenuItem Header="🚀 VIP Pass (Promote to Express)" Command="{Binding PromoteToExpressCommand}"/>
@@ -49,7 +90,13 @@
                                            Foreground="#666"
                                            IsVisible="{Binding !AlbumArtUrl}"/>
                                 <!-- Badge Overlay -->
-                                <Border CornerRadius="10" Background="#222" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-4,-4" Padding="2">
+                                <Border CornerRadius="10" 
+                                        Background="#222" 
+                                        HorizontalAlignment="Right" 
+                                        VerticalAlignment="Bottom" 
+                                        Margin="0,0,-4,-4" 
+                                        Padding="2"
+                                        Classes.pulsing="{Binding IsSpeculative}">
                                      <TextBlock Text="{Binding BadgeIcon}" FontSize="16"/>
                                 </Border>
                             </Grid>

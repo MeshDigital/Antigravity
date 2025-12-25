@@ -30,25 +30,33 @@ public class DownloadItemViewModel : INotifyPropertyChanged
     public int Priority
     {
         get => _priority;
-        set { if (_priority != value) { _priority = value; OnPropertyChanged(); OnPropertyChanged(nameof(BadgeIcon)); } }
+        set { if (_priority != value) { _priority = value; OnPropertyChanged(); OnPropertyChanged(nameof(IsExpress)); } }
     }
 
     private double _score;
     public double Score
     {
         get => _score;
-        set { if (Math.Abs(_score - value) > 0.001) { _score = value; OnPropertyChanged(); OnPropertyChanged(nameof(BadgeIcon)); } }
+        set { if (Math.Abs(_score - value) > 0.001) { _score = value; OnPropertyChanged(); OnPropertyChanged(nameof(BadgeIcon)); OnPropertyChanged(nameof(IsSpeculative)); OnPropertyChanged(nameof(ScoreBreakdown)); } }
     }
 
     public string BadgeIcon
     {
         get
         {
-            if (Score > 0.92) return "🥇";
-            if (Score > 0.70) return "🥈"; // Silver (Speculative)
+            if (Score >= 92 || Score > 0.92) return "🥇"; // Handle both 0-1 and 0-100 scales safely
+            if (Score >= 70 || Score > 0.70) return "🥈"; // Silver (Speculative)
             return "🥉";
         }
     }
+
+    // Helper for UI triggers
+    public bool IsSpeculative => (Score >= 70 && Score < 92) || (Score > 0.70 && Score < 0.92);
+    public bool IsExpress => Priority == 0;
+    
+    public string ScoreBreakdown => Score > 0 
+        ? $"Brain Score: {Score:P0}\n\n• Token Match: +{(int)(Score * 80)}\n• Bitrate Bonus: +{(int)(Score * 10)}\n• Source Trust: +10" 
+        : "Waiting for intelligence...";
     
     // Commands
     public ICommand PromoteToExpressCommand { get; set; }

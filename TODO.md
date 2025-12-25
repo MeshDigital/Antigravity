@@ -156,7 +156,10 @@
         - [x] Add ContextMenu option to promote track to Express Lane (force Priority 0).
     - [ ] **Hardening**
         - [ ] Performance test with 100+ items.
-        - [ ] Verify "Speculative Start" visual feedback.
+        - [x] Verify "Speculative Start" visual feedback (Pulsing Silver Badge).
+        - [x] **Demo Polish**:
+            - [x] Express Lane Gold Borders/Styling.
+            - [x] "Intelligence Breakdown" Tooltips on hover.
 - [x] **Hardening**: Lazy Hydration (Waiting Room Pattern for 2k+ queues)`Services/DownloadHealthMonitor.cs`
 - [ ] Track health metrics per download:
   - Stall count
