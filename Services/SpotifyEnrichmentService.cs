@@ -160,7 +160,6 @@ public class SpotifyEnrichmentService
                 }
             }
         }
-        }
         catch (APITooManyRequestsException ex)
         {
             _logger.LogError("Spotify 429 Rate Limit hit (Batch). Backing off for {Seconds}s.", ex.RetryAfter.TotalSeconds);

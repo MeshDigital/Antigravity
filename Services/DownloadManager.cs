@@ -12,6 +12,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Serilog.Context;
 using SLSKDONET.Configuration;
+using SLSKDONET.Data;
 using SLSKDONET.Models;
 using SLSKDONET.Services.InputParsers;
 using SLSKDONET.Utils;
@@ -520,7 +521,6 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
         }
     }    
         // Processing loop picks this up automatically
-    }
 
     // Updated Delete to take GlobalId instead of VM
     public async Task DeleteTrackFromDiskAndHistoryAsync(string globalId)

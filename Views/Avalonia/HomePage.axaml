@@ -28,7 +28,7 @@
         <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,32">
             <StackPanel Grid.Column="0">
                 <TextBlock Text="Mission Control" FontSize="32" FontWeight="Black" Foreground="White" LetterSpacing="-0.5"/>
-                <TextBlock Text="System Status & Intelligence Dashboard" FontSize="14" Foreground="#808080" Margin="0,4,0,0"/>
+                <TextBlock Text="System Status &amp; Intelligence Dashboard" FontSize="14" Foreground="#808080" Margin="0,4,0,0"/>
             </StackPanel>
             
             <Button Grid.Column="1" Command="{Binding RefreshDashboardCommand}" 

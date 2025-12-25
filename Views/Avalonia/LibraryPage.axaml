@@ -627,7 +627,7 @@
                                             <!-- Score Badge -->
                                             <Border Grid.Column="2" 
                                                     Background="#1A1DB954" 
-                                                    Border Brush="#1DB954" 
+                                                    BorderBrush="#1DB954" 
                                                     BorderThickness="1"
                                                     CornerRadius="6" 
                                                     Padding="8,4"

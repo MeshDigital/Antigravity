@@ -66,9 +66,6 @@ public class DownloadItemViewModel : INotifyPropertyChanged
         set { if (_isHydrated != value) { _isHydrated = value; OnPropertyChanged(); } }
     }
     
-    // Commands
-    public ICommand PromoteToExpressCommand { get; set; }
-    
     // Progress Tracking
     private double _progress;
     public double Progress

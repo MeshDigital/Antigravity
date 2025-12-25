@@ -147,11 +147,8 @@ public class SonicIntegrityService : IDisposable
         {
             try
             {
-            try
-            {
                 var result = await PerformAnalysisAsync(request.FilePath, cancellationToken);
                 request.CompletionSource.SetResult(result);
-            }
             }
             catch (Exception ex)
             {
@@ -163,6 +160,7 @@ public class SonicIntegrityService : IDisposable
                 });
             }
         }
+
     }
 
     /// <summary>

@@ -14,7 +14,7 @@ namespace SLSKDONET.Services
         private SampleChannel? _sampleChannel;
         private MeteringSampleProvider? _meteringProvider;
         private bool _isInitialized;
-        private Timer? _timer;
+        private System.Timers.Timer? _timer;
 
         public event EventHandler<long>? TimeChanged;
         public event EventHandler<float>? PositionChanged;
@@ -42,10 +42,11 @@ namespace SLSKDONET.Services
         public AudioPlayerService()
         {
             _isInitialized = true;
-            _timer = new Timer(50);
+            _timer = new System.Timers.Timer(50);
             _timer.Elapsed += OnTimerElapsed;
             _timer.Start();
         }
+
 
         private void OnTimerElapsed(object? sender, ElapsedEventArgs e)
         {

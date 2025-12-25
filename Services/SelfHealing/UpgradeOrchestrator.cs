@@ -262,7 +262,6 @@ public class UpgradeOrchestrator
             File.Move(sourcePath, targetPath);
         }
         else
-        else
         {
             // Cross-volume - use SafeWriteService for validated copy+delete
             _logger.LogDebug("Cross-volume move (verified copy+delete)");

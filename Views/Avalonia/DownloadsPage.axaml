@@ -112,10 +112,8 @@
                     Padding="20,16"
                     Classes.express="{Binding IsExpress}">
                 <ToolTip.Tip>
-                    <ToolTip ShowDelay="0">
-                         <TextBlock Text="{Binding ScoreBreakdown}"/>
-                    </ToolTip>
-                </ToolTip>
+                    <TextBlock Text="{Binding ScoreBreakdown}"/>
+                </ToolTip.Tip>
                 <Border.Transitions>
                     <Transitions>
                         <BrushTransition Property="BorderBrush" Duration="0:0:0.3"/>
