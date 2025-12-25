@@ -2,6 +2,7 @@ using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
+using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
@@ -35,6 +36,7 @@ public class DownloadCenterViewModel : INotifyPropertyChanged, IDisposable
     private readonly IDisposable _trackAddedSubscription;
     private readonly IDisposable _trackStateChangedSubscription;
     private readonly IDisposable _trackProgressChangedSubscription;
+    private readonly CompositeDisposable _subscriptions = new();
     
     // Collections (DynamicData Source)
     private readonly SourceCache<DownloadItemViewModel, string> _downloadsSource = new(x => x.GlobalId);
@@ -78,6 +80,9 @@ public class DownloadCenterViewModel : INotifyPropertyChanged, IDisposable
         }
     }
     
+    // Alias for HomeViewModel compatibility
+    public string GlobalSpeedDisplay => GlobalSpeed;
+    
     // Commands
     public ICommand PauseAllCommand { get; }
     public ICommand ResumeAllCommand { get; }
@@ -96,8 +101,11 @@ public class DownloadCenterViewModel : INotifyPropertyChanged, IDisposable
         ResumeAllCommand = ReactiveCommand.Create(ResumeAll,
             this.WhenAnyValue(x => x.ActiveDownloads.Count, count => count > 0));
         
-        ClearCompletedCommand = ReactiveCommand.Create(() => CompletedDownloads.Clear());
-        ClearFailedCommand = ReactiveCommand.Create(() => FailedDownloads.Clear());
+        ClearCompletedCommand = ReactiveCommand.Create(() => 
+            _downloadsSource.Remove(_downloadsSource.Items.Where(x => x.State == PlaylistTrackState.Completed).ToList()));
+        
+        ClearFailedCommand = ReactiveCommand.Create(() => 
+            _downloadsSource.Remove(_downloadsSource.Items.Where(x => x.State == PlaylistTrackState.Failed).ToList()));
         
         // Initialize DynamicData Pipelines
         
