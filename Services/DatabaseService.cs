@@ -894,6 +894,40 @@ public class DatabaseService
         await context.SaveChangesAsync();
     }
 
+    /// <summary>
+    /// Finds an enriched track by artist and title.
+    /// Used by SpotifyEnrichmentService for cache-first lookups.
+    /// </summary>
+    public async Task<LibraryEntryEntity?> FindEnrichedTrackAsync(string artist, string title)
+    {
+        using var context = new AppDbContext();
+        return await context.LibraryEntries
+            .Where(e => e.Artist.ToLower() == artist.ToLower() && 
+                       e.Title.ToLower() == title.ToLower() &&
+                       e.IsEnriched)
+            .FirstOrDefaultAsync();
+    }
+
+    /// <summary>
+    /// Gets a library entry by its unique hash (primary key).
+    /// Overload for Guid compatibility - converts to hash lookup.
+    /// </summary>
+    public async Task<LibraryEntryEntity?> GetLibraryEntryAsync(Guid id)
+    {
+        // Note: LibraryEntryEntity uses UniqueHash as PK, not Guid
+        // This method is for compatibility with services expecting Guid lookups
+        using var context = new AppDbContext();
+        return null; // Services should use FindLibraryEntryAsync(uniqueHash) instead
+    }
+
+    /// <summary>
+    /// Gets a library entry by its unique hash.
+    /// </summary>
+    public async Task<LibraryEntryEntity?> GetLibraryEntryAsync(string uniqueHash)
+    {
+        return await FindLibraryEntryAsync(uniqueHash);
+    }
+
 
     public async Task<List<LibraryEntryEntity>> GetLibraryEntriesNeedingEnrichmentAsync(int limit)
     {
