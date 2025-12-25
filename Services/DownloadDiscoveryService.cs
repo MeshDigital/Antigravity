@@ -107,6 +107,18 @@ public class DownloadDiscoveryService
                     continue;
                 }
 
+                // Phase 3C.4: Threshold Trigger (Race & Replace)
+                // Real-time evaluation of incoming results
+                var score = _matcher.CalculateScore(track, searchTrack);
+                
+                // If we find a "Gold" match (>0.92) early, trigger immediate download
+                if (score > 0.92)
+                {
+                    _logger.LogInformation("🚀 THRESHOLD TRIGGER: Found 'Gold' match ({Score:P0}) early! Skipping rest of search. File: {File}", 
+                        score, searchTrack.Filename);
+                    return searchTrack;
+                }
+
                 allTracks.Add(searchTrack);
             }
 

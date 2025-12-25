@@ -29,46 +29,18 @@ public class SearchResultMatcher
     /// <summary>
     /// Finds the best matching track using rich metadata (BPM, Duration, etc.) from PlaylistTrack.
     /// </summary>
+    /// <summary>
+    /// Finds the best matching track using rich metadata (BPM, Duration, etc.) from PlaylistTrack.
+    /// </summary>
     public Track? FindBestMatch(PlaylistTrack model, IEnumerable<Track> candidates)
     {
         if (!candidates.Any()) return null;
 
-        var expectedDuration = model.CanonicalDuration.HasValue ? model.CanonicalDuration.Value / 1000 : 0;
-        
-        // Use existing logic if we don't have rich metadata
-        if (expectedDuration == 0)
-        {
-             return FindBestMatch(model.Artist, model.Title, 0, candidates);
-        }
-
-        var lengthTolerance = _config.SearchLengthToleranceSeconds;
         var matches = new List<(Track Track, double Score)>();
 
         foreach (var candidate in candidates)
         {
-            // Base score (Artist/Title/Duration)
-            var score = CalculateMatchScore(
-                model.Artist,
-                model.Title,
-                expectedDuration,
-                candidate,
-                lengthTolerance);
-
-            // BPM Bonus (Phase 2)
-            if (model.BPM.HasValue && model.BPM > 0)
-            {
-                var candidateBpm = ParseBpm(candidate.Filename);
-                if (candidateBpm.HasValue)
-                {
-                    // If BPM matches within 3%, give a nice boost
-                    if (Math.Abs(candidateBpm.Value - model.BPM.Value) < 3)
-                    {
-                        score += 0.15; // Significant boost for BPM match
-                        _logger.LogTrace("BPM Match! {CandidateBpm} vs {ModelBpm}", candidateBpm, model.BPM);
-                    }
-                }
-            }
-
+            var score = CalculateScore(model, candidate);
             if (score >= 0.7)
             {
                 matches.Add((candidate, score));
@@ -83,6 +55,40 @@ public class SearchResultMatcher
 
         var best = matches.OrderByDescending(m => m.Score).First();
         return best.Track;
+    }
+
+    /// <summary>
+    /// Calculates a match score (0-1) for a single candidate against the requested track.
+    /// Publicly exposed for Real-Time "Threshold Trigger" evaluation.
+    /// </summary>
+    public double CalculateScore(PlaylistTrack model, Track candidate)
+    {
+        var expectedDuration = model.CanonicalDuration.HasValue ? model.CanonicalDuration.Value / 1000 : 0;
+        var lengthTolerance = _config.SearchLengthToleranceSeconds;
+
+        // Base score (Artist/Title/Duration)
+        var score = CalculateMatchScore(
+            model.Artist,
+            model.Title,
+            expectedDuration,
+            candidate,
+            lengthTolerance);
+
+        // BPM Bonus
+        if (model.BPM.HasValue && model.BPM > 0)
+        {
+            var candidateBpm = ParseBpm(candidate.Filename);
+            if (candidateBpm.HasValue)
+            {
+                // If BPM matches within 3%, give a nice boost
+                if (Math.Abs(candidateBpm.Value - model.BPM.Value) < 3)
+                {
+                    score += 0.15; // Significant boost for BPM match
+                }
+            }
+        }
+        
+        return Math.Min(1.0, score);
     }
 
     /// <summary>
