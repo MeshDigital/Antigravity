@@ -16,6 +16,11 @@
   - **Lane B (Standard)**: Priority 1 (2 max slots).
   - **Lane C (Background)**: Priority 10+ (Background fill).
 - **Preemption Logic**: High priority downloads automatically pause lowest-priority active tasks.
+- **Persistence**: Priority levels (even single-track overrides) are persisted to DB to survive restarts.
+- **Lazy Hydration (Waiting Room)**: 
+  - Only hydrates top 100 pending tracks to RAM.
+  - Automatic DB refill when buffer is low.
+  - Reduces memory usage for 2000+ track queues.
 - **Project Prioritization**: "VIP Pass" logic to bump entire playlists to Priority 0.
 
 ## ✅ Recently Completed (December 2025)
