@@ -50,6 +50,7 @@ public class AppConfig
     public bool AutoRetryFailedDownloads { get; set; } = true;
     public int MaxDownloadRetries { get; set; } = 2;
     public ScoringWeights CustomWeights { get; set; } = ScoringWeights.Balanced;
+    public string RankingProfile { get; set; } = "Balanced";
     
     // Brain 2.0 & Quality Guard
     public bool EnableFuzzyNormalization { get; set; } = true; // Strip special chars, normalize feat.

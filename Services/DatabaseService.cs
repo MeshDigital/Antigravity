@@ -160,6 +160,12 @@ public class DatabaseService
                 columnsToAdd.Add(("SourcePlaylistId", "SourcePlaylistId TEXT NULL"));
             if (!existingColumns.Contains("SourcePlaylistName"))
                 columnsToAdd.Add(("SourcePlaylistName", "SourcePlaylistName TEXT NULL"));
+            if (!existingColumns.Contains("Energy"))
+                columnsToAdd.Add(("Energy", "Energy REAL NULL"));
+            if (!existingColumns.Contains("Danceability"))
+                columnsToAdd.Add(("Danceability", "Danceability REAL NULL"));
+            if (!existingColumns.Contains("Valence"))
+                columnsToAdd.Add(("Valence", "Valence REAL NULL"));
             
             foreach (var (name, definition) in columnsToAdd)
             {
@@ -255,6 +261,32 @@ public class DatabaseService
             {
                 _logger.LogWarning("Schema Patch: Adding missing column 'Integrity' to Tracks");
                 await context.Database.ExecuteSqlRawAsync("ALTER TABLE Tracks ADD COLUMN Integrity INTEGER DEFAULT 0");
+            }
+
+            // Check LibraryHealth table
+            cmd.CommandText = "PRAGMA table_info(LibraryHealth)";
+            existingColumns.Clear();
+            using (var reader = await cmd.ExecuteReaderAsync())
+            {
+                while (await reader.ReadAsync())
+                {
+                    existingColumns.Add(reader.GetString(1));
+                }
+            }
+            if (!existingColumns.Contains("GoldCount"))
+            {
+                _logger.LogWarning("Schema Patch: Adding missing column 'GoldCount' to LibraryHealth");
+                await context.Database.ExecuteSqlRawAsync("ALTER TABLE LibraryHealth ADD COLUMN GoldCount INTEGER DEFAULT 0");
+            }
+            if (!existingColumns.Contains("SilverCount"))
+            {
+                _logger.LogWarning("Schema Patch: Adding missing column 'SilverCount' to LibraryHealth");
+                await context.Database.ExecuteSqlRawAsync("ALTER TABLE LibraryHealth ADD COLUMN SilverCount INTEGER DEFAULT 0");
+            }
+            if (!existingColumns.Contains("BronzeCount"))
+            {
+                _logger.LogWarning("Schema Patch: Adding missing column 'BronzeCount' to LibraryHealth");
+                await context.Database.ExecuteSqlRawAsync("ALTER TABLE LibraryHealth ADD COLUMN BronzeCount INTEGER DEFAULT 0");
             }
             
             _logger.LogInformation("[{Ms}ms] Database Init: Schema patches completed", sw.ElapsedMilliseconds);

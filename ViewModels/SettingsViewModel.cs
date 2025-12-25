@@ -178,17 +178,16 @@ public class SettingsViewModel : INotifyPropertyChanged
     
     // Phase 2.4: Ranking Strategy Selection
     // NOTE: RankingPreset property doesn't exist in AppConfig - using CustomWeights directly
-    /*
     public string SelectedRankingMode
     {
-        get => _config.RankingPreset;
+        get => _config.RankingProfile ?? "Balanced";
         set
         {
-            if (_config.RankingPreset != value)
+            if (_config.RankingProfile != value)
             {
-                _config.RankingPreset = value;
+                _config.RankingProfile = value;
                 
-                // Sync weights when preset changes
+                // Sync weights and strategy when preset changes
                 if (value == "Balanced") CustomWeights = ScoringWeights.Balanced;
                 else if (value == "Quality First") CustomWeights = ScoringWeights.QualityFirst;
                 else if (value == "DJ Mode") CustomWeights = ScoringWeights.DjMode;
@@ -196,10 +195,10 @@ public class SettingsViewModel : INotifyPropertyChanged
                 ApplyRankingStrategy(value);
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(RankingModeDescription));
+                UpdateLivePreview();
             }
         }
     }
-    */
     
     public ScoringWeights CustomWeights
     {
@@ -299,7 +298,6 @@ public class SettingsViewModel : INotifyPropertyChanged
         "DJ Mode"
     };
     
-    /* Commented out - depends on SelectedRankingMode which doesn't exist
     public string RankingModeDescription
     {
         get
@@ -312,7 +310,6 @@ public class SettingsViewModel : INotifyPropertyChanged
             };
         }
     }
-    */
     
     private void ApplyRankingStrategy(string mode)
     {

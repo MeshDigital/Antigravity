@@ -107,6 +107,9 @@ public class PlaylistTrack
     public int? BitrateScore { get; set; }
     public int? Bitrate { get; set; }
     public double? AnalysisOffset { get; set; }
+    public double? Energy { get; set; }
+    public double? Danceability { get; set; }
+    public double? Valence { get; set; }
 
     // Phase 3A: Dual-Truth Metadata
     public double? SpotifyBPM { get; set; }

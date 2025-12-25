@@ -203,6 +203,9 @@ public class PlaylistTrackEntity
     public string? AudioFingerprint { get; set; } // Chromaprint/SoundFingerprinting hash
     public int? BitrateScore { get; set; } // Quality score for replacement
     public double? AnalysisOffset { get; set; } // Silence offset for time alignment
+    public double? Energy { get; set; }
+    public double? Danceability { get; set; }
+    public double? Valence { get; set; }
     
     // Phase 3A: Dual-Truth Metadata
     public double? SpotifyBPM { get; set; }

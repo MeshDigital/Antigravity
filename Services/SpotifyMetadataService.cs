@@ -141,6 +141,9 @@ public class SpotifyMetadataService : ISpotifyMetadataService
         {
             track.BPM = features.Tempo;
             track.MusicalKey = $"{features.Key}{(features.Mode == 1 ? "B" : "A")}";
+            track.Energy = features.Energy;
+            track.Danceability = features.Danceability;
+            track.Valence = features.Valence;
             track.AnalysisOffset = 0;
         }
 

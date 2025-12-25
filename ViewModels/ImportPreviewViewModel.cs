@@ -445,6 +445,9 @@ public class ImportPreviewViewModel : INotifyPropertyChanged
                         track.ReleaseDate = playlistTrack.ReleaseDate;
                         track.BPM = playlistTrack.BPM;
                         track.MusicalKey = playlistTrack.MusicalKey;
+                        track.Energy = playlistTrack.Energy;
+                        track.Danceability = playlistTrack.Danceability;
+                        track.Valence = playlistTrack.Valence;
                         
                         enriched++;
                         

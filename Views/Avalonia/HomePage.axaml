@@ -28,24 +28,35 @@
                 <Grid ColumnDefinitions="2*,*,*" RowDefinitions="180">
                     <!-- Library Health Tile -->
                     <Border Grid.Column="0" Background="#121214" CornerRadius="16" Padding="24" BorderBrush="#1F1F23" BorderThickness="1">
-                        <Grid RowDefinitions="Auto,*,Auto">
-                            <TextBlock Grid.Row="0" Text="LIBRARY HEALTH" FontSize="11" FontWeight="Bold" Foreground="#606060" LetterSpacing="1"/>
+                        <Grid ColumnDefinitions="*,Auto">
+                            <Grid Grid.Column="0" RowDefinitions="Auto,*,Auto">
+                                <TextBlock Grid.Row="0" Text="LIBRARY PURITY" FontSize="11" FontWeight="Bold" Foreground="#606060" LetterSpacing="1"/>
+                                
+                                <StackPanel Grid.Row="1" VerticalAlignment="Center" Spacing="0">
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Bottom">
+                                        <TextBlock Text="{Binding PurityPercent, StringFormat='{}{0:F0}'}" FontSize="48" FontWeight="Black" Foreground="White"/>
+                                        <TextBlock Text="%" FontSize="24" FontWeight="Bold" Foreground="#1DB954" Margin="4,0,0,10" VerticalAlignment="Bottom"/>
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding PurityStatus}" FontSize="13" Foreground="#A0A0A0" FontWeight="SemiBold"/>
+                                </StackPanel>
+                                
+                                <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8">
+                                    <Border Background="#1A00A3FF" CornerRadius="6" Padding="8,4" ToolTip.Tip="Gold (FLAC/WAV)">
+                                        <TextBlock Text="{Binding LibraryHealth.GoldCount, StringFormat='{}{0} 🏆', FallbackValue='0'}" 
+                                                   FontSize="11" Foreground="#00A3FF" FontWeight="Bold"/>
+                                    </Border>
+                                    <Border Background="#1A1DB954" CornerRadius="6" Padding="8,4" ToolTip.Tip="Silver (320kbps)">
+                                        <TextBlock Text="{Binding LibraryHealth.SilverCount, StringFormat='{}{0} 🥈', FallbackValue='0'}" 
+                                                   FontSize="11" Foreground="#1DB954" FontWeight="Bold"/>
+                                    </Border>
+                                    <Border Background="#1AFF6B6B" CornerRadius="6" Padding="8,4" ToolTip.Tip="Bronze (Low Quality)">
+                                        <TextBlock Text="{Binding LibraryHealth.BronzeCount, StringFormat='{}{0} 🥉', FallbackValue='0'}" 
+                                                   FontSize="11" Foreground="#FF6B6B" FontWeight="Bold"/>
+                                    </Border>
+                                </StackPanel>
+                            </Grid>
                             
-                            <StackPanel Grid.Row="1" VerticalAlignment="Center" Spacing="4">
-                                <TextBlock Text="{Binding LibraryHealth.TotalTracks, FallbackValue='0'}" FontSize="48" FontWeight="Black" Foreground="White"/>
-                                <TextBlock Text="indexed tracks in library" FontSize="13" Foreground="#A0A0A0"/>
-                            </StackPanel>
-                            
-                            <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="12">
-                                <Border Background="#1A1DB954" CornerRadius="6" Padding="8,4">
-                                    <TextBlock Text="{Binding LibraryHealth.HqTracks, StringFormat='{}{0} HQ', FallbackValue='0'}" 
-                                               FontSize="12" Foreground="#1DB954" FontWeight="Bold"/>
-                                </Border>
-                                <Border Background="#1AFF6B6B" CornerRadius="6" Padding="8,4">
-                                    <TextBlock Text="{Binding LibraryHealth.UpgradableCount, StringFormat='{}{0} to upgrade', FallbackValue='0'}" 
-                                               FontSize="12" Foreground="#FF6B6B" FontWeight="Bold"/>
-                                </Border>
-                            </StackPanel>
+                            <!-- Circular Progress or similar could go here in Auto column -->
                         </Grid>
                     </Border>
                     

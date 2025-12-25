@@ -14,6 +14,10 @@ public class LibraryHealthEntity
     public int UpgradableCount { get; set; } // Low bitrate tracks
     public int PendingUpdates { get; set; } // Tracks needing metadata/enrichment
     
+    public int GoldCount { get; set; } // FLAC/Lossless
+    public int SilverCount { get; set; } // 320kbps
+    public int BronzeCount { get; set; } // < 320kbps
+    
     public long TotalStorageBytes { get; set; }
     public long FreeStorageBytes { get; set; }
     

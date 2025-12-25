@@ -35,8 +35,32 @@ public class HomeViewModel : INotifyPropertyChanged
     public LibraryHealthEntity? LibraryHealth
     {
         get => _libraryHealth;
-        set => SetProperty(ref _libraryHealth, value);
+        set 
+        {
+            if (SetProperty(ref _libraryHealth, value))
+            {
+                OnPropertyChanged(nameof(PurityPercent));
+                OnPropertyChanged(nameof(PurityStatus));
+            }
+        }
     }
+
+    public double PurityPercent
+    {
+        get
+        {
+            if (LibraryHealth == null || LibraryHealth.TotalTracks == 0) return 0;
+            return (double)LibraryHealth.GoldCount / LibraryHealth.TotalTracks * 100;
+        }
+    }
+
+    public string PurityStatus => PurityPercent switch
+    {
+        >= 90 => "Audiophile",
+        >= 70 => "Excellent",
+        >= 50 => "Good",
+        _ => "Needs Upgrades"
+    };
 
     public ObservableCollection<PlaylistJob> RecentPlaylists { get; } = new();
     public ObservableCollection<SpotifyTrackViewModel> SpotifyRecommendations { get; } = new();

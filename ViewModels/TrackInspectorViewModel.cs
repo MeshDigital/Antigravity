@@ -25,9 +25,16 @@ namespace SLSKDONET.ViewModels
                     OnPropertyChanged(nameof(IsTrustworthy));
                     OnPropertyChanged(nameof(Details));
                     OnPropertyChanged(nameof(TrustColor));
+                    OnPropertyChanged(nameof(Energy));
+                    OnPropertyChanged(nameof(Danceability));
+                    OnPropertyChanged(nameof(Valence));
                 }
             }
         }
+
+        public double Energy => Track?.Energy ?? 0;
+        public double Danceability => Track?.Danceability ?? 0;
+        public double Valence => Track?.Valence ?? 0;
 
         public bool HasTrack => Track != null;
 

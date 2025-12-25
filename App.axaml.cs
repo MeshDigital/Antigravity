@@ -159,13 +159,20 @@ public partial class App : Application
                 // Phase 7: Load ranking strategy and weights from config
                 var configDispatcher = Services.GetRequiredService<ConfigManager>();
                 var config = configDispatcher.GetCurrent() ?? new AppConfig();
-                // Use Balanced strategy as default (RankingPreset property doesn't exist)
-                ISortingStrategy strategy = new BalancedStrategy();
+                
+                string profile = config.RankingProfile ?? "Balanced";
+                ISortingStrategy strategy = profile switch
+                {
+                    "Quality First" => new QualityFirstStrategy(),
+                    "DJ Mode" => new DJModeStrategy(),
+                    _ => new BalancedStrategy()
+                };
+                
                 ResultSorter.SetStrategy(strategy);
                 ResultSorter.SetWeights(config.CustomWeights ?? ScoringWeights.Balanced);
                 ResultSorter.SetConfig(config);
                 
-                Serilog.Log.Information("Loaded ranking strategy: Balanced with custom weights");
+                Serilog.Log.Information("Loaded ranking strategy: {Profile}", profile);
 
                 // Phase 8: Validate FFmpeg availability - Moved to background task
 

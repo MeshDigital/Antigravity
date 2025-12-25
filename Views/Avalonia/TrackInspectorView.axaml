@@ -85,6 +85,36 @@
                     </Border>
                 </Grid>
 
+                <Separator Background="#333" Height="1"/>
+
+                <!-- Spotify Audio Features (Sliders/Gauges) -->
+                <StackPanel Spacing="16">
+                    <TextBlock Text="Spotify Audio Features" FontSize="14" FontWeight="SemiBold" Foreground="#AAA"/>
+                    
+                    <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto">
+                        <!-- Energy -->
+                        <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,10,12" Spacing="4">
+                            <TextBlock Text="Energy ⚡" FontSize="11" Foreground="#666"/>
+                            <Slider Value="{Binding Energy}" Minimum="0" Maximum="1" IsEnabled="False" Foreground="#FFB900"/>
+                            <TextBlock Text="{Binding Energy, StringFormat={}{0:P0}}" FontSize="12" Foreground="White" HorizontalAlignment="Right"/>
+                        </StackPanel>
+
+                        <!-- Danceability -->
+                        <StackPanel Grid.Row="0" Grid.Column="1" Margin="10,0,0,12" Spacing="4">
+                            <TextBlock Text="Danceability 💃" FontSize="11" Foreground="#666"/>
+                            <Slider Value="{Binding Danceability}" Minimum="0" Maximum="1" IsEnabled="False" Foreground="#1DB954"/>
+                            <TextBlock Text="{Binding Danceability, StringFormat={}{0:P0}}" FontSize="12" Foreground="White" HorizontalAlignment="Right"/>
+                        </StackPanel>
+
+                        <!-- Valence -->
+                        <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,10,0" Spacing="4">
+                            <TextBlock Text="Valence (Mood) 😊" FontSize="11" Foreground="#666"/>
+                            <Slider Value="{Binding Valence}" Minimum="0" Maximum="1" IsEnabled="False" Foreground="#00A3FF"/>
+                            <TextBlock Text="{Binding Valence, StringFormat={}{0:P0}}" FontSize="12" Foreground="White" HorizontalAlignment="Right"/>
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
+
                 <!-- Technical Details -->
                 <StackPanel Spacing="12">
                     <TextBlock Text="Technical Context" FontSize="14" FontWeight="SemiBold" Foreground="#AAA"/>

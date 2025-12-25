@@ -51,9 +51,14 @@ public class DashboardService
             
             using var context = new AppDbContext();
             
-            var totalTracks = await context.PlaylistTracks.CountAsync();
-            var hqTracks = await context.PlaylistTracks.CountAsync(t => t.Bitrate >= 256 || t.Format.ToLower() == "flac");
-            var lowBitrateTracks = await context.PlaylistTracks.CountAsync(t => t.Status == TrackStatus.Downloaded && t.Bitrate > 0 && t.Bitrate < 256);
+            // Query the global LibraryEntries table for high-level health metrics
+            var totalTracks = await context.LibraryEntries.CountAsync();
+            var goldTracks = await context.LibraryEntries.CountAsync(t => t.Format.ToLower() == "flac" || t.Format.ToLower() == "wav");
+            var silverTracks = await context.LibraryEntries.CountAsync(t => t.Bitrate >= 320 && t.Format.ToLower() != "flac" && t.Format.ToLower() != "wav");
+            var bronzeTracks = await context.LibraryEntries.CountAsync(t => t.Bitrate < 320 && t.Bitrate > 0);
+            
+            // For older pending tracks/upgrades, we can still check PlaylistTracks
+            var lowBitratePending = await context.PlaylistTracks.CountAsync(t => t.Status == TrackStatus.Downloaded && t.Bitrate > 0 && t.Bitrate < 256);
             
             // For storage info
             var storageInsight = GetStorageInsight();
@@ -61,8 +66,11 @@ public class DashboardService
             var health = await context.LibraryHealth.FindAsync(1) ?? new LibraryHealthEntity { Id = 1 };
             
             health.TotalTracks = totalTracks;
-            health.HqTracks = hqTracks;
-            health.UpgradableCount = lowBitrateTracks;
+            health.HqTracks = goldTracks + silverTracks; // Anything 320 or Flac
+            health.GoldCount = goldTracks;
+            health.SilverCount = silverTracks;
+            health.BronzeCount = bronzeTracks;
+            health.UpgradableCount = lowBitratePending;
             health.TotalStorageBytes = storageInsight.TotalBytes;
             health.FreeStorageBytes = storageInsight.FreeBytes;
             health.LastScanDate = DateTime.Now;
