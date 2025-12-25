@@ -249,6 +249,25 @@
   - Bind "Warning Icon" in header to show "Spotify Sync Unavailable" status
   - User feedback instead of silent failures
 
+  - User feedback instead of silent failures
+
+### 🎯 UI Placeholder Refactor (The "Transparency" Phase) - IMMEDIATE PRIORITY
+**Goal**: Eliminate "dead clicks" and connect backend logic to frontend placeholders.
+
+#### 1. Track Inspector "Phantom" Data
+- [ ] Update `TrackInspectorView` to hide empty "Energy/Danceability" fields if data missing.
+- [ ] Add "Fetch Intelligence" button if fields are empty.
+- [ ] Bind `AudioAnalysis` properties correctly.
+
+#### 2. Home Page Bento Grid
+- [ ] Hook "Library Health" card to `CrashRecoveryJournal` queries.
+- [ ] Show "Active Recoveries" count if startup recovery ran.
+
+#### 3. USB Export & Player Control
+- [ ] Set `IsEnabled="False"` on "Export to Rekordbox".
+- [ ] Add Tooltip "Coming in v1.1".
+- [ ] Disable Pitch Slider until `AudioPlayerService` supports stretching.
+
 ### 🏗️ Architectural Improvements & Advanced Features
 
 #### Download Stability (HIGH Priority)
@@ -540,27 +559,22 @@
 
 ---
 
-### 0A.4 System Health Panel (Dashboard Enhancement) (4 hours) - NEW ⭐ MEDIUM
-**Problem**: Users don't know if Soulseek/Spotify are connected or having issues.  
+### 0A.4 System Health Panel (Dashboard Enhancement) (4 hours) - IMMEDIATE PRIORITY ⭐⭐⭐
+**Problem**: Users don't know if Soulseek/Spotify are connected or having issues.
 **Solution**: Real-time system diagnostics widget in Dashboard.
 
 **Implementation**:
-- [ ] Create `Services/SystemHealthService.cs`
+- [ ] Update `HomeViewModel.cs` to query `CrashRecoveryJournal` stats.
 - [ ] Add health widget to `HomePage.axaml`:
   ```
+  🟢 System Health: Excellent (0 Dead Letters)
   🟢 Soulseek: Connected (120ms latency)
-  🟢 Spotify API: 87/100 calls remaining
   🟡 Disk I/O: Moderate (45% utilization)
-  🟢 Analysis Queue: 12 tracks pending
   ```
-- [ ] Implement health checks:
-  - Soulseek connection status + ping latency
-  - Spotify API rate limit tracking
-  - Disk I/O utilization monitoring
-  - Background worker queue depth
+- [ ] Implement "Dead Letter" review action (Unlock/Retry).
 - [ ] Color-coded status: 🟢 Green (good), 🟡 Yellow (warning), 🔴 Red (error)
 
-**Impact**: Makes ORBIT feel like a *professional tool* with operational transparency.
+**Impact**: shows off the industrial reliability of the backend.
 
 ---
 

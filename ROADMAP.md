@@ -39,42 +39,46 @@
 
 ---
 
-## 🎯 Immediate Priority: Phase 3 (Atomic Resumability)
+## Phase 3: Atomic Resumability - COMPLETE ✅
+- **Impact**: No redownloading files after a crash.
+- **Atomic Downloads**: Full `.part` file workflow integrated with Recovery Journal (Verified Phase 3A).
+- **Ghost File Protection**: Logic checks disk size before truncating (Verified Phase 3A).
 
-With the journal in place, we can now implement true resume capability for large files.
+## 🎯 Immediate Priority: UI Placeholder Refactor (The "Show, Don't Tell" Phase)
 
-### 1. Atomic Downloads (.part files) - HIGHEST PRIORITY
-- **Current**: Basic file writing.
-- **Goal**: Full `.part` file workflow integrated with Recovery Journal.
-    - Write to `.OrbitDownload`.
-    - Journal tracks file offset.
-    - On crash: Read journal offset → Open file stream → Seek → Resume.
-- **Impact**: No redownloading 50MB files after a crash.
+With the backend hardened, we must align the frontend reality with user expectations.
 
-### 2. Multi-Session Resume
-- **Goal**: Persist download queue state to database.
-- **Impact**: Close app, restart tomorrow, queue is exactly as you left it.
+### 1. Health Dashboard Integration
+- **Goal**: Visualize the `CrashRecoveryJournal` status in the UI.
+- **Implementation**:
+    - Update `HomeViewModel` to query `DeadLetter` status.
+    - Active "System Health" widget on Dashboard (Green/Orange/Red).
+    - "Review Manual Fixes" action for dead-lettered files.
+
+### 2. UI Transparency Audit
+- **Goal**: Eliminate "dead clicks".
+- **Implementation**:
+    - Disable buttons for `Rekordbox Export` and `Spectral Analysis`.
+    - Add "Coming v1.1" tooltips.
+    - Connect `TrackInspector` spectral fields to actual data sources (or hide if empty).
 
 ---
 
 ## 🔮 Future Phases
 
-### Month 2: Speed & UI Scalability (January 2026)
+### Month 2: UI Transparency & Speed (January 2026)
 
-#### 1. UI Virtualization (Critical)
+#### 1. UI Refactor: "The Transparency Phase" (Highest Priority)
+- **Goal**: Connect placeholder UI elements to real logic or clearly mark as "Coming Soon".
+- **Features**:
+    - **Health Dashboard**: Live status of Crash Journal (DeadLetters) & API Health.
+    - **Logic Connection**: Hook up "Spectral Analysis" and "Export" buttons.
+    - **Disabled States**: Prevent "dead clicks" on unimplemented features.
+
+#### 2. UI Virtualization (Critical)
 - **Goal**: Support libraries with 50,000+ tracks.
 - **Tech**: VirtualizingStackPanel, lazy-loading viewmodels.
 - **Metric**: 60 FPS scrolling at 10k items.
-
-#### 2. Lazy Image Loading
-- **Goal**: Reduce RAM usage by 80%.
-- **Tech**: Virtual Proxy pattern for album art.
-
-#### 3. System Health Dashboard
-- **Goal**: Transparency for power users.
-- **Features**: Real-time graph of download speeds, peer connection health, disk I/O.
-
-### Phase 5: The "Self-Healing" Library (February 2026)
 
 #### 1. Upgrade Scout
 - **Goal**: Automatically find better versions of existing tracks.
