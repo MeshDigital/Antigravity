@@ -211,6 +211,12 @@ public class LibraryEntryEntity
 {
     [Key]
     public string UniqueHash { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Guid identifier for service compatibility (HarmonicMatchService expects this).
+    /// UniqueHash remains the primary key.
+    /// </summary>
+    public Guid Id { get; set; } = Guid.NewGuid();
 
     public string Artist { get; set; } = string.Empty;
     public string Title { get; set; } = string.Empty;
@@ -242,7 +248,9 @@ public class LibraryEntryEntity
 
     // Musical Intelligence
     public string? MusicalKey { get; set; }
+    public string? Key => MusicalKey; // Alias for HarmonicMatchService
     public double? BPM { get; set; }
+    public double? Bpm => BPM; // Alias for HarmonicMatchService (PascalCase)
     
     // Dual-Truth Metadata
     public double? SpotifyBPM { get; set; }

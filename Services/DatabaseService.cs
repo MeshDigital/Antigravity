@@ -909,15 +909,12 @@ public class DatabaseService
     }
 
     /// <summary>
-    /// Gets a library entry by its unique hash (primary key).
-    /// Overload for Guid compatibility - converts to hash lookup.
+    /// Gets a library entry by its Guid Id.
     /// </summary>
     public async Task<LibraryEntryEntity?> GetLibraryEntryAsync(Guid id)
     {
-        // Note: LibraryEntryEntity uses UniqueHash as PK, not Guid
-        // This method is for compatibility with services expecting Guid lookups
         using var context = new AppDbContext();
-        return null; // Services should use FindLibraryEntryAsync(uniqueHash) instead
+        return await context.LibraryEntries.FirstOrDefaultAsync(e => e.Id == id);
     }
 
     /// <summary>
@@ -926,6 +923,16 @@ public class DatabaseService
     public async Task<LibraryEntryEntity?> GetLibraryEntryAsync(string uniqueHash)
     {
         return await FindLibraryEntryAsync(uniqueHash);
+    }
+
+    /// <summary>
+    /// Finds an enriched track in the global Tracks table by its GlobalId.
+    /// Used by enrichment services for cache lookups.
+    /// </summary>
+    public async Task<TrackEntity?> FindEnrichedTrackAsync(string globalId)
+    {
+        using var context = new AppDbContext();
+        return await context.Tracks.FirstOrDefaultAsync(t => t.GlobalId == globalId && t.IsEnriched);
     }
 
 

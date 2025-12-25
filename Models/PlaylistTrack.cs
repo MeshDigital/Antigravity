@@ -102,6 +102,7 @@ public class PlaylistTrack
     // Phase 0.1: Musical Intelligence & Antigravity
     public string? MusicalKey { get; set; }
     public string? Key => MusicalKey; // Alias for UI binding
+    public string? Tonality => MusicalKey; // Alias for PlaylistTrackViewModel
     public double? BPM { get; set; }
     public string? CuePointsJson { get; set; }
     public string? AudioFingerprint { get; set; }
