@@ -139,8 +139,10 @@
 ### 0.3 Download Health Monitor (6 hours) - ENHANCE EXISTING ⭐⭐⭐ CRITICAL
 **Current**: Basic stall detection exists (line 103-107)  
 **Enhancement**:- [x] **Phase 3C: Advanced Queue Orchestration**
-  - [x] Multi-Lane Priority Engine (Express, Standard, Background lanes)
-  - [x] Preemption Logic (High priority pauses low priority)
+  - [x] **Multi-Lane Priority**: High (User) vs Low (Background/Import) lanes.
+  - [x] **Lazy Hydration**: Only hydrate 50 tracks to memory.
+  - [x] **Threshold Trigger**: Start download if score > 92%.
+  - [ ] **Speculative Start**: Start silver match (70%) after 5s (Hot-Swap).
   - [x] Project Prioritization (VIP Pass)
   - [x] **Hardening**: Atomic Slot Allocator (Race Condition Fix)
   - [x] **Hardening**: Lazy Hydration (Waiting Room Pattern for 2k+ queues)`Services/DownloadHealthMonitor.cs`

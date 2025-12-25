@@ -107,3 +107,21 @@ To see why a file ranked #1:
 1.  Enable `Debug` logging in `appsettings.json`.
 2.  Check logs for `Best fuzzy match score`.
 3.  Look for "Strict strict check failed" traces for rejected items.
+
+---
+
+## ⚡ The "Express Lane" (Threshold Trigger)
+
+**Phase 3C.4 Feature (Implemented Dec 2025)**
+
+To match the speed of `slsk-batchdl`, "The Brain" now operates in real-time.
+
+*   **Logic**: Every incoming result is scored immediately.
+*   **The Threshold**: If a result scores **> 0.92 (92%)**:
+    *   **Action**: The search is **aborted instantly**.
+    *   **Result**: The track starts downloading immediately (usually within 2-4 seconds).
+    *   **Why?**: A 92% match (Correct Title, Artist, Duration ±5s, Bitrate > 256kbps) is statistically guaranteed to be the correct file. There is no need to wait 30 seconds for marginally "better" options.
+
+This moves ORBIT from a "Wait-and-Sort" architecture to a "Race-and-Replace" architecture.
+- **Silver Match**: Score > 0.7 (Starts speculatively if no Gold match found in 5s — Planned Phase 3C.5).
+- **Gold Match**: Score > 0.92 (Starts immediately, cancelling any Silver download).

@@ -37,6 +37,9 @@
   - **Real-time Waveforms**: GPU-accelerated rendering of `PWAV` data.
   - **VU Meters**: Exponential decay peak meters.
   - **Background Enrichment**: Batch-fetching (100 tracks) of Spotify Energy/Valence/Danceability.
+- **Phase 3C.4: Threshold Trigger (Completed Dec 2025)**
+  - **Instant Downloads**: Starts download immediately if score > 92%.
+  - **Real-Time Scoring**: Evaluates stream instead of buffering.
 - **Phase 5C: Industrial Hardening (Completed Dec 2025)**
   - **Security**: Windows DPAPI encryption for Spotify tokens (replacing Base64).
   - **Resource Mgmt**: Explicit process killing for FFmpeg (Anti-Zombie).
