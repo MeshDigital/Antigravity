@@ -39,7 +39,9 @@ public class SearchOrchestrationService
     }
     
     public bool IsConnected => _soulseek.IsConnected;
-    
+    private int _activeSearchCount = 0;
+    public int GetActiveSearchCount() => _activeSearchCount;
+
     /// <summary>
     /// Execute a search with the given parameters and stream ranked results.
     /// </summary>
@@ -51,7 +53,10 @@ public class SearchOrchestrationService
         bool isAlbumSearch, // Kept for API compatibility, but grouping is now consumer responsibility
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Streaming search started for: {Query}", query);
+        Interlocked.Increment(ref _activeSearchCount);
+        try
+        {
+            _logger.LogInformation("Streaming search started for: {Query}", query);
         
         var normalizedQuery = _searchQueryNormalizer.RemoveFeatArtists(query);
         normalizedQuery = _searchQueryNormalizer.RemoveYoutubeMarkers(normalizedQuery);
@@ -85,6 +90,11 @@ public class SearchOrchestrationService
             // Rank on-the-fly
             ResultSorter.CalculateRank(track, searchTrack, evaluator);
             yield return track;
+        }
+        }
+        finally
+        {
+            Interlocked.Decrement(ref _activeSearchCount);
         }
     }
     

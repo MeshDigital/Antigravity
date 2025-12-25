@@ -160,11 +160,13 @@
         - [x] **Demo Polish**:
             - [x] Express Lane Gold Borders/Styling.
             - [x] "Intelligence Breakdown" Tooltips on hover.
-- [x] **Phase 5: Mission Control Dashboard**
+- [x] **Phase 0A: Mission Control Dashboard & System Health (Completed Dec 2025)**
   - [x] **"Bento Box" Layout**: Glassmorphism tiles for metrics.
   - [x] **Active Missions Widget**: Live visuals for Express/Standard/Background lanes.
   - [x] **System Health Widget**: "Dead Letter" monitoring with Auto-Recover button.
   - [x] **Library Purity**: Gold/Silver/Bronze stats overview.
+  - [x] **Real-Time Feed**: Throttled (4FPS) "Live Operations" feed using `ItemsRepeater`.
+  - [x] **Resilience Log**: Atomic operations history (Recovery/Zombies) visualization.
 - [x] **Phase 6: UX Enhancements (2025/2026 Trends)**
   - [x] **Vibe Search**: Natural language parsing (e.g., "flac >320").
   - [x] **Skeleton Screens**: Shimmer-animated placeholders for perceived performance.

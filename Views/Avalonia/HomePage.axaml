@@ -133,6 +133,66 @@
                         </Grid>
                     </Border>
                 </Grid>
+
+                <!-- Phase 0A: Live Operations & Resilience Log -->
+                <Grid ColumnDefinitions="2*,1*" Margin="0,0,0,8">
+                    <!-- Live Operations Feed -->
+                    <Border Grid.Column="0" Classes="glass" Padding="20" Margin="0,0,16,0">
+                        <Grid RowDefinitions="Auto,*">
+                            <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,12">
+                                <TextBlock Text="LIVE OPERATIONS FEED" FontSize="11" FontWeight="Bold" Foreground="#606060" LetterSpacing="1"/>
+                                <StackPanel Orientation="Horizontal" Grid.Column="1" Spacing="8">
+                                    <Border Background="#222" CornerRadius="4" Padding="6,2">
+                                        <TextBlock Text="{Binding CurrentSnapshot.ActiveDownloads, StringFormat='{}⬇ {0}'}" FontSize="10" Foreground="#00BCD4" FontWeight="Bold"/>
+                                    </Border>
+                                    <Border Background="#222" CornerRadius="4" Padding="6,2">
+                                        <TextBlock Text="{Binding CurrentSnapshot.ZombieProcessCount, StringFormat='{}🧟 {0}'}" FontSize="10" Foreground="#FF5252" FontWeight="Bold"/>
+                                    </Border>
+                                </StackPanel>
+                            </Grid>
+                            
+                            <ScrollViewer Grid.Row="1" Height="200">
+                                <ItemsRepeater ItemsSource="{Binding ActiveOperations}">
+                                    <ItemsRepeater.Layout>
+                                        <StackLayout Orientation="Vertical" Spacing="4"/>
+                                    </ItemsRepeater.Layout>
+                                    <ItemsRepeater.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Background="#0DFFFFFF" CornerRadius="4" Padding="8,6">
+                                                <TextBlock Text="{Binding}" Foreground="#DDD" FontSize="12" FontFamily="Consolas, Monospace"/>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsRepeater.ItemTemplate>
+                                </ItemsRepeater>
+                            </ScrollViewer>
+                        </Grid>
+                    </Border>
+                    
+                    <!-- Resilience Log -->
+                    <Border Grid.Column="1" Classes="glass" Padding="20">
+                        <Grid RowDefinitions="Auto,*">
+                            <TextBlock Grid.Row="0" Text="RESILIENCE LOG" FontSize="11" FontWeight="Bold" Foreground="#606060" LetterSpacing="1" Margin="0,0,0,12"/>
+                            
+                            <ScrollViewer Grid.Row="1" Height="200">
+                                <ItemsRepeater ItemsSource="{Binding ResilienceLog}">
+                                    <ItemsRepeater.Layout>
+                                        <StackLayout Orientation="Vertical" Spacing="4"/>
+                                    </ItemsRepeater.Layout>
+                                    <ItemsRepeater.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Background="#0D00FF00" CornerRadius="4" Padding="8,6" BorderBrush="#00FF00" BorderThickness="0,0,0,0">
+                                                <Grid ColumnDefinitions="Auto,*">
+                                                    <TextBlock Text="🛡️" FontSize="10" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                                    <TextBlock Grid.Column="1" Text="{Binding}" Foreground="#808080" FontSize="11" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsRepeater.ItemTemplate>
+                                </ItemsRepeater>
+                            </ScrollViewer>
+                        </Grid>
+                    </Border>
+                </Grid>
                 
                 <!-- Second Row: Recently Added (Horizontal Scroller) -->
                 <StackPanel Spacing="16">

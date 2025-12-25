@@ -259,6 +259,10 @@ public partial class App : Application
                         var enrichmentWorker = Services.GetRequiredService<LibraryEnrichmentWorker>();
                         enrichmentWorker.Start();
                         
+                        // Start Mission Control (Phase 0A)
+                        var missionControl = Services.GetRequiredService<MissionControlService>();
+                        missionControl.Start();
+                        
                         // Load projects into the LibraryViewModel that's bound to UI
                         // CRITICAL: Use mainVm.LibraryViewModel (the one shown in UI)
                         // not a new instance from DI
@@ -470,6 +474,9 @@ public partial class App : Application
         services.AddSingleton<INotificationService, NotificationServiceAdapter>();
         services.AddSingleton<IClipboardService, ClipboardService>();
         services.AddSingleton<IDialogService, DialogService>();
+
+        // Mission Control
+        services.AddSingleton<MissionControlService>();
 
         // ViewModels
         services.AddSingleton<MainViewModel>();

@@ -65,7 +65,7 @@ public struct SystemHealthStats
 {
     public int ActiveCount { get; set; }
     public int DeadLetterCount { get; set; }
-    public int CompletedCount { get; set; }
+    public int RecoveredCount { get; set; } // Renamed from CompletedCount, tracks session recoveries
 }
 
 public class HydrationCheckpointState
@@ -272,6 +272,11 @@ public class CrashRecoveryJournal : IDisposable, IAsyncDisposable
     /// <summary>
     /// Removes a checkpoint after successful completion.
     /// </summary>
+    private int _sessionRecoveredCount = 0;
+
+    /// <summary>
+    /// Removes a checkpoint after successful completion.
+    /// </summary>
     public async Task CompleteCheckpointAsync(string checkpointId)
     {
         if (_disposed || _deleteCheckpointCmd == null)
@@ -287,6 +292,7 @@ public class CrashRecoveryJournal : IDisposable, IAsyncDisposable
             
             if (rowsAffected > 0)
             {
+                Interlocked.Increment(ref _sessionRecoveredCount);
                 _logger.LogDebug("✅ Completed checkpoint: {Id}", checkpointId);
             }
         }
@@ -460,14 +466,12 @@ public class CrashRecoveryJournal : IDisposable, IAsyncDisposable
                     case CheckpointStatus.Active:
                         stats.ActiveCount = count;
                         break;
-                    case CheckpointStatus.Completed:
-                        stats.CompletedCount = count;
-                        break;
                     case CheckpointStatus.DeadLetter:
                         stats.DeadLetterCount = count;
                         break;
                 }
             }
+            stats.RecoveredCount = _sessionRecoveredCount;
             return stats;
         }
         catch (Exception ex)

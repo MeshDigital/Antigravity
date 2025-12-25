@@ -108,6 +108,19 @@ public class HomeViewModel : INotifyPropertyChanged, IDisposable
     public ICommand QuickSearchCommand { get; }
     public ICommand ClearDeadLettersCommand { get; } // Phase 3B
 
+    private readonly MissionControlService _missionControl;
+    private DashboardSnapshot _currentSnapshot = new();
+
+    // UI Properties from Snapshot
+    public DashboardSnapshot CurrentSnapshot
+    {
+        get => _currentSnapshot;
+        set => SetProperty(ref _currentSnapshot, value);
+    }
+
+    public ObservableCollection<string> ActiveOperations { get; } = new();
+    public ObservableCollection<string> ResilienceLog { get; } = new();
+
     public HomeViewModel(
         ILogger<HomeViewModel> logger,
         DashboardService dashboardService,
@@ -120,7 +133,8 @@ public class HomeViewModel : INotifyPropertyChanged, IDisposable
         Downloads.DownloadCenterViewModel downloadCenter,
         CrashRecoveryJournal crashJournal,
         INotificationService notificationService,
-        IEventBus eventBus)
+        IEventBus eventBus,
+        MissionControlService missionControl)
     {
         _logger = logger;
         _dashboardService = dashboardService;
@@ -134,20 +148,28 @@ public class HomeViewModel : INotifyPropertyChanged, IDisposable
         _crashJournal = crashJournal;
         _notificationService = notificationService;
         _eventBus = eventBus;
+        _missionControl = missionControl;
 
-        // Subscribe to DownloadCenter updates for reactivity
-        _downloadCenter.PropertyChanged += (s, e) =>
+        // Subscribe to Mission Control Updates (Smart Throttled)
+        _eventSubscription = _eventBus.GetEvent<DashboardSnapshot>().Subscribe(snapshot =>
         {
-             if (e.PropertyName == nameof(Downloads.DownloadCenterViewModel.GlobalSpeedDisplay) ||
-                 e.PropertyName == nameof(Downloads.DownloadCenterViewModel.ActiveCount))
-             {
-                 OnPropertyChanged(nameof(DownloadSpeed));
-                 OnPropertyChanged(nameof(ExpressCount));
-                 OnPropertyChanged(nameof(StandardCount));
-                 OnPropertyChanged(nameof(BackgroundCount));
-             }
-        };
+            // Strict UI Thread Marshaling as per user request
+            Dispatcher.UIThread.Post(() =>
+            {
+                CurrentSnapshot = snapshot;
+                
+                // Update Observable Collections for UI (reduce GC by reusing)
+                UpdateOperationsList(snapshot.ActiveOperations);
+                UpdateResilienceLog(snapshot.ResilienceLog);
+                
+                // Update Health Visuals
+                if (LibraryHealth == null) LibraryHealth = new LibraryHealthEntity();
+                LibraryHealth.HealthStatus = snapshot.SystemHealth.ToString();
+                LibraryHealth.IssuesCount = snapshot.DeadLetterCount;
+            });
+        });
 
+        // Initialize other commands
         RefreshDashboardCommand = new AsyncRelayCommand(RefreshDashboardAsync);
         NavigateToSearchCommand = new RelayCommand(() => _navigationService.NavigateTo("Search"));
         QuickSearchCommand = new AsyncRelayCommand<SpotifyTrackViewModel>(ExecuteQuickSearchAsync);
@@ -163,17 +185,27 @@ public class HomeViewModel : INotifyPropertyChanged, IDisposable
             }
         };
 
-        // Multi-source reactive updates for the Live Pulse
-        var enrichmentEvents = _eventBus.GetEvent<LibraryMetadataEnrichedEvent>();
-        var statusEvents = _eventBus.GetEvent<TrackStateChangedEvent>();
-
-        _eventSubscription = enrichmentEvents
-            .Merge(statusEvents.Select(_ => new LibraryMetadataEnrichedEvent(0))) // Cheat to trigger refresh
-            .Throttle(TimeSpan.FromSeconds(2)) // Don't spam DB during heavy bursts
-            .Subscribe(_ => Dispatcher.UIThread.InvokeAsync(LoadLibraryHealthAsync));
-
         // Trigger initial load
         _ = RefreshDashboardAsync();
+    }
+
+    private void UpdateOperationsList(List<string> newOperations)
+    {
+        // Simple synchronization to avoid flicker
+        // For very large lists, we might want a smarter diff, but for <50 items this is fast enough
+        // If items are same count and content, skip
+        if (ActiveOperations.SequenceEqual(newOperations)) return;
+
+        ActiveOperations.Clear();
+        foreach (var op in newOperations) ActiveOperations.Add(op);
+    }
+    
+    private void UpdateResilienceLog(List<string> newLog)
+    {
+        if (ResilienceLog.SequenceEqual(newLog)) return;
+        
+        ResilienceLog.Clear();
+        foreach (var l in newLog) ResilienceLog.Add(l);
     }
 
     public async Task RefreshDashboardAsync()
