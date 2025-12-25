@@ -160,6 +160,11 @@
         - [x] **Demo Polish**:
             - [x] Express Lane Gold Borders/Styling.
             - [x] "Intelligence Breakdown" Tooltips on hover.
+- [x] **Phase 5: Mission Control Dashboard**
+  - [x] **"Bento Box" Layout**: Glassmorphism tiles for metrics.
+  - [x] **Active Missions Widget**: Live visuals for Express/Standard/Background lanes.
+  - [x] **System Health Widget**: "Dead Letter" monitoring with Auto-Recover button.
+  - [x] **Library Purity**: Gold/Silver/Bronze stats overview.
 - [x] **Hardening**: Lazy Hydration (Waiting Room Pattern for 2k+ queues)`Services/DownloadHealthMonitor.cs`
 - [ ] Track health metrics per download:
   - Stall count

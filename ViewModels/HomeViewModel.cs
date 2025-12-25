@@ -28,6 +28,7 @@ public class HomeViewModel : INotifyPropertyChanged, IDisposable
     private readonly SpotifyAuthService _spotifyAuth;
     private readonly SpotifyEnrichmentService _spotifyEnrichment;
     private readonly DownloadManager _downloadManager;
+    private readonly Downloads.DownloadCenterViewModel _downloadCenter; // Inject for stats
     private readonly CrashRecoveryJournal _crashJournal; // Phase 3A: Transparency
     private readonly INotificationService _notificationService;
     private readonly IEventBus _eventBus;
@@ -95,6 +96,12 @@ public class HomeViewModel : INotifyPropertyChanged, IDisposable
     public bool IsSoulseekConnected => _connectionViewModel.IsConnected;
     // public string DownloadSpeed => _downloadManager.CurrentSpeedText; // Property doesn't exist
 
+    // Mission Control Stats
+    public int ExpressCount => _downloadCenter?.ExpressItems.Count ?? 0;
+    public int StandardCount => _downloadCenter?.StandardItems.Count ?? 0;
+    public int BackgroundCount => _downloadCenter?.BackgroundItems.Count ?? 0;
+    // public string DownloadSpeed => _downloadCenter?.GlobalSpeedDisplay; // Already defined/mocked below, removing duplicate
+
     // Commands
     public ICommand RefreshDashboardCommand { get; }
     public ICommand NavigateToSearchCommand { get; }
@@ -110,6 +117,7 @@ public class HomeViewModel : INotifyPropertyChanged, IDisposable
         SpotifyAuthService spotifyAuth,
         SpotifyEnrichmentService spotifyEnrichment,
         DownloadManager downloadManager,
+        Downloads.DownloadCenterViewModel downloadCenter,
         CrashRecoveryJournal crashJournal,
         INotificationService notificationService,
         IEventBus eventBus)
@@ -122,9 +130,23 @@ public class HomeViewModel : INotifyPropertyChanged, IDisposable
         _spotifyAuth = spotifyAuth;
         _spotifyEnrichment = spotifyEnrichment;
         _downloadManager = downloadManager;
+        _downloadCenter = downloadCenter;
         _crashJournal = crashJournal;
         _notificationService = notificationService;
         _eventBus = eventBus;
+
+        // Subscribe to DownloadCenter updates for reactivity
+        _downloadCenter.PropertyChanged += (s, e) =>
+        {
+             if (e.PropertyName == nameof(Downloads.DownloadCenterViewModel.GlobalSpeedDisplay) ||
+                 e.PropertyName == nameof(Downloads.DownloadCenterViewModel.ActiveCount))
+             {
+                 OnPropertyChanged(nameof(DownloadSpeed));
+                 OnPropertyChanged(nameof(ExpressCount));
+                 OnPropertyChanged(nameof(StandardCount));
+                 OnPropertyChanged(nameof(BackgroundCount));
+             }
+        };
 
         RefreshDashboardCommand = new AsyncRelayCommand(RefreshDashboardAsync);
         NavigateToSearchCommand = new RelayCommand(() => _navigationService.NavigateTo("Search"));

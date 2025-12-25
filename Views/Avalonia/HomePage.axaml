@@ -8,12 +8,27 @@
              x:DataType="vm:HomeViewModel"
              Background="#0A0A0B">
     
+    <UserControl.Styles>
+        <Style Selector="Border.glass">
+            <Setter Property="Background" Value="#1A1A1D"/>
+            <Setter Property="BorderBrush" Value="#2A2A2E"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="16"/>
+            <Setter Property="Opacity" Value="0.95"/>
+            <Setter Property="BoxShadow" Value="0 4 24 0 #08000000"/>
+        </Style>
+        <Style Selector="Border.glass:pointerover">
+            <Setter Property="BorderBrush" Value="#404045"/>
+            <Setter Property="Background" Value="#222226"/>
+        </Style>
+    </UserControl.Styles>
+
     <Grid RowDefinitions="Auto,*" Margin="32">
         <!-- Header -->
         <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,32">
             <StackPanel Grid.Column="0">
-                <TextBlock Text="The Command Center" FontSize="32" FontWeight="Black" Foreground="White" LetterSpacing="-0.5"/>
-                <TextBlock Text="Intelligence hub for your music asset management" FontSize="14" Foreground="#808080" Margin="0,4,0,0"/>
+                <TextBlock Text="Mission Control" FontSize="32" FontWeight="Black" Foreground="White" LetterSpacing="-0.5"/>
+                <TextBlock Text="System Status & Intelligence Dashboard" FontSize="14" Foreground="#808080" Margin="0,4,0,0"/>
             </StackPanel>
             
             <Button Grid.Column="1" Command="{Binding RefreshDashboardCommand}" 
@@ -25,9 +40,9 @@
         <ScrollViewer Grid.Row="1">
             <StackPanel Spacing="24">
                 <!-- Top Bento Row: Core Metrics -->
-                <Grid ColumnDefinitions="2*,*,*" RowDefinitions="180">
+                <Grid ColumnDefinitions="2*,2*,1.5*" RowDefinitions="180">
                     <!-- Library Health Tile -->
-                    <Border Grid.Column="0" Background="#121214" CornerRadius="16" Padding="24" BorderBrush="#1F1F23" BorderThickness="1">
+                    <Border Grid.Column="0" Classes="glass" Padding="24" Margin="0,0,16,0">
                         <Grid ColumnDefinitions="*,Auto">
                             <Grid Grid.Column="0" RowDefinitions="Auto,*,Auto">
                                 <TextBlock Grid.Row="0" Text="LIBRARY PURITY" FontSize="11" FontWeight="Bold" Foreground="#606060" LetterSpacing="1"/>
@@ -55,37 +70,66 @@
                                     </Border>
                                 </StackPanel>
                             </Grid>
-                            
-                            <!-- Circular Progress or similar could go here in Auto column -->
                         </Grid>
                     </Border>
                     
-                    <!-- Session Status Tile -->
-                    <Border Grid.Column="1" Background="#121214" CornerRadius="16" Padding="20" BorderBrush="#1F1F23" BorderThickness="1">
+                    <!-- Active Missions (Air Traffic Control) Widget -->
+                    <Border Grid.Column="1" Classes="glass" Padding="20" Margin="0,0,16,0">
                         <Grid RowDefinitions="Auto,*,Auto">
-                            <TextBlock Grid.Row="0" Text="SESSION" FontSize="11" FontWeight="Bold" Foreground="#606060" LetterSpacing="1"/>
-                            
-                            <StackPanel Grid.Row="1" VerticalAlignment="Center" Spacing="8">
-                                <Ellipse Width="10" Height="10" HorizontalAlignment="Left" 
-                                         Fill="{Binding IsSoulseekConnected, Converter={StaticResource BooleanToStatusColorConverter}}"/>
-                                <TextBlock Text="{Binding SessionStatus}" FontSize="18" FontWeight="SemiBold" Foreground="White" TextWrapping="Wrap"/>
-                            </StackPanel>
-                            
-                            <TextBlock Grid.Row="2" Text="{Binding DownloadSpeed, StringFormat='{}⬇ {0}'}" FontSize="13" Foreground="#00A3FF" FontWeight="Medium"/>
-                        </Grid>
-                    </Border>
-                    
-                    <!-- Storage Insight Tile -->
-                    <Border Grid.Column="2" Background="#121214" CornerRadius="16" Padding="20" BorderBrush="#1F1F23" BorderThickness="1">
-                        <Grid RowDefinitions="Auto,*,Auto">
-                            <TextBlock Grid.Row="0" Text="STORAGE" FontSize="11" FontWeight="Bold" Foreground="#606060" LetterSpacing="1"/>
+                            <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+                                <TextBlock Text="ACTIVE MISSIONS" FontSize="11" FontWeight="Bold" Foreground="#606060" LetterSpacing="1"/>
+                                <TextBlock Text="{Binding DownloadSpeed, StringFormat='{}⬇ {0}'}" FontSize="11" Foreground="#00BCD4" FontWeight="Bold" Grid.Column="1"/>
+                            </Grid>
                             
                             <StackPanel Grid.Row="1" VerticalAlignment="Center" Spacing="12">
-                                <ProgressBar Value="65" Height="6" CornerRadius="3" Background="#262629" Foreground="#00A3FF"/>
-                                <TextBlock Text="65% Used" FontSize="14" Foreground="White" FontWeight="Medium"/>
+                                <!-- Express Lane -->
+                                <Grid ColumnDefinitions="Auto,*,Auto">
+                                    <TextBlock Text="🚀 Express" FontSize="13" Foreground="#FFCA28" FontWeight="Bold" Width="80"/>
+                                    <ProgressBar Grid.Column="1" Value="{Binding ExpressCount}" Maximum="10" Height="4" Background="#333" Foreground="#FFCA28" CornerRadius="2" Margin="0,0,12,0" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="2" Text="{Binding ExpressCount}" FontSize="13" Foreground="White" FontWeight="Bold"/>
+                                </Grid>
+                                
+                                <!-- Standard Lane -->
+                                <Grid ColumnDefinitions="Auto,*,Auto">
+                                    <TextBlock Text="📦 Standard" FontSize="13" Foreground="#2196F3" FontWeight="SemiBold" Width="80"/>
+                                    <ProgressBar Grid.Column="1" Value="{Binding StandardCount}" Maximum="50" Height="4" Background="#333" Foreground="#2196F3" CornerRadius="2" Margin="0,0,12,0" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="2" Text="{Binding StandardCount}" FontSize="13" Foreground="#DDD" FontWeight="SemiBold"/>
+                                </Grid>
+                                
+                                <!-- Background Lane -->
+                                <Grid ColumnDefinitions="Auto,*,Auto">
+                                    <TextBlock Text="🌙 Background" FontSize="13" Foreground="#AAA" Width="80"/>
+                                    <ProgressBar Grid.Column="1" Value="{Binding BackgroundCount}" Maximum="200" Height="4" Background="#333" Foreground="#666" CornerRadius="2" Margin="0,0,12,0" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="2" Text="{Binding BackgroundCount}" FontSize="13" Foreground="#AAA"/>
+                                </Grid>
                             </StackPanel>
                             
-                            <TextBlock Grid.Row="2" Text="420 GB Free" FontSize="12" Foreground="#808080"/>
+                            <TextBlock Grid.Row="2" Text="Air Traffic Control Active" FontSize="10" Foreground="#555" FontStyle="Italic" HorizontalAlignment="Center"/>
+                        </Grid>
+                    </Border>
+                    
+                    <!-- System Health (Dead Letter) Widget -->
+                    <Border Grid.Column="2" Classes="glass" Padding="20">
+                        <Grid RowDefinitions="Auto,*,Auto">
+                            <TextBlock Grid.Row="0" Text="SYSTEM HEALTH" FontSize="11" FontWeight="Bold" Foreground="#606060" LetterSpacing="1"/>
+                            
+                            <StackPanel Grid.Row="1" VerticalAlignment="Center" Spacing="8">
+                                <TextBlock Text="❤️" FontSize="32" HorizontalAlignment="Center" 
+                                           IsVisible="{Binding LibraryHealth.IssuesCount, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=0}"/>
+                                <TextBlock Text="⚠️" FontSize="32" HorizontalAlignment="Center" Foreground="#FF5252"
+                                           IsVisible="{Binding LibraryHealth.IssuesCount, Converter={x:Static ObjectConverters.NotEqual}, ConverterParameter=0}"/>
+                                
+                                <TextBlock Text="All Systems Nominal" FontSize="14" FontWeight="SemiBold" Foreground="#4CAF50" HorizontalAlignment="Center"
+                                           IsVisible="{Binding LibraryHealth.IssuesCount, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=0}"/>
+                                <TextBlock Text="{Binding LibraryHealth.IssuesCount, StringFormat='{}{0} Stuck Items'}" FontSize="14" FontWeight="Bold" Foreground="#FF5252" HorizontalAlignment="Center"
+                                           IsVisible="{Binding LibraryHealth.IssuesCount, Converter={x:Static ObjectConverters.NotEqual}, ConverterParameter=0}"/>
+                            </StackPanel>
+                            
+                            <Button Grid.Row="2" Command="{Binding ClearDeadLettersCommand}" 
+                                    IsVisible="{Binding LibraryHealth.IssuesCount, Converter={x:Static ObjectConverters.NotEqual}, ConverterParameter=0}"
+                                    Background="#2A1010" BorderBrush="#FF5252" BorderThickness="1" CornerRadius="4" HorizontalAlignment="Center" Padding="12,4">
+                                <TextBlock Text="Auto-Recover" Foreground="#FF5252" FontSize="11" FontWeight="Bold"/>
+                            </Button>
                         </Grid>
                     </Border>
                 </Grid>
