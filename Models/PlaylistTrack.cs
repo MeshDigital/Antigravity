@@ -108,6 +108,12 @@ public class PlaylistTrack
     public int? Bitrate { get; set; }
     public double? AnalysisOffset { get; set; }
 
+    // Phase 3A: Dual-Truth Metadata
+    public double? SpotifyBPM { get; set; }
+    public string? SpotifyKey { get; set; }
+    public double? ManualBPM { get; set; }
+    public string? ManualKey { get; set; }
+
     // Phase 8: Sonic Integrity & Spectral Analysis
     public string? SpectralHash { get; set; }
     public double? QualityConfidence { get; set; }

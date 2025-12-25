@@ -1790,6 +1790,15 @@ public class DatabaseService
             return Task.CompletedTask;
         }
     }
+    /// <summary>
+    /// Retrieves all library entries. Used for bulk operations like Export.
+    /// WARN: This can be memory intensive for large libraries.
+    /// </summary>
+    public async Task<List<LibraryEntryEntity>> GetAllLibraryEntriesAsync()
+    {
+        using var context = new AppDbContext();
+        return await context.LibraryEntries.AsNoTracking().ToListAsync();
+    }
 }
 
 
