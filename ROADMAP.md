@@ -62,7 +62,48 @@
 - **Monthly Drop**: Tools menu feature for recent tracks (last 30 days)
 - **SaveFileDialog**: Integrated using Avalonia StorageProvider
 
----
+## 🎯 Phase 5A: Self-Healing Library (In Progress)
+**Phase Goal**: Automatic quality upgrades for library tracks.
+
+### Core Components
+- ✅ **LibraryScanner**: Batch processing with yield return (50 tracks/batch)
+- ✅ **MetadataCloner**: Cross-format metadata transfer (ID3 ↔ Vorbis ↔ APE)
+- 🚧 **UpgradeScout**: P2P search with ±2s duration matching
+- 🚧 **FileLockMonitor**: Playback conflict detection
+- 🚧 **UpgradeOrchestrator**: Atomic swap with SafeWriteService integration
+
+### Features
+- **FLAC-Only Mode**: Conservative upgrade strategy (128/192kbps MP3 → FLAC)
+- **7-Day Scan Cooldown**: Prevents redundant rescanning
+- **Gold Status Exclusion**: Respects user-verified tracks
+- **Backup System**: 7-day retention before cleanup
+- **Crash Recovery**: Journal integration for mid-swap safety
+
+## 🔮 Phase 5B: Stealth Integration (Planned)
+**Phase Goal**: Preserve Rekordbox analysis during file upgrades.
+
+### Rekordbox Analysis Preservation (RAP)
+- **Binary ANLZ Parsing**: Read beat grids, waveforms, hot cues from `.DAT/.EXT` files
+- **XOR Descrambling**: Decrypt PSSI song structure phrases (Intro/Verse/Chorus/Outro)
+- **Database Surgery**: Update Rekordbox master.db paths (SQLCipher integration)
+- **Shadow Task Pattern**: Non-intrusive, fails gracefully without breaking core upgrade
+
+### ANLZ Tags Supported
+- `PQTZ` - Beat Grid (quantized tick markers)
+- `PCOB` - Cue Points and Hot Cues
+- `PWAV` - Waveform Preview
+- `PSSI` - Song Structure (XOR-encrypted phrases)
+
+### Value Proposition
+When ORBIT upgrades MP3 → FLAC, DJ opens Rekordbox to find:
+- ✅ High-quality FLAC file
+- ✅ All waveforms intact
+- ✅ Beat grid corrections preserved
+- ✅ Hot cues and memory cues in place
+- ✅ Song structure phrases (Intro/Verse/Outro) maintained
+
+**No re-analysis required** - seamless upgrade experience for professional DJs.
+
 
 ## 🎯 Archived Priority: UI Placeholder Refactor (Completed Phase 3A)
 
