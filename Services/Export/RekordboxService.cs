@@ -171,88 +171,116 @@ public class RekordboxService
 
     private async Task<int> GenerateXmlFile(List<RekordboxTrack> tracks, string playlistName, string outputPath)
     {
-        var settings = new XmlWriterSettings
-        {
-            Async = true,
-            Indent = true,
-            Encoding = Encoding.UTF8
-        };
-
-        await using var stream = new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.None, 4096, true);
-        await using var writer = XmlWriter.Create(stream, settings);
-
-        await writer.WriteStartDocumentAsync();
+        // ATOMIC WRITE PATTERN: Write to temp file, then atomic rename
+        // This prevents corruption if Rekordbox reads while we're writing
+        var tempPath = outputPath + ".tmp";
         
-        // <DJ_PLAYLISTS Version="1.0.0">
-        await writer.WriteStartElementAsync(null, "DJ_PLAYLISTS", null);
-        await writer.WriteAttributeStringAsync(null, "Version", null, "1.0.0");
-        
-        // <PRODUCT Name="SLSK.NET" Version="1.0.0" />
-        await writer.WriteStartElementAsync(null, "PRODUCT", null);
-        await writer.WriteAttributeStringAsync(null, "Name", null, "ORBIT");
-        await writer.WriteAttributeStringAsync(null, "Version", null, "1.0.0");
-        await writer.WriteEndElementAsync(); // PRODUCT
-
-        // <COLLECTION Entries="N">
-        await writer.WriteStartElementAsync(null, "COLLECTION", null);
-        await writer.WriteAttributeStringAsync(null, "Entries", null, tracks.Count.ToString());
-
-        foreach (var t in tracks)
+        try
         {
-            await writer.WriteStartElementAsync(null, "TRACK", null);
-            await writer.WriteAttributeStringAsync(null, "TrackID", null, t.TrackID.ToString());
-            await writer.WriteAttributeStringAsync(null, "Name", null, t.Name);
-            await writer.WriteAttributeStringAsync(null, "Artist", null, t.Artist);
-            await writer.WriteAttributeStringAsync(null, "Album", null, t.Album);
-            await writer.WriteAttributeStringAsync(null, "Genre", null, t.Genre);
-            await writer.WriteAttributeStringAsync(null, "Kind", null, t.Kind);
-            await writer.WriteAttributeStringAsync(null, "Size", null, t.Size.ToString());
-            await writer.WriteAttributeStringAsync(null, "TotalTime", null, t.TotalTime.ToString());
-            await writer.WriteAttributeStringAsync(null, "DateAdded", null, t.DateAdded);
-            await writer.WriteAttributeStringAsync(null, "BitRate", null, t.BitRate.ToString());
-            await writer.WriteAttributeStringAsync(null, "SampleRate", null, t.SampleRate.ToString());
+            var settings = new XmlWriterSettings
+            {
+                Async = true,
+                Indent = true,
+                Encoding = Encoding.UTF8
+            };
+
+            await using var stream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, 4096, true);
+            await using var writer = XmlWriter.Create(stream, settings);
+
+            await writer.WriteStartDocumentAsync();
             
-            if (t.AverageBpm > 0)
-                await writer.WriteAttributeStringAsync(null, "AverageBpm", null, t.AverageBpm.ToString(CultureInfo.InvariantCulture));
+            // <DJ_PLAYLISTS Version="1.0.0">
+            await writer.WriteStartElementAsync(null, "DJ_PLAYLISTS", null);
+            await writer.WriteAttributeStringAsync(null, "Version", null, "1.0.0");
             
-            if (!string.IsNullOrEmpty(t.Tonality))
-                await writer.WriteAttributeStringAsync(null, "Tonality", null, t.Tonality);
+            // <PRODUCT Name="SLSK.NET" Version="1.0.0" />
+            await writer.WriteStartElementAsync(null, "PRODUCT", null);
+            await writer.WriteAttributeStringAsync(null, "Name", null, "ORBIT");
+            await writer.WriteAttributeStringAsync(null, "Version", null, "1.0.0");
+            await writer.WriteEndElementAsync(); // PRODUCT
+
+            // <COLLECTION Entries="N">
+            await writer.WriteStartElementAsync(null, "COLLECTION", null);
+            await writer.WriteAttributeStringAsync(null, "Entries", null, tracks.Count.ToString());
+
+            foreach (var t in tracks)
+            {
+                await writer.WriteStartElementAsync(null, "TRACK", null);
+                await writer.WriteAttributeStringAsync(null, "TrackID", null, t.TrackID.ToString());
+                await writer.WriteAttributeStringAsync(null, "Name", null, t.Name);
+                await writer.WriteAttributeStringAsync(null, "Artist", null, t.Artist);
+                await writer.WriteAttributeStringAsync(null, "Album", null, t.Album);
+                await writer.WriteAttributeStringAsync(null, "Genre", null, t.Genre);
+                await writer.WriteAttributeStringAsync(null, "Kind", null, t.Kind);
+                await writer.WriteAttributeStringAsync(null, "Size", null, t.Size.ToString());
+                await writer.WriteAttributeStringAsync(null, "TotalTime", null, t.TotalTime.ToString());
+                await writer.WriteAttributeStringAsync(null, "DateAdded", null, t.DateAdded);
+                await writer.WriteAttributeStringAsync(null, "BitRate", null, t.BitRate.ToString());
+                await writer.WriteAttributeStringAsync(null, "SampleRate", null, t.SampleRate.ToString());
                 
-            await writer.WriteAttributeStringAsync(null, "Location", null, t.Location);
+                if (t.AverageBpm > 0)
+                    await writer.WriteAttributeStringAsync(null, "AverageBpm", null, t.AverageBpm.ToString(CultureInfo.InvariantCulture));
+                
+                if (!string.IsNullOrEmpty(t.Tonality))
+                    await writer.WriteAttributeStringAsync(null, "Tonality", null, t.Tonality);
+                    
+                await writer.WriteAttributeStringAsync(null, "Location", null, t.Location);
+                
+                await writer.WriteEndElementAsync(); // TRACK
+            }
+
+            await writer.WriteEndElementAsync(); // COLLECTION
+
+            // <PLAYLISTS> (Optional: Create a playlist node for this specific export)
+            await writer.WriteStartElementAsync(null, "PLAYLISTS", null);
+            await writer.WriteStartElementAsync(null, "NODE", null);
+            await writer.WriteAttributeStringAsync(null, "Type", null, "0"); // 0=Root/Folder
+            await writer.WriteAttributeStringAsync(null, "Name", null, "ROOT");
             
-            await writer.WriteEndElementAsync(); // TRACK
+            // Actual Playlist
+            await writer.WriteStartElementAsync(null, "NODE", null);
+            await writer.WriteAttributeStringAsync(null, "Name", null, playlistName);
+            await writer.WriteAttributeStringAsync(null, "Type", null, "1"); // 1=Playlist
+            await writer.WriteAttributeStringAsync(null, "KeyType", null, "0");
+            await writer.WriteAttributeStringAsync(null, "Entries", null, tracks.Count.ToString());
+
+            for (int i = 0; i < tracks.Count; i++)
+            {
+                await writer.WriteStartElementAsync(null, "TRACK", null);
+                await writer.WriteAttributeStringAsync(null, "Key", null, tracks[i].TrackID.ToString());
+                await writer.WriteEndElementAsync(); // TRACK
+            }
+
+            await writer.WriteEndElementAsync(); // NODE (Playlist)
+            await writer.WriteEndElementAsync(); // NODE (Root)
+            await writer.WriteEndElementAsync(); // PLAYLISTS
+
+            await writer.WriteEndElementAsync(); // DJ_PLAYLISTS
+            await writer.WriteEndDocumentAsync();
+            
+            // Close streams before moving
+            await writer.FlushAsync();
+            
+            // ATOMIC OPERATION: Rename temp file to final destination
+            // This is an OS-level atomic operation that prevents corruption
+            File.Move(tempPath, outputPath, overwrite: true);
+            
+            _logger.LogInformation("Atomic XML write completed: {OutputPath}", outputPath);
+            
+            return tracks.Count;
         }
-
-        await writer.WriteEndElementAsync(); // COLLECTION
-
-        // <PLAYLISTS> (Optional: Create a playlist node for this specific export)
-        await writer.WriteStartElementAsync(null, "PLAYLISTS", null);
-        await writer.WriteStartElementAsync(null, "NODE", null);
-        await writer.WriteAttributeStringAsync(null, "Type", null, "0"); // 0=Root/Folder
-        await writer.WriteAttributeStringAsync(null, "Name", null, "ROOT");
-        
-        // Actual Playlist
-        await writer.WriteStartElementAsync(null, "NODE", null);
-        await writer.WriteAttributeStringAsync(null, "Name", null, playlistName);
-        await writer.WriteAttributeStringAsync(null, "Type", null, "1"); // 1=Playlist
-        await writer.WriteAttributeStringAsync(null, "KeyType", null, "0");
-        await writer.WriteAttributeStringAsync(null, "Entries", null, tracks.Count.ToString());
-
-        for (int i = 0; i < tracks.Count; i++)
+        catch (Exception ex)
         {
-            await writer.WriteStartElementAsync(null, "TRACK", null);
-            await writer.WriteAttributeStringAsync(null, "Key", null, tracks[i].TrackID.ToString());
-            await writer.WriteEndElementAsync(); // TRACK
+            _logger.LogError(ex, "Failed to generate Rekordbox XML file");
+            
+            // Cleanup temp file if it exists
+            if (File.Exists(tempPath))
+            {
+                try { File.Delete(tempPath); } catch { /* Best effort cleanup */ }
+            }
+            
+            throw;
         }
-
-        await writer.WriteEndElementAsync(); // NODE (Playlist)
-        await writer.WriteEndElementAsync(); // NODE (Root)
-        await writer.WriteEndElementAsync(); // PLAYLISTS
-
-        await writer.WriteEndElementAsync(); // DJ_PLAYLISTS
-        await writer.WriteEndDocumentAsync();
-        
-        return tracks.Count;
     }
 
     /// <summary>

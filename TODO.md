@@ -175,6 +175,18 @@
   - [ ] **Tactile Interactions**:
     - [ ] Advanced cursor feedback for VIP actions.
     - [ ] Kinetic typography for live status.
+- [x] **Phase 7: Rekordbox Integration (DJ Hardware Ready)**
+  - [x] **Atomic XML Writes**: Temp file + rename pattern to prevent corruption.
+  - [ ] **Settings Page Hardening**:
+    - [ ] Interactive path validation with LED status.
+    - [ ] USB path translation UI (C:/ → /Volumes/USB/).
+    - [ ] Auto-Export Watcher toggle.
+  - [ ] **Library Sync Status**:
+    - [ ] Rekordbox Status Column (🔵 Synced, ⚪ Pending, 🔴 Missing).
+    - [ ] One-Click "Crate" Creator.
+  - [ ] **Pro Hardware Refinements**:
+    - [ ] Camelot key display verification.
+    - [ ] Bitrate color-coding (Green/Gold/Red).
 - [x] **Hardening**: Lazy Hydration (Waiting Room Pattern for 2k+ queues)`Services/DownloadHealthMonitor.cs`
 - [ ] Track health metrics per download:
   - Stall count
