@@ -192,8 +192,9 @@
   - [x] **Key Compatibility**: Perfect, Compatible, Relative major/minor detection.
   - [x] **BPM Matching**: ±6% beatmatching range.
   - [x] **Scoring Algorithm**: 0-100 compatibility score (Key: 50pts, BPM: 30pts, Energy: 20pts).
+  - [x] **Command Implementation**: FindHarmonicMatchesCommand in LibraryViewModel.
   - [ ] **UI Integration**:
-    - [ ] Library context menu: "Find Harmonic Matches".
+    - [ ] Library TreeDataGrid context menu: "Find Harmonic Matches".
     - [ ] "Mix Helper" panel for seed track visualization.
     - [ ] Smart Playlist Generator.
   - [ ] **Advanced Features**:

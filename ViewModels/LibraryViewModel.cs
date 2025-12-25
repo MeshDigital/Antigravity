@@ -27,6 +27,7 @@ public class LibraryViewModel : INotifyPropertyChanged
     private readonly IDialogService _dialogService;
     private readonly INotificationService _notificationService;
     private readonly SpotifyEnrichmentService _spotifyEnrichmentService; // Phase 5: Cache-First
+    private readonly HarmonicMatchService _harmonicMatchService; // Phase 8: DJ Features
     private Views.MainViewModel? _mainViewModel; // Reference to parent
     public Views.MainViewModel? MainViewModel
     {
@@ -106,6 +107,7 @@ public class LibraryViewModel : INotifyPropertyChanged
     public System.Windows.Input.ICommand PlayAlbumCommand { get; }
     public System.Windows.Input.ICommand DownloadAlbumCommand { get; }
     public System.Windows.Input.ICommand ExportMonthlyDropCommand { get; }
+    public System.Windows.Input.ICommand FindHarmonicMatchesCommand { get; }
 
     public LibraryViewModel(
         ILogger<LibraryViewModel> logger,
@@ -123,7 +125,8 @@ public class LibraryViewModel : INotifyPropertyChanged
         Services.Export.RekordboxService rekordboxService,
         IDialogService dialogService,
         INotificationService notificationService,
-        SpotifyEnrichmentService spotifyEnrichmentService) // Refactor: Inject Singleton Inspector
+        SpotifyEnrichmentService spotifyEnrichmentService,
+        HarmonicMatchService harmonicMatchService) // Phase 8: DJ Features
     {
         _logger = logger;
         _navigationService = navigationService;
@@ -134,6 +137,7 @@ public class LibraryViewModel : INotifyPropertyChanged
         _dialogService = dialogService;
         _notificationService = notificationService;
         _spotifyEnrichmentService = spotifyEnrichmentService;
+        _harmonicMatchService = harmonicMatchService;
         
         // Assign child ViewModels
         Projects = projects;
@@ -154,6 +158,7 @@ public class LibraryViewModel : INotifyPropertyChanged
         PlayAlbumCommand = new AsyncRelayCommand<PlaylistJob>(ExecutePlayAlbumAsync);
         DownloadAlbumCommand = new AsyncRelayCommand<PlaylistJob>(ExecuteDownloadAlbumAsync);
         ExportMonthlyDropCommand = new AsyncRelayCommand(ExecuteExportMonthlyDropAsync);
+        FindHarmonicMatchesCommand = new AsyncRelayCommand<PlaylistTrackViewModel>(ExecuteFindHarmonicMatchesAsync);
         
         PlayerViewModel = playerViewModel;
         UpgradeScout = upgradeScout;
@@ -587,5 +592,84 @@ public class LibraryViewModel : INotifyPropertyChanged
         // BUGFIX: Propagate MainViewModel to child ViewModels that depend on it
         // TrackListViewModel needs _mainViewModel for AllGlobalTracks sync
         Tracks.SetMainViewModel(mainViewModel);
+    }
+
+    /// <summary>
+    /// Phase 8: Finds harmonically compatible tracks using Camelot Wheel theory.
+    /// </summary>
+    private async Task ExecuteFindHarmonicMatchesAsync(PlaylistTrackViewModel? seedTrack)
+    {
+        if (seedTrack == null)
+        {
+            _logger.LogWarning("No track selected for harmonic matching");
+            return;
+        }
+
+        try
+        {
+            _logger.LogInformation("Finding harmonic matches for track: {TrackTitle}", seedTrack.Title);
+
+            // Find matches using HarmonicMatchService
+            var matches = await _harmonicMatchService.GetHarmonicMatchesAsync(
+                seedTrack.GlobalId,
+                limit: 20,
+                includeBpmRange: true,
+                includeEnergyMatch: true);
+
+            if (!matches.Any())
+            {
+                await _notificationService.ShowAsync(
+                    "Harmonic Matches",
+                    $"No compatible tracks found for '{seedTrack.Title}'. Ensure tracks have Key and BPM metadata.",
+                    NotificationType.Information);
+                return;
+            }
+
+            // Build friendly message
+            var matchSummary = new System.Text.StringBuilder();
+            matchSummary.AppendLine($"🎹 Found {matches.Count} tracks that mix well with:");
+            matchSummary.AppendLine($"'{seedTrack.Title}' by {seedTrack.Artist}");
+            matchSummary.AppendLine();
+            matchSummary.AppendLine("Top Matches:");
+
+            var topMatches = matches.Take(5);
+            foreach (var match in topMatches)
+            {
+                var relationship = match.KeyRelationship switch
+                {
+                    KeyRelationship.Perfect => "❤️ Perfect",
+                    KeyRelationship.Compatible => "💚 Compatible",
+                    KeyRelationship.Relative => "💙 Relative",
+                    _ => "⚪"
+                };
+
+                var bpmInfo = match.BpmDifference.HasValue 
+                    ? $" (±{match.BpmDifference:F0} BPM)" 
+                    : "";
+
+                matchSummary.AppendLine(
+                    $"{relationship} [{match.CompatibilityScore:F0}%] - {match.Track.Artist} - {match.Track.Title}{bpmInfo}");
+            }
+
+            if (matches.Count > 5)
+            {
+                matchSummary.AppendLine($"\n...and {matches.Count - 5} more");
+            }
+
+            await _notificationService.ShowAsync(
+                "Harmonic Matches",
+                matchSummary.ToString(),
+                NotificationType.Success);
+
+            _logger.LogInformation("Found {Count} harmonic matches", matches.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to find harmonic matches");
+            await _notificationService.ShowAsync(
+                "Harmonic Matches",
+                $"Error: {ex.Message}",
+                NotificationType.Error);
+        }
     }
 }
