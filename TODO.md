@@ -2060,6 +2060,17 @@ public QualityFlags Flags { get; set; }
     - [x] **Resources**: Implement Zombie Process killer for FFmpeg.
     - [x] **Database**: Implement WAL Checkpoint on shutdown.
     - [x] **Stability**: Implement UI Throttling and Semaphore Timeouts.view
+
+- [ ] **Phase 6: Mission Control "Command Center"**
+  - [ ] **Architecture**
+    - [ ] **Schema**: Create `DashboardSnapshots` table (JSON blobs for pre-computed stats).
+    - [ ] **Service**: Implement `MissionControlService` (Aggregator Facade).
+    - [ ] **Throttling**: Ensure UI only receives updates at 4fps via BatchedAdapter.
+  - [ ] **Features**
+    - [ ] **Live Ops Grid**: Virtualized panel for active transfers/searches.
+    - [ ] **Genre Galaxy**: Integrate LiveCharts2 for library visualization.
+    - [ ] **Missions**: Implement "Monthly Drop" command journey.
+    - [ ] **Vibe Search**: NLP parser for context queries.
 - [ ] Suggest higher quality replacements
 - [ ] Auto-replace option (with confirmation)
 

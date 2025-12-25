@@ -54,6 +54,16 @@
 - **Automatic Recovery**: Self-healing on startup (checks journal, resumes operations, notifies user).
 - **Performance**: <1% CPU overhead, <500ms startup delay.
 
+### Phase 6: Mission Control Dashboard (Q1 2026)
+**Goal**: Transform "Home" into a proactive command center with "Industrial Grade" performance.
+- [ ] **Tier 1: Aggregator Facade**: `MissionControlService` for throttled UI updates.
+- [ ] **Tier 2: Materialized Intelligence**: `DashboardSnapshots` SQLite table for pre-computed stats.
+- [ ] **Live Operations Grid**: "Glass Cockpit" view of transfers using VirtualizingStackPanel.
+- [ ] **Genre Galaxy**: GPU-accelerated force-directed graph (LiveCharts2).
+- [ ] **One-Click Missions**: "Monthly Drop", "Sonic Audit" via Command Pattern.
+- [ ] **Vibe Search**: Natural language query expansion ("Late night 124bpm").
+
+### Phase 7: Mobile Companion App (Q2 2026)
 ### Phase 1B: Database Optimization - COMPLETE
 **Impact**: 50-100x faster query performance.
 - **WAL Mode**: Write-Ahead Logging for high concurrency.
