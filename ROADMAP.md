@@ -1,17 +1,25 @@
 # ORBIT (formerly SLSKDONET): v1.0 Stabilization Roadmap
 
-**Last Updated**: December 25, 2024  
+**Last Updated**: December 25, 2025  
 **Repository**: https://github.com/MeshDigital/ORBIT  
-**Current Phase**: **Phase 4 Complete** (Rekordbox Integration) → Preparing for Phase 5 (Self-Healing)
+**Current Phase**: **Phase 5 Complete** (Self-Healing & Rekordbox Analysis) → Preparing for Phase 6 (UI Virtualization)
 
 > [!IMPORTANT]
 > **Status Update**: Phase 4 "Rekordbox Integration" is COMPLETE. ORBIT now features professional DJ export tools including playlist export and Monthly Drop functionality. Focus shifts to **Phase 5: Self-Healing Library**.
 
 ---
 
-## ✅ Recently Completed (December 2024)
+## ✅ Recently Completed (December 2025)
 
-### Phase 2A: The Ironclad Recovery System - COMPLETE
+### Phase 5B: Rekordbox Analysis Preservation & Hi-Fi Player - COMPLETE
+**Impact**: Professional DJ experience with instant waveforms and VU meters.
+- **NAudio Engine**: Low-latency audio processing for VU meters and pitch shifting.
+- **ANLZ Probing**: Automatic discovery of Rekordbox `.DAT/.EXT` companion files.
+- **Waveform Control**: Real-time rendering of Rekordbox `PWAV` data.
+- **VU Monitoring**: Exponential decay peak meters in the main player.
+- **Background Enrichment**: Batch-fetching (100 tracks) of Spotify Energy/Valence/Danceability.
+
+### Phase 5A: Self-Healing Library - COMPLETE
 **Impact**: Guaranteed zero data loss during crashes/power failures.
 - **Crash Recovery Journal**: Transactional logging (SQLite WAL) for all destructive operations.
 - **Atomic Tag Writes**: ACID-compliant metadata updates (`SafeWriteService`).
@@ -84,30 +92,24 @@
 - **Shadow Downloads**: Isolated `.orbit/tmp/upgrades` directory
 - **Cross-Volume Detection**: MFT atomic update vs verified copy+delete
 
-## 🔮 Phase 5B: Stealth Integration (Planned)
+## ✅ Phase 5B: Rekordbox Analysis Preservation (RAP) - COMPLETE
 **Phase Goal**: Preserve Rekordbox analysis during file upgrades.
-
-### Rekordbox Analysis Preservation (RAP)
-- **Binary ANLZ Parsing**: Read beat grids, waveforms, hot cues from `.DAT/.EXT` files
-- **XOR Descrambling**: Decrypt PSSI song structure phrases (Intro/Verse/Chorus/Outro)
-- **Database Surgery**: Update Rekordbox master.db paths (SQLCipher integration)
-- **Shadow Task Pattern**: Non-intrusive, fails gracefully without breaking core upgrade
+- ✅ **Binary ANLZ Parsing**: Read beat grids, waveforms, hot cues from `.DAT/.EXT` files
+- ✅ **XOR Descrambling**: Decrypted PSSI song structure phrases (Intro/Verse/Chorus/Outro)
+- ✅ **High-Fidelity Player**: NAudio-based engine with VU meters and real-time waveforms
+- ✅ **Companion Probing**: Automatic lookup of analysis data in `ANLZ` subfolders or USB structures
 
 ### ANLZ Tags Supported
-- `PQTZ` - Beat Grid (quantized tick markers)
-- `PCOB` - Cue Points and Hot Cues
-- `PWAV` - Waveform Preview
-- `PSSI` - Song Structure (XOR-encrypted phrases)
+- ✅ `PQTZ` - Beat Grid (quantized tick markers)
+- ✅ `PCOB` - Cue Points and Hot Cues
+- ✅ `PWAV` - Waveform Preview
+- ✅ `PSSI` - Song Structure (XOR-encrypted phrases)
 
-### Value Proposition
-When ORBIT upgrades MP3 → FLAC, DJ opens Rekordbox to find:
-- ✅ High-quality FLAC file
-- ✅ All waveforms intact
-- ✅ Beat grid corrections preserved
-- ✅ Hot cues and memory cues in place
-- ✅ Song structure phrases (Intro/Verse/Outro) maintained
-
-**No re-analysis required** - seamless upgrade experience for professional DJs.
+### High-Fidelity Infrastructure
+- **NAudio Backend**: Replaced LibVLC for better control over audio buffers and threading
+- **MeteringSampleProvider**: Real-time VU meter data (Left/Right peak)
+- **WaveformControl**: Custom Avalonia component for professional Waveform rendering
+- **Pitch UI**: Real-time tempo adjustment (0.9x to 1.1x)
 
 
 ## 🎯 Archived Priority: UI Placeholder Refactor (Completed Phase 3A)

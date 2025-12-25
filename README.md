@@ -41,9 +41,10 @@ Where traditional P2P clients download the first available file, ORBIT analyzes 
 - **Stall Detection**: Warns when transfers haven't progressed in 1 minute
 - **Zero Data Loss**: SQLite WAL mode prevents database corruption
 
-### 🎧 Spotify Integration
+### 🎧 Spotify & Deep Enrichment
 - **Playlist Import**: Paste a Spotify URL to queue downloads
-- **Metadata Enrichment**: Automatic BPM, Key, Album Art, and Genre tagging
+- **Background Worker**: Automatic BPM, Key, Energy, Valence, Danceability tagging
+- **Infinite Enrichment**: Secondary task continues to fetch deep audio features for all library tracks
 - **Duration Validation**: Uses Spotify's canonical duration to verify file versions
 - **Liked Songs Support**: Import your entire Spotify library
 
@@ -60,11 +61,13 @@ Where traditional P2P clients download the first available file, ORBIT analyzes 
 - **XML Sanitization**: Prevents metadata-related import failures
 - **Professional URIs**: `file://localhost/` format for cross-platform compatibility
 
-### 🎨 Modern UI
-- **Dark Theme**: Clean, Spotify-inspired interface
-- **Real-Time Progress**: Live download tracking with queue management
-- **Library Organization**: Drag-and-drop playlist management
-- **Built-in Player**: Preview tracks before committing to downloads
+### 🎨 High-Fidelity Player
+- **NAudio Engine**: Professional low-latency audio processing
+- **VU Monitoring**: Real-time Left/Right peak meters for volume balancing
+- **Waveform Seekbar**: High-resolution track visualization
+- **Rekordbox Integration**: Direct parsing of `.DAT/.EXT` analysis files—no re-analysis needed
+- **Pitch Control**: Accurate tempo adjustment for previewing mixes
+- **Queue Management**: Persistent play queue that survives app restarts
 
 ---
 

@@ -25,6 +25,7 @@ public record TransferFailedEvent(string Filename, string Username, string Error
 public record LibraryEntryAddedEvent(LibraryEntry Entry);
 public record LibraryEntryUpdatedEvent(LibraryEntry Entry);
 public record LibraryEntryDeletedEvent(string UniqueHash);
+public record LibraryMetadataEnrichedEvent(int Count);
 
 // Player Events
 public record TrackPlaybackStartedEvent(string FilePath, string Artist, string Title);

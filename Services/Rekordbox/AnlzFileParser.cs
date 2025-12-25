@@ -24,22 +24,56 @@ public class AnlzFileParser
     }
     
     /// <summary>
-    /// Parses an ANLZ file and extracts all supported tags.
+    /// Attempts to find an associated Rekordbox ANLZ file and parse it.
+    /// Probes standard directory structures (local and USB-style).
     /// </summary>
-    public AnlzData Parse(string filePath)
+    public AnlzData TryFindAndParseAnlz(string audioPath)
     {
-        if (!File.Exists(filePath))
+        var dir = Path.GetDirectoryName(audioPath);
+        if (dir == null) return new AnlzData();
+
+        var fileName = Path.GetFileNameWithoutExtension(audioPath);
+        
+        // Probing paths:
+        // 1. Same directory, same name with .DAT extension
+        // 2. Same directory, ANLZ subfolder
+        // 3. PIONEER/USBANLZ structure (if on USB)
+        
+        string[] candidates = {
+            Path.Combine(dir, fileName + ".DAT"),
+            Path.Combine(dir, "ANLZ", fileName + ".DAT"),
+            Path.Combine(dir, fileName + ".ext"),
+            Path.Combine(dir, fileName + ".2ex")
+        };
+        
+        foreach (var candidate in candidates)
         {
-            _logger.LogWarning("ANLZ file not found: {Path}", filePath);
-            return new AnlzData();
+            if (File.Exists(candidate))
+            {
+                _logger.LogInformation("Found Rekordbox companion file: {Path}", candidate);
+                return Parse(candidate);
+            }
         }
         
-        _logger.LogInformation("Parsing ANLZ file: {Path}", filePath);
-        
+        return new AnlzData();
+    }
+
+    /// <summary>
+    /// Parses ANLZ data from a byte array.
+    /// </summary>
+    public AnlzData Parse(byte[] buffer)
+    {
+        using var ms = new MemoryStream(buffer);
+        return Parse(ms);
+    }
+
+    /// <summary>
+    /// Parses ANLZ data from a stream.
+    /// </summary>
+    public AnlzData Parse(Stream stream)
+    {
         var data = new AnlzData();
-        
-        using var fs = File.OpenRead(filePath);
-        using var reader = new BinaryReader(fs);
+        using var reader = new BinaryReader(stream, Encoding.UTF8, true);
         
         // Read and validate header
         var header = Encoding.ASCII.GetString(reader.ReadBytes(4));
@@ -50,51 +84,57 @@ public class AnlzFileParser
         }
         
         var headerLength = reader.ReadUInt32BigEndian();
-        _logger.LogDebug("ANLZ header length: {Length} bytes", headerLength);
         
         // Parse tags using TLV pattern
-        while (fs.Position < fs.Length - 8)
+        while (stream.Position < stream.Length - 8)
         {
             var tag = Encoding.ASCII.GetString(reader.ReadBytes(4));
             var length = reader.ReadUInt32BigEndian();
             
-            _logger.LogDebug("Found tag: {Tag}, length: {Length}", tag, length);
-            
             switch (tag)
             {
-                case "PQTZ": // Beat Grid (quantized ticks)
-                case "PQT2": // Beat Grid v2
+                case "PQTZ": 
+                case "PQT2": 
                     data.BeatGrid = ParseBeatGrid(reader, length);
-                    _logger.LogInformation("Parsed beat grid: {Count} ticks", data.BeatGrid.Count);
                     break;
                     
-                case "PCOB": // Cue Points
-                case "PCO2": // Cue Points v2
+                case "PCOB": 
+                case "PCO2": 
                     data.CuePoints = ParseCuePoints(reader, length);
-                    _logger.LogInformation("Parsed cue points: {Count} cues", data.CuePoints.Count);
                     break;
                     
-                case "PWAV": // Waveform Preview
-                case "PWV2": // Waveform v2
-                case "PWV3": // Waveform v3
+                case "PWAV": 
+                case "PWV2": 
+                case "PWV3": 
                     data.WaveformData = ParseWaveform(reader, length);
-                    _logger.LogInformation("Parsed waveform: {Size} bytes", data.WaveformData.Length);
                     break;
                     
-                case "PSSI": // Song Structure (encrypted)
+                case "PSSI": 
                     data.SongStructure = ParseSongStructure(reader, length);
-                    _logger.LogInformation("Parsed song structure: {Count} phrases", data.SongStructure.Phrases.Count);
                     break;
                     
                 default:
-                    // Skip unknown tag
                     reader.ReadBytes((int)length);
-                    _logger.LogDebug("Skipped unknown tag: {Tag}", tag);
                     break;
             }
         }
         
         return data;
+    }
+
+    /// <summary>
+    /// Parses an ANLZ file and extracts all supported tags.
+    /// </summary>
+    public AnlzData Parse(string filePath)
+    {
+        if (!File.Exists(filePath))
+        {
+            _logger.LogWarning("ANLZ file not found: {Path}", filePath);
+            return new AnlzData();
+        }
+        
+        using var fs = File.OpenRead(filePath);
+        return Parse(fs);
     }
     
     /// <summary>

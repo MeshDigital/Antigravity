@@ -95,6 +95,38 @@ All destructive operations follow the **Prepare → Log → Execute → Commit**
 
 ---
 
+## 🔊 Audio Layer (High-Fidelity Engine)
+
+Phase 5B introduced a low-latency audio processing pipeline powered by **NAudio**.
+
+### Signal Chain
+```
+[File] → (AudioFileReader) → [Sample Data] → (SampleChannel) → (MeteringSampleProvider) → [Output Device]
+                                                                        │
+                                                                        └──▶ [AudioLevelsChanged Event]
+                                                                                      │
+                                                                        ┌─────────────▼─────────────┐
+                                                                        │      PlayerViewModel      │
+                                                                        │ (Peak Left / peak Right)  │
+                                                                        └─────────────┬─────────────┘
+                                                                                      ▼
+                                                                        [UI: Dual VU Meters]
+```
+
+### Components
+- **IAudioPlayerService**: Abstracted interface for playback controls and metrics.
+- **NAudio Provider**: Uses `WaveOutEvent` with custom latency settings (100ms) to balance CPU usage and UI responsiveness.
+- **MeteringSampleProvider**: A non-blocking wrapper that calculates RMS and Peak levels on a secondary thread.
+- **Custom WaveformControl**: A direct-drawing Avalonia control that renders pre-parsed Rekordbox `PWAV` data or generates peaks on-the-fly.
+
+### Analysis Preservation (RAP)
+The audio layer is deeply integrated with the `Rekordbox.AnlzFileParser`:
+- **Probing Service**: Automatically scans for `.DAT/.EXT` companion files.
+- **Binary Extraction**: Extracts high-resolution waveforms and cue points without re-analyzing audio.
+- **XOR Descrambler**: Decrypts phrase data for song structure visualization.
+
+---
+
 ## 💾 Persistence Layer
 
 ### Database Strategy

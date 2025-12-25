@@ -30,6 +30,7 @@ namespace SLSKDONET.ViewModels
         }
         private readonly IAudioPlayerService _playerService;
         private readonly DatabaseService _databaseService;
+        private readonly Services.Rekordbox.AnlzFileParser _anlzParser;
         
         private string _trackTitle = "No Track Playing";
         public string TrackTitle
@@ -179,6 +180,41 @@ namespace SLSKDONET.ViewModels
             set => SetProperty(ref _isCurrentTrackLiked, value);
         }
         
+        // Sprint B: High-Fidelity Features
+        private float _vuLeft;
+        public float VuLeft
+        {
+            get => _vuLeft;
+            set => SetProperty(ref _vuLeft, value);
+        }
+
+        private float _vuRight;
+        public float VuRight
+        {
+            get => _vuRight;
+            set => SetProperty(ref _vuRight, value);
+        }
+
+        private byte[] _waveformData = Array.Empty<byte>();
+        public byte[] WaveformData
+        {
+            get => _waveformData;
+            set => SetProperty(ref _waveformData, value);
+        }
+
+        private double _pitch = 1.0;
+        public double Pitch
+        {
+            get => _pitch;
+            set
+            {
+                if (SetProperty(ref _pitch, value))
+                {
+                    _playerService.Pitch = value;
+                }
+            }
+        }
+        
         // Shuffle history to prevent immediate repeats
         private readonly List<int> _shuffleHistory = new();
 
@@ -195,10 +231,11 @@ namespace SLSKDONET.ViewModels
         public ICommand ToggleQueueCommand { get; }
         public ICommand ToggleLikeCommand { get; } // Phase 9.3
 
-        public PlayerViewModel(IAudioPlayerService playerService, DatabaseService databaseService, IEventBus eventBus)
+        public PlayerViewModel(IAudioPlayerService playerService, DatabaseService databaseService, IEventBus eventBus, Services.Rekordbox.AnlzFileParser anlzParser)
         {
             _playerService = playerService;
             _databaseService = databaseService;
+            _anlzParser = anlzParser;
             
             // Phase 6B: Subscribe to playback requests
             eventBus.GetEvent<PlayTrackRequestEvent>().Subscribe(evt => 
@@ -254,6 +291,12 @@ namespace SLSKDONET.ViewModels
             _playerService.TimeChanged += (s, timeMs) => CurrentTimeStr = TimeSpan.FromMilliseconds(timeMs).ToString(@"m\:ss");
             
             _playerService.LengthChanged += (s, lenMs) => TotalTimeStr = TimeSpan.FromMilliseconds(lenMs).ToString(@"m\:ss");
+            
+            _playerService.AudioLevelsChanged += (s, e) =>
+            {
+                VuLeft = e.Left;
+                VuRight = e.Right;
+            };
 
             TogglePlayPauseCommand = new RelayCommand(TogglePlayPause);
             StopCommand = new RelayCommand(Stop);
@@ -505,6 +548,10 @@ namespace SLSKDONET.ViewModels
 
             if (!string.IsNullOrEmpty(filePath))
             {
+                // Sprint B: Load Rekordbox Waveform if exists
+                var anlz = _anlzParser.TryFindAndParseAnlz(filePath);
+                WaveformData = anlz.WaveformData;
+                
                 PlayTrack(filePath, track.Title ?? "Unknown", track.Artist ?? "Unknown");
             }
         }

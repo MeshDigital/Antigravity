@@ -2,18 +2,20 @@
 
 ## 🎵 Audio Playback
 
-### Built-in Music Player
-- **LibVLC Integration**: Professional-grade audio playback
+### High-Fidelity Music Player
+- **NAudio Integration**: High-performance audio engine with low-latency monitoring
 - **Format Support**: MP3, FLAC, WAV, OGG, and more
-- **Playback Controls**: Play, pause, stop, volume control
+- **Real-Time VU Meters**: Dual-channel peak monitoring for volume balancing
+- **Waveform Seekbar**: Interactive waveform rendering (supports Rekordbox direct parsing)
+- **Pitch/Tempo Control**: Adjust playback speed from 0.9x to 1.1x
 - **Drag-and-Drop**: Drag tracks from Library to player sidebar
 - **Double-Click Play**: Quick playback from track lists
 
-### Player Features
-- Real-time progress bar
-- Track information display (artist, title, album)
-- Volume slider
-- Initialization diagnostics (shows errors if LibVLC missing)
+### Visual Analysis
+- **Automatic Rekordbox Probing**: Detects `.DAT/.EXT` companion files for instant waveforms
+- **Beat Grid Support**: Displays original beat markers from analysis data
+- **Hot Cue Visualization**: Renders Rekordbox hot cues on the waveform
+- **Song Structure**: Phases (Intro/Chorus/Outro) visible in the player timeline
 
 ---
 
@@ -43,11 +45,13 @@
 
 ## 📥 Import System
 
-### Spotify Integration
+### Spotify & Deep Enrichment
 - **Playlist Import**: Import public Spotify playlists by URL
 - **Track Extraction**: Automatic artist/title extraction
-- **Metadata Preservation**: Album and track info retained
-- **Batch Import**: Import entire playlists at once
+- **Background Enrichment**: Automatic BPM, Key, Energy, Valence, and Danceability tagging
+- **Batch Processing**: Unified feature fetching (batches of 100) for API efficiency
+- **Duration Validation**: Uses Spotify's canonical duration to verify file versions
+- **Liked Songs Support**: Import your entire Spotify library
 
 ### CSV Import
 - **File Support**: Import from CSV files

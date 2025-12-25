@@ -39,4 +39,22 @@ namespace SLSKDONET.Views.Avalonia.Converters
             throw new NotImplementedException();
         }
     }
+
+    public class VuHeightConverter : IValueConverter
+    {
+        public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+        {
+            if (value is float vu && parameter is string paramStr && double.TryParse(paramStr, out var maxHeight))
+            {
+                // Simple linear scaling for now. In real DJ gear it's usually logarithmic.
+                return Math.Clamp(vu * maxHeight, 0, maxHeight);
+            }
+            return 0.0;
+        }
+
+        public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
+        {
+            throw new NotImplementedException();
+        }
+    }
 }

@@ -34,13 +34,23 @@
 - ✅ **Library UI**: Fixed real-time status updates and bindings for track view.
 
 ### Recent Updates (December 25, 2025)
-- ✅ **Phase 5A Complete**: Self-healing library with automatic quality upgrades
-- ✅ **LibraryScanner**: Batch processing (50 tracks/batch), 7-day scan cooldown
-- ✅ **MetadataCloner**: Cross-format metadata transfer with ORBIT custom tags
-- ✅ **UpgradeScout**: P2P search with ±2s duration matching and weighted quality scoring
-- ✅ **FileLockMonitor**: Dual-layer safety (PlayerViewModel + OS-level exclusive lock)
-- ✅ **UpgradeOrchestrator**: 8-step atomic swap with state machine and rollback logic
-- ✅ **Phase 5B Validation**: XOR descrambler, AnlzFileParser for Rekordbox binary formats
+- ✅ **Phase 5A Complete**: Self-healing library with automatic quality upgrades.
+- ✅ **Phase 5B Complete**: Rekordbox Analysis Preservation (RAP).
+  - ✅ **ANLZ Parser**: Binary parsing of Rekordbox `.DAT`, `.EXT`, `.2EX` files.
+  - ✅ **Waveform Visualization**: Custom `WaveformControl` support for Rekordbox PWAV data.
+  - ✅ **XOR Descrambling**: Support for song structure phrase markers.
+- ✅ **Sprint A: Background Enrichment**:
+  - ✅ **Priority Worker**: Playlist tracks are enriched before global library.
+  - ✅ **Unified features**: Fetching Energy, Danceability, Valence in 100-track batches.
+  - ✅ **Event Messaging**: `IEventBus` integration for real-time UI updates.
+- ✅ **Sprint B: High-Fidelity Player**:
+  - ✅ **NAudio Backend**: Switched from LibVLC for better signal processing.
+  - ✅ **VU Meters**: Real-time Left/Right peak monitoring.
+  - ✅ **Pitch Control**: Hardware-style tempo adjustment (0.9x - 1.1x).
+  - ✅ **Companion Probing**: Automatic discovery of Rekordbox metadata in secondary folders.
+- ✅ **Metadata Persistence**:
+  - ✅ **Upgrade Safety**: `MetadataCloner` now preserves musical intelligence during file swaps.
+  - ✅ **Database Sync**: Synced Spotify features between `LibraryEntry` and `PlaylistTrack`.
 
 ---
 

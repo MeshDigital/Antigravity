@@ -23,6 +23,9 @@ public class MetadataCloner
     private const string TAG_IMPORT_DATE = "ORBIT_IMPORT_DATE";
     private const string TAG_UPGRADE_SOURCE = "ORBIT_UPGRADE_SOURCE";
     private const string TAG_ORIGINAL_BITRATE = "ORBIT_ORIGINAL_BITRATE";
+    private const string TAG_ENERGY = "ORBIT_ENERGY";
+    private const string TAG_DANCEABILITY = "ORBIT_DANCEABILITY";
+    private const string TAG_VALENCE = "ORBIT_VALENCE";
     
     public MetadataCloner(ILogger<MetadataCloner> logger)
     {
@@ -204,7 +207,10 @@ public class MetadataCloner
             [TAG_INTEGRITY] = track.Integrity.ToString(),
             [TAG_IMPORT_DATE] = track.AddedAt.ToString("yyyy-MM-dd"),
             [TAG_UPGRADE_SOURCE] = "Auto", // Mark as auto-upgraded
-            [TAG_ORIGINAL_BITRATE] = track.PreviousBitrate ?? $"{track.Bitrate}kbps"
+            [TAG_ORIGINAL_BITRATE] = track.PreviousBitrate ?? $"{track.Bitrate}kbps",
+            [TAG_ENERGY] = track.Energy?.ToString("F2") ?? "0.00",
+            [TAG_DANCEABILITY] = track.Danceability?.ToString("F2") ?? "0.00",
+            [TAG_VALENCE] = track.Valence?.ToString("F2") ?? "0.00"
         };
         
         foreach (var (key, value) in customTags)

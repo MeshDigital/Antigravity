@@ -13,10 +13,12 @@ using System.Threading.Tasks;
 using System.Windows.Input;
 using Avalonia.Threading;
 using SLSKDONET.Views;
+using System.Reactive.Linq;
+using System.Collections.Generic;
 
 namespace SLSKDONET.ViewModels;
 
-public class HomeViewModel : INotifyPropertyChanged
+public class HomeViewModel : INotifyPropertyChanged, IDisposable
 {
     private readonly ILogger<HomeViewModel> _logger;
     private readonly DashboardService _dashboardService;
@@ -27,7 +29,9 @@ public class HomeViewModel : INotifyPropertyChanged
     private readonly SpotifyEnrichmentService _spotifyEnrichment;
     private readonly DownloadManager _downloadManager;
     private readonly CrashRecoveryJournal _crashJournal; // Phase 3A: Transparency
-    private readonly INotificationService _notificationService; // Phase 3B: UI Feedback
+    private readonly INotificationService _notificationService;
+    private readonly IEventBus _eventBus;
+    private IDisposable? _eventSubscription;
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -107,7 +111,8 @@ public class HomeViewModel : INotifyPropertyChanged
         SpotifyEnrichmentService spotifyEnrichment,
         DownloadManager downloadManager,
         CrashRecoveryJournal crashJournal,
-        INotificationService notificationService)
+        INotificationService notificationService,
+        IEventBus eventBus)
     {
         _logger = logger;
         _dashboardService = dashboardService;
@@ -119,6 +124,7 @@ public class HomeViewModel : INotifyPropertyChanged
         _downloadManager = downloadManager;
         _crashJournal = crashJournal;
         _notificationService = notificationService;
+        _eventBus = eventBus;
 
         RefreshDashboardCommand = new AsyncRelayCommand(RefreshDashboardAsync);
         NavigateToSearchCommand = new RelayCommand(() => _navigationService.NavigateTo("Search"));
@@ -134,6 +140,15 @@ public class HomeViewModel : INotifyPropertyChanged
                 OnPropertyChanged(nameof(IsSoulseekConnected));
             }
         };
+
+        // Multi-source reactive updates for the Live Pulse
+        var enrichmentEvents = _eventBus.GetEvent<LibraryMetadataEnrichedEvent>();
+        var statusEvents = _eventBus.GetEvent<TrackStateChangedEvent>();
+
+        _eventSubscription = enrichmentEvents
+            .Merge(statusEvents.Select(_ => new LibraryMetadataEnrichedEvent(0))) // Cheat to trigger refresh
+            .Throttle(TimeSpan.FromSeconds(2)) // Don't spam DB during heavy bursts
+            .Subscribe(_ => Dispatcher.UIThread.InvokeAsync(LoadLibraryHealthAsync));
 
         // Trigger initial load
         _ = RefreshDashboardAsync();
@@ -293,6 +308,11 @@ public class HomeViewModel : INotifyPropertyChanged
         // we can trigger its property changes or a command if we have access.
         // For now, let's assume we navigate and the user can see the intent.
         // Better: We should have a way to pass parameters to Navigation.
+    }
+
+    public void Dispose()
+    {
+        _eventSubscription?.Dispose();
     }
 
     protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)

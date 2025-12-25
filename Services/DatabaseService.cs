@@ -943,6 +943,59 @@ public class DatabaseService
             }
             
             context.LibraryEntries.Update(entry);
+            
+            // Sync to PlaylistTracks too
+            var relatedTracks = await context.PlaylistTracks.Where(pt => pt.TrackUniqueHash == uniqueHash).ToListAsync();
+            foreach (var pt in relatedTracks)
+            {
+                pt.SpotifyTrackId = result.SpotifyId;
+                if (!string.IsNullOrEmpty(result.ISRC)) pt.ISRC = result.ISRC;
+                if (!string.IsNullOrEmpty(result.AlbumArtUrl)) pt.AlbumArtUrl = result.AlbumArtUrl;
+                if (result.Bpm > 0)
+                {
+                    pt.BPM = result.Bpm;
+                    pt.Energy = result.Energy;
+                    pt.Valence = result.Valence;
+                    pt.Danceability = result.Danceability;
+                    pt.IsEnriched = true;
+                }
+            }
+            
+            await context.SaveChangesAsync();
+        }
+    }
+
+    public async Task<List<PlaylistTrackEntity>> GetPlaylistTracksNeedingEnrichmentAsync(int limit)
+    {
+        using var context = new AppDbContext();
+        return await context.PlaylistTracks
+            .Where(e => !e.IsEnriched && e.SpotifyTrackId == null)
+            .OrderByDescending(e => e.AddedAt)
+            .Take(limit)
+            .ToListAsync();
+    }
+
+    public async Task UpdatePlaylistTrackEnrichmentAsync(Guid id, TrackEnrichmentResult result)
+    {
+        using var context = new AppDbContext();
+        var track = await context.PlaylistTracks.FindAsync(id);
+        if (track != null)
+        {
+            if (result.Success)
+            {
+                track.SpotifyTrackId = result.SpotifyId;
+                if (!string.IsNullOrEmpty(result.ISRC)) track.ISRC = result.ISRC;
+                if (!string.IsNullOrEmpty(result.AlbumArtUrl)) track.AlbumArtUrl = result.AlbumArtUrl;
+                
+                if (result.Bpm > 0)
+                {
+                    track.BPM = result.Bpm;
+                    track.Energy = result.Energy;
+                    track.Valence = result.Valence;
+                    track.Danceability = result.Danceability;
+                    track.IsEnriched = true;
+                }
+            }
             await context.SaveChangesAsync();
         }
     }
@@ -958,11 +1011,22 @@ public class DatabaseService
              .ToListAsync();
     }
 
+    public async Task<List<PlaylistTrackEntity>> GetPlaylistTracksNeedingFeaturesAsync(int limit)
+    {
+        using var context = new AppDbContext();
+        return await context.PlaylistTracks
+            .Where(e => e.SpotifyTrackId != null && !e.IsEnriched)
+            .OrderByDescending(e => e.AddedAt)
+            .Take(limit)
+            .ToListAsync();
+    }
+
     public async Task UpdateLibraryEntriesFeaturesAsync(Dictionary<string, SpotifyAPI.Web.TrackAudioFeatures> featuresMap)
     {
         using var context = new AppDbContext();
         var ids = featuresMap.Keys.ToList();
         
+        // 1. Update Library Entries
         var entries = await context.LibraryEntries
             .Where(e => e.SpotifyTrackId != null && ids.Contains(e.SpotifyTrackId))
             .ToListAsync();
@@ -971,15 +1035,32 @@ public class DatabaseService
         {
             if (entry.SpotifyTrackId != null && featuresMap.TryGetValue(entry.SpotifyTrackId, out var f))
             {
-                entry.BPM = f.Tempo; // Use explicit property names from Entity
+                entry.BPM = f.Tempo;
                 entry.Energy = f.Energy;
                 entry.Valence = f.Valence;
                 entry.Danceability = f.Danceability;
                 entry.IsEnriched = true;
             }
         }
+
+        // 2. Update Playlist Tracks (Intelligence Sync)
+        var pTracks = await context.PlaylistTracks
+            .Where(e => e.SpotifyTrackId != null && ids.Contains(e.SpotifyTrackId))
+            .ToListAsync();
+
+        foreach (var pt in pTracks)
+        {
+            if (pt.SpotifyTrackId != null && featuresMap.TryGetValue(pt.SpotifyTrackId, out var f))
+            {
+                pt.BPM = f.Tempo;
+                pt.Energy = f.Energy;
+                pt.Valence = f.Valence;
+                pt.Danceability = f.Danceability;
+                pt.IsEnriched = true;
+            }
+        }
         
-       await context.SaveChangesAsync();
+        await context.SaveChangesAsync();
     }
 
 

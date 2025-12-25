@@ -17,6 +17,7 @@ public class LibraryEnrichmentWorker : IDisposable
     private readonly ILogger<LibraryEnrichmentWorker> _logger;
     private readonly DatabaseService _databaseService;
     private readonly SpotifyEnrichmentService _enrichmentService;
+    private readonly IEventBus _eventBus;
     private CancellationTokenSource? _cts;
     private Task? _workerTask;
     
@@ -28,11 +29,13 @@ public class LibraryEnrichmentWorker : IDisposable
     public LibraryEnrichmentWorker(
         ILogger<LibraryEnrichmentWorker> logger,
         DatabaseService databaseService,
-        SpotifyEnrichmentService enrichmentService)
+        SpotifyEnrichmentService enrichmentService,
+        IEventBus eventBus)
     {
         _logger = logger;
         _databaseService = databaseService;
         _enrichmentService = enrichmentService;
+        _eventBus = eventBus;
     }
 
     public void Start()
@@ -98,20 +101,49 @@ public class LibraryEnrichmentWorker : IDisposable
     private async Task<bool> ProcessBatchAsync()
     {
         bool didWork = false;
+        int enrichedCount = 0;
 
-        // --- PASS 1: Identification (Stage 1) ---
-        // Find tracks with NO Spotify ID (e.g. from CSV)
+        // --- STAGE 0: Active Project Identification (High Priority) ---
+        // Find tracks in playlists that are missing identifiers
+        var unidentifiedPlaylist = await _databaseService.GetPlaylistTracksNeedingEnrichmentAsync(BatchSize);
+        
+        if (unidentifiedPlaylist.Any())
+        {
+            _logger.LogInformation("Enrichment Stage 0: Identification for {Count} PlaylistTracks", unidentifiedPlaylist.Count);
+            foreach (var track in unidentifiedPlaylist)
+            {
+                if (_cts.Token.IsCancellationRequested) break;
+                
+                await Task.Delay(RateLimitDelayMs, _cts.Token); 
+
+                try 
+                {
+                    var result = await _enrichmentService.IdentifyTrackAsync(track.Artist, track.Title);
+                    await _databaseService.UpdatePlaylistTrackEnrichmentAsync(track.Id, result);
+                    
+                    if (result.Success)
+                    {
+                         _logger.LogDebug("Identified PlaylistTrack: {Artist} - {Title}", track.Artist, track.Title);
+                         enrichedCount++;
+                    }
+                }
+                catch (Exception ex) { _logger.LogError(ex, "Stage 0 failed for track {Id}", track.Id); }
+            }
+            didWork = true;
+        }
+
+        // --- STAGE 1: Global Library Identification ---
+        // Find tracks with NO Spotify ID (Global Library)
         var unidentified = await _databaseService.GetLibraryEntriesNeedingEnrichmentAsync(BatchSize);
         
         if (unidentified.Any())
         {
-            _logger.LogInformation("Enrichment Pass 1: Identification for {Count} tracks", unidentified.Count);
+            _logger.LogInformation("Enrichment Stage 1: Identification for {Count} Library Entries", unidentified.Count);
             
             foreach (var track in unidentified)
             {
                 if (_cts.Token.IsCancellationRequested) break;
                 
-                // Rate limit for search API
                 await Task.Delay(RateLimitDelayMs, _cts.Token); 
 
                 try 
@@ -120,52 +152,54 @@ public class LibraryEnrichmentWorker : IDisposable
                     await _databaseService.UpdateLibraryEntryEnrichmentAsync(track.UniqueHash, result);
                     
                     if (result.Success)
-                         _logger.LogDebug("Identified: {Artist} - {Title} => {SpotifyId}", track.Artist, track.Title, result.SpotifyId);
-                    else
-                         _logger.LogDebug("Identification failed: {Artist} - {Title}", track.Artist, track.Title);
+                    {
+                         _logger.LogDebug("Identified LibraryEntry: {Artist} - {Title}", track.Artist, track.Title);
+                         enrichedCount++;
+                    }
                 }
-                catch (Exception ex)
-                {
-                     _logger.LogError(ex, "Pass 1 failed for track {Hash}", track.UniqueHash);
-                }
+                catch (Exception ex) { _logger.LogError(ex, "Stage 1 failed for track {Hash}", track.UniqueHash); }
             }
             didWork = true;
         }
 
-        // --- PASS 2: Musical Intelligence (Stage 2) ---
-        // Find tracks WITH Spotify ID but NO Features (IsEnriched = false)
-        // Can process up to 100 at once efficiently
-        var needingFeatures = await _databaseService.GetLibraryEntriesNeedingFeaturesAsync(50); // Get 50 to benefit from batching
+        // --- STAGE 2: Batch Musical Intelligence (Unified) ---
+        // Fetch features for identified tracks (Shared across Library and Projects)
+        var needingFeaturesEntries = await _databaseService.GetLibraryEntriesNeedingFeaturesAsync(50);
+        var needingFeaturesPlaylist = await _databaseService.GetPlaylistTracksNeedingFeaturesAsync(50);
         
-        if (needingFeatures.Any())
+        var allIds = needingFeaturesEntries.Select(e => e.SpotifyTrackId)
+            .Concat(needingFeaturesPlaylist.Select(p => p.SpotifyTrackId))
+            .Where(id => !string.IsNullOrEmpty(id))
+            .Distinct()
+            .Select(id => id!)
+            .Take(100)
+            .ToList();
+
+        if (allIds.Any())
         {
-             _logger.LogInformation("Enrichment Pass 2: Batch Features for {Count} tracks", needingFeatures.Count);
+             _logger.LogInformation("Enrichment Stage 2: Batch Features for {Count} unique tracks", allIds.Count);
              
-             // Extract IDs
-             var ids = needingFeatures
-                .Select(t => t.SpotifyTrackId)
-                .Where(id => !string.IsNullOrEmpty(id))
-                .Select(id => id!)
-                .ToList();
-             
-             if (ids.Any())
+             try 
              {
-                 try 
-                 {
-                     // Single API call for up to 50 tracks
-                     var featuresMap = await _enrichmentService.GetAudioFeaturesBatchAsync(ids);
-                     
-                     // Batch DB update
-                     await _databaseService.UpdateLibraryEntriesFeaturesAsync(featuresMap);
-                     
-                     _logger.LogInformation("Pass 2 Complete: Enriched {Count} tracks with audio features", featuresMap.Count);
-                 }
-                 catch (Exception ex)
-                 {
-                     _logger.LogError(ex, "Pass 2 Batch failed");
-                 }
+                 var featuresMap = await _enrichmentService.GetAudioFeaturesBatchAsync(allIds);
+                 
+                 // Batch DB update (Updates both LibraryEntry and PlaylistTrack tables via Intelligence Sync)
+                 await _databaseService.UpdateLibraryEntriesFeaturesAsync(featuresMap);
+                 
+                 enrichedCount += featuresMap.Count;
+                 _logger.LogInformation("Stage 2 Complete: Enriched {Count} tracks with audio features", featuresMap.Count);
+             }
+             catch (Exception ex)
+             {
+                 _logger.LogError(ex, "Stage 2 Batch failed");
              }
              didWork = true;
+        }
+
+        if (enrichedCount > 0)
+        {
+            // Update UI/Dashboard metrics
+            _eventBus.Publish(new LibraryMetadataEnrichedEvent(enrichedCount));
         }
 
         return didWork;

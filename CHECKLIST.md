@@ -243,62 +243,42 @@
 - [x] Project compiles without errors
 - [x] No C# compilation errors
 - [x] All new classes resolve properly
-- [x] Theme resources available
-- [x] Backward compatible with existing code
+  - [x] Theme resources available
+  - [x] Backward compatible with existing code
 
 ---
 
-## Phase 5: Spotify & Advanced Features ⏳ (Next)
+## Phase 5: Self-Healing & Hi-Fi Audio ✅ (Dec 2025)
 
-### Spotify Integration
-- [ ] SpotifyInputSource implementation
-  - [ ] OAuth flow setup
-  - [ ] Playlist parsing
-  - [ ] Liked songs support
-  - [ ] Track metadata extraction
-- [ ] SpotifyAuthWindow
-  - [ ] Browser-based OAuth
-  - [ ] Token caching
-  - [ ] Refresh token management
-- [ ] Integration into UI
-  - [ ] Spotify playlist button opens auth dialog
-  - [ ] Select playlist from list
-  - [ ] Extract and populate search results
-  - [ ] Show Spotify track metadata
+### Phase 5A: Self-Healing Library
+- [x] **LibraryScanner** - Batch processing (50 tracks/batch)
+- [x] **MetadataCloner** - Cross-format tag transfer (ID3 ↔ Vorbis ↔ APE)
+- [x] **UpgradeScout** - P2P search matching duration/metadata
+- [x] **UpgradeOrchestrator** - 8-step atomic swap with state machine
+- [x] **FileLockMonitor** - OS-level exclusive lock prevention
 
-### Advanced Search Filters (UI)
-- [ ] FiltersWindow (new WPF dialog)
-  - [ ] Bitrate range sliders
-  - [ ] Format multiselect checkboxes
-  - [ ] Length tolerance input
-  - [ ] Strict title/artist toggles
-  - [ ] "Remove feat" checkbox
-  - [ ] Apply/Clear buttons
-  - [ ] Preset system
-- [ ] Wire to FileConditionEvaluator
-- [ ] Show active filter summary
-- [ ] Save filter presets
+### Phase 5B: Rekordbox Analysis & Hi-Fi Player
+- [x] **ANLZ Parser** - Binary parsing of Rekordbox metadata tags
+  - [x] `PQTZ` (Beat Grid)
+  - [x] `PCOB` (Cue Points)
+  - [x] `PWAV` (Waveform)
+  - [x] `PSSI` (Song Structure)
+- [x] **NAudio Integration** - Low-latency audio processing
+- [x] **Hi-Fi Visualization**
+  - [x] Dual-channel VU meters with exponential decay
+  - [x] Custom `WaveformControl` for professional rendering
+  - [x] Real-time pitch/tempo control (±10%)
+- [x] **Companion Probing** - Automated metadata discovery for analyzed tracks
 
-### CSV Import Enhancement
-- [ ] CsvImportWindow (new WPF dialog)
-  - [ ] File browser with CSV filter
-  - [ ] Preview grid (first 10 rows)
-  - [ ] Column auto-detection display
-  - [ ] Manual column mapping UI
-  - [ ] Mode selection (track vs album)
-  - [ ] Import/Cancel buttons
-- [ ] Progress during parsing
-- [ ] Error reporting
-
-### Download Manager Enhancement
-- [ ] Pause functionality (not just cancel)
-- [ ] Individual download cancellation
-- [ ] Bandwidth throttling
-- [ ] Download speed display
+### Spotify Deep Enrichment
+- [x] **Background Worker** - Priority enrichment for playlist tracks
+- [x] **Deep Features** - Energy, Valence, Danceability, BPM, Key
+- [x] **Batch Fetching** - 100-track batches for API efficiency
+- [x] **Event Bus UI Sync** - Real-time updates in Library views
 
 ---
 
-## Phase 6: Album & Persistence ⏳ (Later)
+## Phase 6: UI Virtualization & Scale ⏳ (Next)
 
 ### Build
 - [x] Compiles without warnings
@@ -441,4 +421,4 @@ Checklist:
 
 This checklist will be updated as features are completed. Track progress by marking items and updating dates.
 
-Last Updated: December 9, 2025
+Last Updated: December 25, 2025

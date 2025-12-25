@@ -485,7 +485,38 @@ public class LibraryService : ILibraryService
             AddedAt = entity.AddedAt,
             SortOrder = entity.SortOrder,
             PreferredFormats = entity.PreferredFormats,
-            MinBitrateOverride = entity.MinBitrateOverride
+            MinBitrateOverride = entity.MinBitrateOverride,
+            
+            // Spotify Metadata
+            SpotifyTrackId = entity.SpotifyTrackId,
+            ISRC = entity.ISRC,
+            SpotifyAlbumId = entity.SpotifyAlbumId,
+            SpotifyArtistId = entity.SpotifyArtistId,
+            AlbumArtUrl = entity.AlbumArtUrl,
+            WaveformData = entity.WaveformData ?? Array.Empty<byte>(),
+            ArtistImageUrl = entity.ArtistImageUrl,
+            Genres = entity.Genres,
+            Popularity = entity.Popularity,
+            CanonicalDuration = entity.CanonicalDuration,
+            ReleaseDate = entity.ReleaseDate,
+
+            // Musical Intelligence
+            MusicalKey = entity.MusicalKey,
+            BPM = entity.BPM,
+            Energy = entity.Energy,
+            Danceability = entity.Danceability,
+            Valence = entity.Valence,
+            AnalysisOffset = entity.AnalysisOffset,
+            BitrateScore = entity.BitrateScore,
+            Bitrate = entity.Bitrate,
+            
+            // Dual-Truth
+            SpotifyBPM = entity.SpotifyBPM,
+            SpotifyKey = entity.SpotifyKey,
+            ManualBPM = entity.ManualBPM,
+            ManualKey = entity.ManualKey,
+            
+            IsEnriched = entity.IsEnriched
         };
     }
 
@@ -509,7 +540,38 @@ public class LibraryService : ILibraryService
             AddedAt = track.AddedAt,
             SortOrder = track.SortOrder,
             PreferredFormats = track.PreferredFormats,
-            MinBitrateOverride = track.MinBitrateOverride
+            MinBitrateOverride = track.MinBitrateOverride,
+            
+            // Spotify Metadata
+            SpotifyTrackId = track.SpotifyTrackId,
+            ISRC = track.ISRC,
+            SpotifyAlbumId = track.SpotifyAlbumId,
+            SpotifyArtistId = track.SpotifyArtistId,
+            AlbumArtUrl = track.AlbumArtUrl,
+            WaveformData = track.WaveformData,
+            ArtistImageUrl = track.ArtistImageUrl,
+            Genres = track.Genres,
+            Popularity = track.Popularity,
+            CanonicalDuration = track.CanonicalDuration,
+            ReleaseDate = track.ReleaseDate,
+
+            // Musical Intelligence
+            MusicalKey = track.MusicalKey,
+            BPM = track.BPM,
+            Energy = track.Energy,
+            Danceability = track.Danceability,
+            Valence = track.Valence,
+            AnalysisOffset = track.AnalysisOffset,
+            BitrateScore = track.BitrateScore,
+            Bitrate = track.Bitrate ?? 0,
+            
+            // Dual-Truth
+            SpotifyBPM = track.SpotifyBPM,
+            SpotifyKey = track.SpotifyKey,
+            ManualBPM = track.ManualBPM,
+            ManualKey = track.ManualKey,
+            
+            IsEnriched = track.IsEnriched
         };
     }
 
@@ -527,13 +589,27 @@ public class LibraryService : ILibraryService
             Bitrate = entity.Bitrate,
             DurationSeconds = entity.DurationSeconds,
             Format = entity.Format,
-            AddedAt = entity.AddedAt
+            AddedAt = entity.AddedAt,
+            
+            // Scientific Fields
+            SpotifyTrackId = entity.SpotifyTrackId,
+            Energy = entity.Energy,
+            Danceability = entity.Danceability,
+            Valence = entity.Valence,
+            BPM = entity.BPM,
+            MusicalKey = entity.MusicalKey,
+            IsEnriched = entity.IsEnriched,
+            
+            // Dual-Truth
+            SpotifyBPM = entity.SpotifyBPM,
+            SpotifyKey = entity.SpotifyKey,
+            ManualBPM = entity.ManualBPM,
+            ManualKey = entity.ManualKey
         };
     }
 
     private LibraryEntryEntity LibraryEntryToEntity(LibraryEntry entry)
     {
-        // This is a simplified mapping. In a real scenario, you might use a library like AutoMapper.
         var entity = new LibraryEntryEntity();
         entity.UniqueHash = entry.UniqueHash;
         entity.Artist = entry.Artist;
@@ -543,8 +619,22 @@ public class LibraryService : ILibraryService
         entity.Bitrate = entry.Bitrate;
         entity.DurationSeconds = entry.DurationSeconds;
         entity.Format = entry.Format;
-        // Ensure AddedAt is only set on creation, not on update.
-        // The DatabaseService logic should handle this. If it doesn't, we can do it here:
+        
+        // Scientific Fields
+        entity.SpotifyTrackId = entry.SpotifyTrackId;
+        entity.Energy = entry.Energy;
+        entity.Danceability = entry.Danceability;
+        entity.Valence = entry.Valence;
+        entity.BPM = entry.BPM;
+        entity.MusicalKey = entry.MusicalKey;
+        entity.IsEnriched = entry.IsEnriched;
+        
+        // Dual-Truth
+        entity.SpotifyBPM = entry.SpotifyBPM;
+        entity.SpotifyKey = entry.SpotifyKey;
+        entity.ManualBPM = entry.ManualBPM;
+        entity.ManualKey = entry.ManualKey;
+        
         if (entry.AddedAt == default)
         {
             entity.AddedAt = DateTime.UtcNow;

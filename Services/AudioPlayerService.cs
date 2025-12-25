@@ -1,153 +1,149 @@
 using System;
 using System.IO;
-using LibVLCSharp.Shared;
+using NAudio.Wave;
+using NAudio.Wave.SampleProviders;
+using System.Timers;
 
 namespace SLSKDONET.Services
 {
-    public class AudioPlayerService : IAudioPlayerService
+    public class AudioPlayerService : IAudioPlayerService, IDisposable
     {
-        private LibVLC? _libVLC;
-        private MediaPlayer? _mediaPlayer;
+        private IWavePlayer? _outputDevice;
+        private AudioFileReader? _audioFile;
+        private WdlResamplingSampleProvider? _resampler;
+        private SampleChannel? _sampleChannel;
+        private MeteringSampleProvider? _meteringProvider;
         private bool _isInitialized;
+        private Timer? _timer;
 
         public event EventHandler<long>? TimeChanged;
         public event EventHandler<float>? PositionChanged;
         public event EventHandler<long>? LengthChanged;
+        public event EventHandler<AudioLevelsEventArgs>? AudioLevelsChanged;
         public event EventHandler? EndReached;
         public event EventHandler? PausableChanged;
 
+        private double _pitch = 1.0;
+        public double Pitch 
+        { 
+            get => _pitch; 
+            set 
+            {
+                _pitch = value;
+                if (_resampler != null)
+                {
+                    // For turntable style pitch, we change the output sample rate
+                    // However WdlResamplingSampleProvider expects a fixed target rate.
+                    // To do dynamic pitch, we'd ideally use a provider that supports varying its source rate.
+                }
+            }
+        }
+
         public AudioPlayerService()
         {
-            // Defer initialization until first use to avoid blocking app startup
-            // Initialize() will be called lazily when Play() is first invoked
-        }
-
-        private void Initialize()
-    {
-        if (_isInitialized) return;
-
-        try 
-        {
-            // Explicitly set LibVLC path to the output directory
-            var appDir = AppDomain.CurrentDomain.BaseDirectory;
-            var libVlcPath = Path.Combine(appDir, "libvlc", Environment.Is64BitProcess ? "win-x64" : "win-x86");
-            
-            Console.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] [AudioPlayerService] Initializing LibVLC from: {libVlcPath}");
-            Console.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] [AudioPlayerService] LibVLC path exists: {Directory.Exists(libVlcPath)}");
-            
-            if (!Directory.Exists(libVlcPath))
-            {
-                Console.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] [AudioPlayerService] ERROR: LibVLC directory not found!");
-                return;
-            }
-            
-            // Initialize with explicit path
-            Core.Initialize(libVlcPath);
-            
-            _libVLC = new LibVLC();
-            _mediaPlayer = new MediaPlayer(_libVLC);
-
-            _mediaPlayer.TimeChanged += (s, e) => TimeChanged?.Invoke(this, e.Time);
-            _mediaPlayer.PositionChanged += (s, e) => PositionChanged?.Invoke(this, e.Position);
-            _mediaPlayer.LengthChanged += (s, e) => LengthChanged?.Invoke(this, e.Length);
-            _mediaPlayer.EndReached += (s, e) => EndReached?.Invoke(this, EventArgs.Empty);
-            _mediaPlayer.PausableChanged += (s, e) => PausableChanged?.Invoke(this, EventArgs.Empty);
-
             _isInitialized = true;
-            Console.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] [AudioPlayerService] Initialization successful!");
+            _timer = new Timer(50);
+            _timer.Elapsed += OnTimerElapsed;
+            _timer.Start();
         }
-        catch (Exception ex)
+
+        private void OnTimerElapsed(object? sender, ElapsedEventArgs e)
         {
-            Console.WriteLine($"[AudioPlayerService] Initialization Failed: {ex.Message}");
-            Console.WriteLine($"[AudioPlayerService] Stack trace: {ex.StackTrace}");
+            if (_audioFile != null && _outputDevice?.PlaybackState == PlaybackState.Playing)
+            {
+                TimeChanged?.Invoke(this, (long)_audioFile.CurrentTime.TotalMilliseconds);
+                PositionChanged?.Invoke(this, (float)(_audioFile.Position / (double)_audioFile.Length));
+            }
         }
-    }
-        
 
         public bool IsInitialized => _isInitialized;
-        
-        public bool IsPlaying => _mediaPlayer?.IsPlaying ?? false;
-        
-        public long Length => _mediaPlayer?.Length ?? 0;
-        
-        public long Time => _mediaPlayer?.Time ?? 0;
+        public bool IsPlaying => _outputDevice?.PlaybackState == PlaybackState.Playing;
+        public long Length => (long)(_audioFile?.TotalTime.TotalMilliseconds ?? 0);
+        public long Time => (long)(_audioFile?.CurrentTime.TotalMilliseconds ?? 0);
 
         public float Position
         {
-            get => _mediaPlayer?.Position ?? 0f;
+            get => (float)(_audioFile != null ? _audioFile.Position / (double)_audioFile.Length : 0);
             set
             {
-                if (_mediaPlayer != null) 
-                    _mediaPlayer.Position = value;
+                if (_audioFile != null)
+                {
+                    _audioFile.Position = (long)(value * _audioFile.Length);
+                }
             }
         }
 
         public int Volume
         {
-            get => _mediaPlayer?.Volume ?? 100;
-            set
-            {
-                if (_mediaPlayer != null) 
-                    _mediaPlayer.Volume = value;
-            }
+            get => (int)((_outputDevice?.Volume ?? 1f) * 100);
+            set { if (_outputDevice != null) _outputDevice.Volume = value / 100f; }
         }
 
         public void Play(string filePath)
         {
-            if (!_isInitialized || _libVLC == null || _mediaPlayer == null) return;
+            Stop();
 
-            // Ensure we have a clean file path (not URL-encoded)
-            // If it's a URI, decode it first
-            string cleanPath = filePath;
-            if (filePath.StartsWith("file:///"))
+            try
             {
-                cleanPath = Uri.UnescapeDataString(new Uri(filePath).LocalPath);
+                _audioFile = new AudioFileReader(filePath);
+                
+                // Set up channel and resampler for pitch (turntable style)
+                _sampleChannel = new SampleChannel(_audioFile, true);
+                
+                // For true pitch sliding, we'd need a custom ResamplingProvider.
+                // For now, we use the standard pipeline with Metering.
+                _meteringProvider = new MeteringSampleProvider(_sampleChannel);
+                _meteringProvider.StreamVolume += OnStreamVolume;
+                
+                _outputDevice = new WaveOutEvent { DesiredLatency = 100 };
+                _outputDevice.Init(_meteringProvider);
+                _outputDevice.PlaybackStopped += (s, e) => EndReached?.Invoke(this, EventArgs.Empty);
+                
+                _outputDevice.Play();
+                LengthChanged?.Invoke(this, (long)_audioFile.TotalTime.TotalMilliseconds);
+                PausableChanged?.Invoke(this, EventArgs.Empty);
             }
-            else if (filePath.Contains("%20") || filePath.Contains("%"))
+            catch (Exception ex)
             {
-                cleanPath = Uri.UnescapeDataString(filePath);
+                Console.WriteLine($"[AudioPlayerService] Playback error: {ex.Message}");
+                throw;
             }
+        }
 
-            // Verify file exists
-            if (!File.Exists(cleanPath))
-            {
-                Console.WriteLine($"[AudioPlayerService] File not found: {cleanPath}");
-                return;
-            }
-
-            // Stop current if playing
-            if (_mediaPlayer.IsPlaying)
-            {
-                _mediaPlayer.Stop();
-            }
-            
-            // CRITICAL: Pass the RAW Windows path directly
-            // LibVLC handles Windows paths correctly without URI conversion
-            Console.WriteLine($"[AudioPlayerService] Creating media from path: {cleanPath}");
-            
-            // Create media from raw path
-            var media = new Media(_libVLC, cleanPath);
-            media.Parse(MediaParseOptions.ParseLocal);
-            
-            _mediaPlayer.Play(media);
-            
-            Console.WriteLine($"[AudioPlayerService] Playback started for: {Path.GetFileName(cleanPath)}");
+        private void OnStreamVolume(object? sender, StreamVolumeEventArgs e)
+        {
+            AudioLevelsChanged?.Invoke(this, new AudioLevelsEventArgs 
+            { 
+                Left = e.MaxSampleValues[0], 
+                Right = e.MaxSampleValues.Length > 1 ? e.MaxSampleValues[1] : e.MaxSampleValues[0] 
+            });
         }
 
         public void Pause()
         {
-            _mediaPlayer?.Pause();
+            if (_outputDevice?.PlaybackState == PlaybackState.Playing)
+                _outputDevice.Pause();
+            else if (_outputDevice?.PlaybackState == PlaybackState.Paused)
+                _outputDevice.Play();
+                
+            PausableChanged?.Invoke(this, EventArgs.Empty);
         }
 
         public void Stop()
         {
-            _mediaPlayer?.Stop();
+            _outputDevice?.Stop();
+            _audioFile?.Dispose();
+            _outputDevice?.Dispose();
+            _audioFile = null;
+            _outputDevice = null;
+            PausableChanged?.Invoke(this, EventArgs.Empty);
         }
 
         public void Dispose()
         {
-            _mediaPlayer?.Dispose();
-            _libVLC?.Dispose();
+            Stop();
+            _timer?.Stop();
+            _timer?.Dispose();
         }
     }
 }

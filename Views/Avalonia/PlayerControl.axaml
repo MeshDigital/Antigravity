@@ -33,10 +33,22 @@
                     HorizontalAlignment="Center"
                     DragDrop.AllowDrop="True">
                 <Panel>
-                    <!-- Dynamic Album Artwork -->
-                    <Image Source="{Binding AlbumArtUrl}" 
-                           Stretch="UniformToFill"
-                           IsVisible="{Binding AlbumArtUrl, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                    <Grid ColumnDefinitions="4,*,4" Margin="4">
+                        <!-- VU Meter Left -->
+                        <Border Grid.Column="0" VerticalAlignment="Bottom" 
+                                Background="#1DB954" Width="4"
+                                Height="{Binding VuLeft, Converter={StaticResource VuHeightConverter}, ConverterParameter=250}"/>
+                                
+                        <!-- Dynamic Album Artwork -->
+                        <Image Grid.Column="1" Source="{Binding AlbumArtUrl}" 
+                               Stretch="UniformToFill"
+                               IsVisible="{Binding AlbumArtUrl, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                               
+                        <!-- VU Meter Right -->
+                        <Border Grid.Column="2" VerticalAlignment="Bottom" 
+                                Background="#1DB954" Width="4"
+                                Height="{Binding VuRight, Converter={StaticResource VuHeightConverter}, ConverterParameter=250}"/>
+                    </Grid>
                     
                     <!-- Professional fallback with Path geometry instead of emoji -->
                     <Path Data="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z" 
@@ -112,22 +124,36 @@
         <!-- Controls Section -->
         <StackPanel x:Name="QueueZone" Grid.Row="3" Spacing="16" Margin="16,0,16,20" DragDrop.AllowDrop="True">
             
-            <!-- Progress Bar -->
-            <StackPanel Spacing="8">
-                <Slider Minimum="0"
-                        Maximum="1"
-                        Value="{Binding Position, Mode=TwoWay}"
-                        Height="20"
-                        Foreground="#1DB954">
-                    <Slider.Styles>
-                        <Style Selector="Slider /template/ Thumb">
-                            <Setter Property="Background" Value="White"/>
-                            <Setter Property="Width" Value="14"/>
-                            <Setter Property="Height" Value="14"/>
-                            <Setter Property="CornerRadius" Value="7"/>
-                        </Style>
-                    </Slider.Styles>
-                </Slider>
+            <!-- Waveform Seekbar -->
+            <StackPanel Spacing="8" xmlns:controls="clr-namespace:SLSKDONET.Views.Avalonia.Controls">
+                <Panel Height="40">
+                    <!-- Background Waveform -->
+                    <controls:WaveformControl Data="{Binding WaveformData}" 
+                                            Progress="{Binding Position}"
+                                            Opacity="0.6"
+                                            VerticalAlignment="Stretch"
+                                            HorizontalAlignment="Stretch"/>
+                    
+                    <!-- Interactive Slider Overlay -->
+                    <Slider Minimum="0"
+                            Maximum="1"
+                            Value="{Binding Position, Mode=TwoWay}"
+                            Height="40"
+                            Foreground="#1DB954"
+                            Background="Transparent">
+                        <Slider.Styles>
+                            <Style Selector="Slider /template/ Thumb">
+                                <Setter Property="Background" Value="White"/>
+                                <Setter Property="Width" Value="2"/>
+                                <Setter Property="Height" Value="40"/>
+                                <Setter Property="CornerRadius" Value="0"/>
+                            </Style>
+                            <Style Selector="Slider /template/ TrackBackground">
+                                <Setter Property="IsVisible" Value="False"/>
+                            </Style>
+                        </Slider.Styles>
+                    </Slider>
+                </Panel>
                 
                 <!-- Time Labels -->
                 <Grid ColumnDefinitions="*,*">
@@ -233,8 +259,19 @@
                 </Button>
             </StackPanel>
             
-            <!-- Volume Control -->
-            <StackPanel Spacing="8">
+            <!-- Pitch & Volume Controls -->
+            <StackPanel Spacing="12">
+                <!-- Pitch Slider -->
+                <Grid ColumnDefinitions="Auto,*,Auto">
+                    <TextBlock Grid.Column="0" Text="-" FontSize="12" Foreground="#B3B3B3" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <Slider Grid.Column="1" 
+                            Minimum="0.9" Maximum="1.1" 
+                            Value="{Binding Pitch, Mode=TwoWay}"
+                            Height="20"
+                            ToolTip.Tip="Pitch / Tempo"/>
+                    <TextBlock Grid.Column="2" Text="+" FontSize="12" Foreground="#B3B3B3" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                </Grid>
+
                 <Grid ColumnDefinitions="Auto,*">
                     <TextBlock Grid.Column="0" 
                                Text="🔊" 

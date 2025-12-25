@@ -20,7 +20,9 @@
 - **[BUILD_REFERENCE.md](BUILD_REFERENCE.md)** - Quick build and project reference
 - **[IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md)** - Complete feature matrix
 - **[DOCS/FILE_PATH_RESOLUTION.md](DOCS/FILE_PATH_RESOLUTION.md)** - File path resolution with fuzzy matching ✨
-- **[DOCS/PHASE8_TECHNICAL.md](DOCS/PHASE8_TECHNICAL.md)** - Phase 8 sonic integrity & automation (Dec 2025) ✨ NEW
+- **[DOCS/PHASE8_TECHNICAL.md](DOCS/PHASE8_TECHNICAL.md)** - Phase 8 sonic integrity & automation (Dec 2025) ✨
+- **[DOCS/HIGH_FIDELITY_AUDIO.md](DOCS/HIGH_FIDELITY_AUDIO.md)** - NAudio engine, VU meters, & waveforms (Dec 2025) ✨ NEW
+- **[DOCS/SPOTIFY_ENRICHMENT_PIPELINE.md](DOCS/SPOTIFY_ENRICHMENT_PIPELINE.md)** - Deep musical intelligence worker ✨ NEW
 
 #### Phase 4 (Modern UI) ✨
 - **[PHASE4_QUICK_REFERENCE.md](PHASE4_QUICK_REFERENCE.md)** - 5-minute overview
@@ -31,8 +33,8 @@
 - **[CHECKLIST.md](CHECKLIST.md)** - Complete project checklist
   - ✅ Phase 1: Core Foundation (Complete)
   - ✅ Phase 4: Modern UI (Complete)
-  - ⏳ Phase 5: Spotify & Advanced Filters (Planned)
-  - ⏳ Phase 6: Album & Persistence (Future)
+  - ✅ Phase 5: Self-Healing & Hi-Fi Audio (Complete) ✨
+  - ⏳ Phase 6: UI Virtualization (Planned)
 
 ---
 
@@ -394,6 +396,6 @@ private void SearchButton_Click(object sender, RoutedEventArgs e)
 
 ---
 
-**Last Updated:** Phase 4 Completion (2024)  
-**Status:** ✅ Phase 4 Complete | ⏳ Phase 5 Planned  
-**Errors:** 0 | **Documentation:** 3000+ lines | **Code Quality:** Professional
+**Last Updated:** Phase 5 Complete (Dec 2025)  
+**Status:** ✅ Phase 5 Complete | ⏳ Phase 6 Planned  
+**Errors:** 0 | **Documentation:** 4000+ lines | **Code Quality:** Professional

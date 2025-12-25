@@ -14,11 +14,19 @@ namespace SLSKDONET.Services
         event EventHandler<long> TimeChanged;
         event EventHandler<float> PositionChanged;
         event EventHandler<long> LengthChanged;
+        event EventHandler<AudioLevelsEventArgs> AudioLevelsChanged;
         event EventHandler EndReached;
         event EventHandler PausableChanged;
 
+        double Pitch { get; set; }
         void Play(string uri);
         void Pause();
         void Stop();
+    }
+
+    public class AudioLevelsEventArgs : EventArgs
+    {
+        public float Left { get; set; }
+        public float Right { get; set; }
     }
 }

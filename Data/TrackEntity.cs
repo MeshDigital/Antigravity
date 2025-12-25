@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using SLSKDONET.Models;
@@ -71,6 +72,15 @@ public class TrackEntity
     public DateTime? LastUpgradeAt { get; set; }
     public string? UpgradeSource { get; set; } // "Auto" or "Manual"
     public string? PreviousBitrate { get; set; } // e.g., "128kbps MP3" before upgrade
+
+    // Phase 3C: Advanced Queue Orchestration
+    public int Priority { get; set; } = 1;
+    public Guid? SourcePlaylistId { get; set; }
+    public string? SourcePlaylistName { get; set; }
+
+    // Phase 13: Per-Track Filter Overrides
+    public string? PreferredFormats { get; set; }
+    public int? MinBitrateOverride { get; set; }
 }
 
 /// <summary>
@@ -127,14 +137,14 @@ public class PlaylistTrackEntity
     public string Title { get; set; } = string.Empty;
     public string Album { get; set; } = string.Empty;
     public string TrackUniqueHash { get; set; } = string.Empty;
-    public TrackStatus Status { get; set; } = TrackStatus.Missing; // Changed to enum
+    public TrackStatus Status { get; set; } = TrackStatus.Missing;
     public string ResolvedFilePath { get; set; } = string.Empty;
     public int TrackNumber { get; set; }
     public int Bitrate { get; set; } = 0;
-    public string? Format { get; set; } // Nullable to handle existing NULL values
+    public string? Format { get; set; }
 
     // User engagement
-    public int Rating { get; set; } = 0; // 1-5 stars, 0 = not rated
+    public int Rating { get; set; } = 0;
     public bool IsLiked { get; set; } = false;
     public int PlayCount { get; set; } = 0;
     public DateTime? LastPlayedAt { get; set; }
@@ -142,108 +152,51 @@ public class PlaylistTrackEntity
     public DateTime AddedAt { get; set; }
     public int SortOrder { get; set; }
     
-    // Spotify Metadata (Phase 0: Metadata Gravity Well)
-    /// <summary>
-    /// Spotify track ID - canonical identifier for this track.
-    /// Used for duplicate detection, quality guard, and recommendations.
-    /// </summary>
+    // Spotify Metadata
     public string? SpotifyTrackId { get; set; }
-    
-    /// <summary>
-    /// International Standard Recording Code.
-    /// Critical for cross-platform matching (Soulseek matching).
-    /// </summary>
     public string? ISRC { get; set; }
-    
-    /// <summary>
-    /// Spotify album ID - for artwork and album grouping.
-    /// </summary>
     public string? SpotifyAlbumId { get; set; }
-    
-    /// <summary>
-    /// Spotify artist ID - for artist pages and recommendations.
-    /// </summary>
     public string? SpotifyArtistId { get; set; }
-    
-    /// <summary>
-    /// Album artwork URL from Spotify (300x300 or larger).
-    /// </summary>
     public string? AlbumArtUrl { get; set; }
-    
-    /// <summary>
-    /// Artist image URL from Spotify.
-    /// </summary>
+    public byte[]? WaveformData { get; set; }
     public string? ArtistImageUrl { get; set; }
-    
-    /// <summary>
-    /// Genres as JSON array (e.g. ["rock", "indie"]).
-    /// </summary>
     public string? Genres { get; set; }
-    
-    /// <summary>
-    /// Spotify popularity score (0-100).
-    /// </summary>
     public int? Popularity { get; set; }
-    
-    /// <summary>
-    /// Canonical track duration from Spotify (milliseconds).
-    /// Used for quality guard and fake detection.
-    /// </summary>
     public int? CanonicalDuration { get; set; }
-    
-    /// <summary>
-    /// Release date from Spotify.
-    /// </summary>
     public DateTime? ReleaseDate { get; set; }
 
-    // Phase 0.1: Musical Intelligence & Antigravity
-    public string? MusicalKey { get; set; } // e.g. "8A"
-    public double? BPM { get; set; } // e.g. 128.0
-    public string? CuePointsJson { get; set; } // Rekordbox/DJ cue points blob
-    public string? AudioFingerprint { get; set; } // Chromaprint/SoundFingerprinting hash
-    public int? BitrateScore { get; set; } // Quality score for replacement
-    public double? AnalysisOffset { get; set; } // Silence offset for time alignment
+    // Musical Intelligence
+    public string? MusicalKey { get; set; }
+    public double? BPM { get; set; }
+    public string? CuePointsJson { get; set; }
+    public string? AudioFingerprint { get; set; }
+    public int? BitrateScore { get; set; }
+    public double? AnalysisOffset { get; set; }
     public double? Energy { get; set; }
     public double? Danceability { get; set; }
     public double? Valence { get; set; }
     
-    // Phase 3A: Dual-Truth Metadata
+    // Dual-Truth Metadata
     public double? SpotifyBPM { get; set; }
     public string? SpotifyKey { get; set; }
     public double? ManualBPM { get; set; }
     public string? ManualKey { get; set; }
 
-    // Phase 8: Sonic Integrity & Spectral Analysis
-    public IntegrityLevel Integrity { get; set; } = IntegrityLevel.None; // Phase 3B: Dual-Truth Verification
+    // Sonic Integrity
     public string? SpectralHash { get; set; }
     public double? QualityConfidence { get; set; }
     public int? FrequencyCutoff { get; set; }
     public bool? IsTrustworthy { get; set; }
     public string? QualityDetails { get; set; }
     
-    // Phase 3C: Advanced Queue Orchestration
-    /// <summary>
-    /// Download priority: 0=High (manual/bump-to-top), 1=Standard (playlist), 10=Background (large imports).
-    /// Used for multi-lane priority queue to prevent large imports from blocking smaller playlists.
-    /// </summary>
+    // Queue Orchestration
     public int Priority { get; set; } = 1;
-    
-    /// <summary>
-    /// Source playlist ID for origin tracking and project grouping.
-    /// Enables "Group by Project" view and bulk operations.
-    /// </summary>
     public Guid? SourcePlaylistId { get; set; }
-    
-    /// <summary>
-    /// Cached source playlist name for performance (avoids JOIN in download queue queries).
-    /// Displayed as origin tag in Download Center UI.
-    /// </summary>
     public string? SourcePlaylistName { get; set; }
     
-    // New Flag
     public bool IsEnriched { get; set; } = false;
 
-    // Phase 13: Per-Track Filter Overrides
+    // Filter Overrides
     public string? PreferredFormats { get; set; }
     public int? MinBitrateOverride { get; set; }
     
@@ -252,7 +205,6 @@ public class PlaylistTrackEntity
 
 /// <summary>
 /// Database entity for a unique, downloaded file in the global library.
-/// This replaces the old JSON-based LibraryEntry.
 /// </summary>
 public class LibraryEntryEntity
 {
@@ -263,7 +215,7 @@ public class LibraryEntryEntity
     public string Title { get; set; } = string.Empty;
     public string Album { get; set; } = string.Empty;
     public string FilePath { get; set; } = string.Empty;
-    public string? OriginalFilePath { get; set; } // Track original path for resolution tracking
+    public string? OriginalFilePath { get; set; }
 
     // Audio metadata
     public int Bitrate { get; set; }
@@ -273,25 +225,25 @@ public class LibraryEntryEntity
     // Timestamps
     public DateTime AddedAt { get; set; }
     public DateTime LastUsedAt { get; set; }
-    public DateTime? FilePathUpdatedAt { get; set; } // Track when path was last resolved/updated
+    public DateTime? FilePathUpdatedAt { get; set; }
 
-    // Spotify Metadata (Phase 0: Metadata Gravity Well)
+    // Spotify Metadata
     public string? SpotifyTrackId { get; set; }
     public string? ISRC { get; set; }
     public string? SpotifyAlbumId { get; set; }
     public string? SpotifyArtistId { get; set; }
     public string? AlbumArtUrl { get; set; }
     public string? ArtistImageUrl { get; set; }
-    public string? Genres { get; set; } // JSON array
+    public string? Genres { get; set; }
     public int? Popularity { get; set; }
-    public int? CanonicalDuration { get; set; } // milliseconds
+    public int? CanonicalDuration { get; set; }
     public DateTime? ReleaseDate { get; set; }
 
-    // Phase 0.1: Musical Intelligence & Antigravity
+    // Musical Intelligence
     public string? MusicalKey { get; set; }
     public double? BPM { get; set; }
     
-    // Phase 3A: Dual-Truth Metadata
+    // Dual-Truth Metadata
     public double? SpotifyBPM { get; set; }
     public string? SpotifyKey { get; set; }
     public double? ManualBPM { get; set; }
@@ -302,7 +254,7 @@ public class LibraryEntryEntity
     public double? Danceability { get; set; }
     public string? AudioFingerprint { get; set; }
     
-    // Phase 3B: Dual-Truth Verification
+    // Dual-Truth Verification
     public IntegrityLevel Integrity { get; set; } = IntegrityLevel.None;
     
     public bool IsEnriched { get; set; } = false;
