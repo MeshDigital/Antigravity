@@ -31,6 +31,14 @@ public class SearchFilterViewModel : ReactiveObject
         set => this.RaiseAndSetIfChanged(ref _useHighReliability, value); 
     }
 
+    // Phase 12.6: Hide potential fakes by default (Curation Assistant)
+    private bool _hideSuspects = true;
+    public bool HideSuspects
+    {
+        get => _hideSuspects;
+        set => this.RaiseAndSetIfChanged(ref _hideSuspects, value);
+    }
+
     // Format Toggles (Helpers for UI binding)
     public bool FilterMp3
     {
@@ -77,14 +85,15 @@ public class SearchFilterViewModel : ReactiveObject
     public IObservable<Func<SearchResult, bool>> FilterChanged => 
         this.WhenAnyValue(
             x => x.MinBitrate,
-            x => x.UseHighReliability)
+            x => x.UseHighReliability,
+            x => x.HideSuspects) // Phase 12.6: Curation filter
             .Throttle(TimeSpan.FromMilliseconds(200), RxApp.MainThreadScheduler)
             .Merge(
                 Observable.FromEventPattern<NotifyCollectionChangedEventHandler, NotifyCollectionChangedEventArgs>(
                     h => SelectedFormats.CollectionChanged += h, 
                     h => SelectedFormats.CollectionChanged -= h)
                 .Select(_ => System.Reactive.Unit.Default)
-                .Select(_ => (MinBitrate, UseHighReliability)) // Dummy value to match type
+                .Select(_ => (MinBitrate, UseHighReliability, HideSuspects)) // Updated tuple
             )
             .Select(_ => GetFilterPredicate());
 
@@ -95,6 +104,7 @@ public class SearchFilterViewModel : ReactiveObject
         var minBitrate = MinBitrate;
         var formats = SelectedFormats.Select(f => f.ToUpperInvariant()).ToHashSet(); // HashSet for O(1)
         var highReliability = UseHighReliability;
+        var hideSuspects = HideSuspects; // Phase 12.6: Curation quality
         
         // Return a single optimized function
         return result => 
@@ -121,6 +131,9 @@ public class SearchFilterViewModel : ReactiveObject
             // 3. Reliability (Queue Length)
             // If High Reliability is ON, reject queues > 50
             if (highReliability && result.QueueLength > 50) return false;
+
+            // Phase 12.6: Hide potential fakes/upscales
+            if (hideSuspects && result.IntegrityStatus == "Suspect") return false;
 
             return true;
         };

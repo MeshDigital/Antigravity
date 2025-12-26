@@ -314,7 +314,12 @@ public partial class SearchViewModel : ReactiveObject
             finally
             {
                 IsSearching = false;
-                if (totalFound > 0) StatusText = $"Found {totalFound} items";
+                if (totalFound > 0)
+                {
+                    // Phase 12.6: Apply percentile-based scoring for visual hierarchy
+                    ApplyPercentileScoring();
+                    StatusText = $"Found {totalFound} items";
+                }
                 else StatusText = "No results found";
             }
         }
@@ -323,6 +328,25 @@ public partial class SearchViewModel : ReactiveObject
             _logger.LogError(ex, "Search failed");
             StatusText = $"Error: {ex.Message}";
             IsSearching = false;
+        }
+    }
+
+    /// <summary>
+    /// Phase 12.6: Calculate relative percentile scores for visual hierarchy.
+    /// Top results get golden highlighting regardless of absolute score.
+    /// </summary>
+    private void ApplyPercentileScoring()
+    {
+        var results = _publicSearchResults.ToList();
+        if (!results.Any()) return;
+        
+        // Sort by rank (already calculated by ResultSorter)
+        var sorted = results.OrderByDescending(r => r.CurrentRank).ToList();
+        
+        for (int i = 0; i < sorted.Count; i++)
+        {
+            var percentile = (double)i / sorted.Count;
+            sorted[i].Percentile = percentile;
         }
     }
 

@@ -31,6 +31,95 @@ public class SearchResult : INotifyPropertyChanged
     public double CurrentRank => Model.CurrentRank;
     public string ScoreBreakdown => Model.ScoreBreakdown ?? $"Rank: {CurrentRank:F1}";
 
+    // Phase 12.6: Percentile-based scoring for visual hierarchy
+    private double _percentile;
+    public double Percentile
+    {
+        get => _percentile;
+        set
+        {
+            if (Math.Abs(_percentile - value) > 0.001)
+            {
+                _percentile = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(IsGoldenMatch));
+                OnPropertyChanged(nameof(HeatMapOpacity));
+                OnPropertyChanged(nameof(RowBackground));
+            }
+        }
+    }
+
+    // Phase 12.6: Visual hierarchy properties
+    public bool IsGoldenMatch => Percentile <= 0.05; // Top 5%
+    
+    public double HeatMapOpacity => Percentile switch
+    {
+        <= 0.05 => 1.0,      // Top 5%: Full opacity
+        <= 0.75 => 0.85,     // Middle 70%: Standard
+        _ => 0.6             // Bottom 25%: Faded
+    };
+    
+    public string RowBackground => Percentile switch
+    {
+        <= 0.05 => "#2A2D2E",  // Top tier: Slightly lighter
+        _ => "#1E1E1E"         // Standard
+    };
+
+    // Phase 12.6: Integrity badges
+    private string _integrityStatus = "";
+    public string IntegrityStatus
+    {
+        get => _integrityStatus;
+        set
+        {
+            if (_integrityStatus != value)
+            {
+                _integrityStatus = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(IntegrityBadge));
+                OnPropertyChanged(nameof(IntegrityTooltip));
+            }
+        }
+    }
+
+    public string IntegrityBadge => IntegrityStatus switch
+    {
+        "Verified" => "✅",
+        "Warning" => "⚠️",
+        "Suspect" => "🚫",
+        "HarmonicMatch" => "🔥",
+        _ => ""
+    };
+
+    public string IntegrityTooltip => IntegrityStatus switch
+    {
+        "Verified" => "High-confidence quality",
+        "Warning" => "Duration mismatch (likely radio edit)",
+        "Suspect" => "Potential upscale/fake detected",
+        "HarmonicMatch" => "Key/BPM match with current track",
+        _ => ""
+    };
+
+    // Phase 12.6: "Add to Project" workflow state
+    private bool _isAddedToProject;
+    public bool IsAddedToProject
+    {
+        get => _isAddedToProject;
+        set
+        {
+            if (_isAddedToProject != value)
+            {
+                _isAddedToProject = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(AddButtonText));
+                OnPropertyChanged(nameof(AddButtonColor));
+            }
+        }
+    }
+
+    public string AddButtonText => IsAddedToProject ? "✓ Added" : "Add to Project";
+    public string AddButtonColor => IsAddedToProject ? "#4EC9B0" : "#007ACC";
+
     private bool _isSelected;
     public bool IsSelected
     {
