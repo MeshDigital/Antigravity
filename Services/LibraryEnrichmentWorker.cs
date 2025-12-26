@@ -19,6 +19,7 @@ public class LibraryEnrichmentWorker : IDisposable
     private readonly DatabaseService _databaseService;
     private readonly SpotifyEnrichmentService _enrichmentService;
     private readonly IEventBus _eventBus;
+    private readonly Configuration.AppConfig _config;
     private CancellationTokenSource? _cts;
     private Task? _workerTask;
     
@@ -31,12 +32,14 @@ public class LibraryEnrichmentWorker : IDisposable
         ILogger<LibraryEnrichmentWorker> logger,
         DatabaseService databaseService,
         SpotifyEnrichmentService enrichmentService,
-        IEventBus eventBus)
+        IEventBus eventBus,
+        Configuration.AppConfig config)
     {
         _logger = logger;
         _databaseService = databaseService;
         _enrichmentService = enrichmentService;
         _eventBus = eventBus;
+        _config = config;
     }
 
     public void Start()
