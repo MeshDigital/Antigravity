@@ -177,7 +177,16 @@ public partial class App : Application
                 // Phase 8: Validate FFmpeg availability - Moved to background task
 
                 // Create main window and show it immediately
-                var mainVm = Services.GetRequiredService<MainViewModel>();
+                MainViewModel mainVm;
+                try 
+                {
+                    mainVm = Services.GetRequiredService<MainViewModel>();
+                }
+                catch (Exception diEx)
+                {
+                    Serilog.Log.Fatal(diEx, "DI RESOLUTION ERROR: {Message}", diEx.GetBaseException().Message);
+                    throw;
+                }
                 mainVm.StatusText = "Initializing application...";
                 
                 var mainWindow = new Views.Avalonia.MainWindow
@@ -446,6 +455,8 @@ public partial class App : Application
         services.AddSingleton<IFilePathResolverService, FilePathResolverService>();
 
         // Rekordbox export service
+        services.AddSingleton<Services.Rekordbox.XorService>();
+        services.AddSingleton<Services.Rekordbox.AnlzFileParser>();
         services.AddSingleton<RekordboxXmlExporter>();
         services.AddSingleton<Services.Export.RekordboxService>();
         
