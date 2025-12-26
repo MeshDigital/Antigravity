@@ -565,22 +565,33 @@
 - [x] **Reactive Status**: Bind search results to `DownloadManager` for live status updates
 
 ### 12.2 Advanced Filtering HUD (3 hours)
-- [ ] Create `SearchFilterViewModel`
-- [ ] Add **Bitrate Slider** (range selector)
-- [ ] Add **Format Chips** (MP3/FLAC/WAV toggles)
-- [ ] Add **User Trust Toggle** (filter locked/slow peers)
-- [ ] Bind filter logic to `DynamicData` filter pipeline
+- [x] Create `SearchFilterViewModel`
+- [x] Add **Bitrate Slider** (range selector)
+- [x] Add **Format Chips** (MP3/FLAC/WAV toggles)
+- [x] Add **User Trust Toggle** (filter locked/slow peers)
+- [x] Bind filter logic to `DynamicData` filter pipeline
 
 ### 12.3 Batch Actions & Selection (3 hours)
-- [ ] Enable `SelectionMode="Multiple"` in Search Grid
-- [ ] Implement "Floating Action Bar" (appears on selection > 1)
-- [ ] Add `DownloadSelectedCommand` (batch download)
+- [x] Enable `SelectionMode="Multiple"` in Search Grid
+- [x] Implement "Floating Action Bar" (appears on selection > 1)
+- [x] Add `DownloadSelectedCommand` (batch download)
 - [ ] Add `AddToPlaylistCommand` (batch add)
 
 ### 12.4 Critical Fixes (2 hours)
 - [ ] **Overlay Bug**: Replace `GetType().Name` calculation with explicit `IsImportOverlayActive` flags
 - [ ] **Theming**: Replace `#1A1A1A` with `{DynamicResource RegionColor}`
 - [ ] **Reflection Removal**: Replace `GetType().GetProperty("PlayerViewModel")` with properly injected `IPlayerService`
+
+### 12.6 Search 2.0 Visual Hierarchy (December 26, 2025) ✅ COMPLETE
+- [x] **Percentile-Based Scoring**: Relative ranking (top 5% = golden match)
+- [x] **Golden Match Highlighting**: 🔥 emoji for top 5% results
+- [x] **Heat-Map Opacity**: Visual fading (1.0/0.85/0.6) based on percentile
+- [x] **Integrity Badges**: ✅⚠️🚫🔥 with tooltips (Verified/Warning/Suspect/HarmonicMatch)
+- [x] **Hide Suspects Filter**: Checkbox in filter HUD (enabled by default)
+- [x] **Multi-Line Row Templates**: Two-line layout (Artist-Title / Technical metadata)
+  - Line 1: `Artist - Title` (bold) + free slot indicator
+  - Line 2: `320 kbps MP3 • @username • 12.3 MB • Q:2` (gray monospace)
+- [x] Commits: `20c8526`, `0b4f04a`, `b349c7b`
 
 ---
 
