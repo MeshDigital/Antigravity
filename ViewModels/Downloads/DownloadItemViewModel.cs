@@ -369,7 +369,8 @@ public class DownloadItemViewModel : INotifyPropertyChanged
     // Command CanExecute
     public bool CanPause => State == PlaylistTrackState.Downloading || State == PlaylistTrackState.Searching;
     public bool CanResume => State == PlaylistTrackState.Paused;
-    public bool CanRetry => State == PlaylistTrackState.Failed;
+    // Allow retrying Failed, Cancelled, or even active states (Force Retry)
+    public bool CanRetry => State == PlaylistTrackState.Failed || State == PlaylistTrackState.Cancelled || State == PlaylistTrackState.Downloading || State == PlaylistTrackState.Searching || State == PlaylistTrackState.Queued;
     public bool CanCancel => State != PlaylistTrackState.Completed && State != PlaylistTrackState.Cancelled;
     
     public DownloadItemViewModel(
