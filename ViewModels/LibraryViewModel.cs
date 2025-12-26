@@ -204,11 +204,8 @@ public class LibraryViewModel : INotifyPropertyChanged
 
         TrackInspector = trackInspector;
 
-        // Subscribe to selection changes in Tracks.Hierarchical.Source.Selection
-        if (Tracks.Hierarchical.Source.Selection is ITreeDataGridSelectionInteraction selectionInteraction)
-        {
-            selectionInteraction.SelectionChanged += OnTrackSelectionChanged;
-        }
+        // Subscribe to selection changes in Tracks.SelectedTracks (ListBox)
+        Tracks.SelectedTracks.CollectionChanged += OnTrackSelectionChanged;
         
         // Subscribe to UpgradeScout close event
         
@@ -263,13 +260,22 @@ public class LibraryViewModel : INotifyPropertyChanged
         }
     }
 
-    private async void OnTrackSelectionChanged(object? sender, EventArgs e)
+    private async void OnTrackSelectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
     {
-        var selection = Tracks.Hierarchical.Source.Selection as ITreeDataGridRowSelectionModel<PlaylistTrackViewModel>;
-        var selectedItem = selection?.SelectedItem;
-        if (selectedItem is PlaylistTrackViewModel trackVm)
+        // We only care about the most recently selected item for the Inspector/Sidebars
+        var lastSelected = Tracks.SelectedTracks.LastOrDefault();
+        
+        if (lastSelected is PlaylistTrackViewModel trackVm)
         {
             TrackInspector.Track = trackVm.Model;
+            
+            // Handle row expansion (Accordion style - collapse others)
+            foreach (var t in Tracks.CurrentProjectTracks)
+            {
+                if (t.GlobalId != trackVm.GlobalId && t.IsExpanded)
+                    t.IsExpanded = false;
+            }
+            trackVm.IsExpanded = true;
             
             // Phase 5 Hardening: Cache-First Enrichment Proxy
             // Attempt to hydrate from local cache immediately (Optimistic UI)
@@ -310,6 +316,11 @@ public class LibraryViewModel : INotifyPropertyChanged
                 null,
                 250, // Wait 250ms after last selection change
                 System.Threading.Timeout.Infinite);
+        }
+        else
+        {
+            // No selection
+            TrackInspector.Track = null;
         }
     }
 

@@ -335,76 +335,131 @@
                 </Grid>
             </Border>
 
-            <!-- Track TreeDataGrid -->
+            <!-- Track List (Replaced TreeDataGrid with ListBox for Inspector Card) -->
             <Grid Grid.Row="2">
-                <TreeDataGrid x:Name="TracksTreeDataGrid"
-                              Source="{Binding Tracks.Hierarchical.Source}"
-                              Background="Transparent"
-                              BorderThickness="0"
-                              Foreground="#DDD"
-                              DoubleTapped="OnTreeDataGridDoubleTapped">
-                    <TreeDataGrid.ContextMenu>
-                        <ContextMenu>
-                            <MenuItem Header="Add to Queue" 
-                                      Command="{Binding $parent[UserControl].((vm:LibraryViewModel)DataContext).PlayerViewModel.AddToQueueCommand}"
-                                      CommandParameter="{Binding Source.Selection.SelectedItem}">
-                                 <MenuItem.Icon>
-                                     <TextBlock Text="📋"/>
-                                 </MenuItem.Icon>
-                            </MenuItem>
-                            
-                            <MenuItem Header="Download Album" 
-                                      Command="{Binding $parent[UserControl].((vm:LibraryViewModel)DataContext).DownloadAlbumCommand}"
-                                      CommandParameter="{Binding Source.Selection.SelectedItem}">
-                                 <MenuItem.Icon>
-                                     <TextBlock Text="💿"/>
-                                 </MenuItem.Icon>
-                            </MenuItem>
-                            
-                            <Separator/>
-                            
-                            <!-- Phase 9: Harmonic Matching -->
-                            <MenuItem Header="Find Harmonic Matches" 
-                                      Command="{Binding $parent[UserControl].((vm:LibraryViewModel)DataContext).FindHarmonicMatchesCommand}"
-                                      CommandParameter="{Binding Source.Selection.SelectedItem}">
-                                 <MenuItem.Icon>
-                                     <TextBlock Text="🎹"/>
-                                 </MenuItem.Icon>
-                            </MenuItem>
-                            
-                            <MenuItem Header="Show Mix Helper" 
-                                      Command="{Binding $parent[UserControl].((vm:LibraryViewModel)DataContext).ToggleMixHelperCommand}">
-                                 <MenuItem.Icon>
-                                     <TextBlock Text="🎛️"/>
-                                 </MenuItem.Icon>
-                            </MenuItem>
-                        </ContextMenu>
-                    </TreeDataGrid.ContextMenu>
-                    <TreeDataGrid.Styles>
-                        <Style Selector="TreeDataGridRow">
-                            <Setter Property="Foreground" Value="White"/>
-                            <Setter Property="MinHeight" Value="40"/><!-- Phase 9: Increased from 32 for modern touch-friendly feel -->
-                            <Setter Property="Transitions">
-                                <Transitions>
-                                    <BrushTransition Property="Background" Duration="0:0:0.15"/>
-                                </Transitions>
-                            </Setter>
+                <ListBox ItemsSource="{Binding Tracks.FilteredTracks}"
+                         SelectionMode="Multiple"
+                         SelectedItems="{Binding Tracks.SelectedTracks}"
+                         Background="Transparent"
+                         BorderThickness="0">
+                    <ListBox.Styles>
+                        <Style Selector="ListBoxItem">
+                            <Setter Property="Padding" Value="4"/>
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                            <Setter Property="Background" Value="Transparent"/>
+                            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+                            <Setter Property="BorderBrush" Value="#22FFFFFF"/>
                         </Style>
-                        <Style Selector="TreeDataGridRow:pointerover">
+                        <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
                             <Setter Property="Background" Value="#1AFFFFFF"/>
                         </Style>
-                        <Style Selector="TreeDataGridRow:selected">
-                            <Setter Property="Background" Value="#2A0078D4"/>
-                        </Style>
-                        <Style Selector="TreeDataGridColumnHeader">
-                            <Setter Property="Foreground" Value="#AAA"/>
-                            <Setter Property="Background" Value="Transparent"/>
-                            <Setter Property="FontWeight" Value="SemiBold"/>
-                            <Setter Property="FontSize" Value="12"/>
-                            <Setter Property="Padding" Value="8,4"/>
-                        </Style>
-                    </TreeDataGrid.Styles>
-                </TreeDataGrid>
+                    </ListBox.Styles>
+                    
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="Transparent" Padding="8,6">
+                                <Grid RowDefinitions="Auto,Auto">
+                                    <!-- Main Row Content -->
+                                    <Grid ColumnDefinitions="Auto,*,Auto,Auto" RowDefinitions="Auto,Auto">
+                                        <!-- Album Art -->
+                                        <Border Grid.RowSpan="2" Grid.Column="0" 
+                                                Width="40" Height="40" 
+                                                CornerRadius="4" 
+                                                Margin="0,0,12,0"
+                                                Background="#222">
+                                            <Image Source="{Binding AlbumArtUrl, Converter={StaticResource BitmapValueConverter}}" Stretch="UniformToFill"/>
+                                        </Border>
+
+                                        <!-- Line 1: Artist - Title + Integrity -->
+                                        <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Artist}" FontWeight="Bold" FontSize="14" Foreground="White"/>
+                                            <TextBlock Text="-" Foreground="#888"/>
+                                            <TextBlock Text="{Binding Title}" FontSize="14" Foreground="#DDD"/>
+                                            
+                                            <!-- Integrity Badge -->
+                                            <Border Background="#203E3E3E" CornerRadius="3" Padding="4,1" Margin="8,0,0,0"
+                                                    IsVisible="{Binding IntegrityLevel, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                                    <TextBlock Text="🛡️" FontSize="10"/>
+                                                    <TextBlock Text="{Binding IntegrityLevel}" FontSize="10" Foreground="#AAA"/>
+                                                </StackPanel>
+                                            </Border>
+                                        </StackPanel>
+
+                                        <!-- Line 2: Technical Metadata -->
+                                        <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Spacing="12" Margin="0,4,0,0">
+                                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                                <TextBlock Text="⏱" FontSize="11" Foreground="#666"/>
+                                                <TextBlock Text="{Binding Bpm, StringFormat='{}{0:F0}'}" FontFamily="Consolas, Monospace" FontSize="11" Foreground="#888"/>
+                                            </StackPanel>
+                                            
+                                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                                <TextBlock Text="🎵" FontSize="11" Foreground="#666"/>
+                                                <TextBlock Text="{Binding Key}" FontFamily="Consolas, Monospace" FontSize="11" Foreground="#888"/>
+                                            </StackPanel>
+
+                                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                                <TextBlock Text="⚡" FontSize="11" Foreground="#666"/>
+                                                <!-- Vibe Meter (Mini) -->
+                                                <Border Width="40" Height="4" Background="#333" VerticalAlignment="Center" CornerRadius="2">
+                                                    <Border Width="{Binding Energy, Converter={x:Static conv:MathConverter.Multiply}, ConverterParameter=40}" 
+                                                            HorizontalAlignment="Left" 
+                                                            Background="#4EC9B0" 
+                                                            CornerRadius="2"/>
+                                                </Border>
+                                            </StackPanel>
+                                            
+                                            <TextBlock Text="{Binding Bitrate, StringFormat='{}{0}kbps'}" FontSize="11" Foreground="#666"/>
+                                        </StackPanel>
+                                        
+                                        <!-- Actions -->
+                                        <Button Grid.RowSpan="2" Grid.Column="3" Theme="{StaticResource SimpleButton}" Padding="8">
+                                            <TextBlock Text="⋮" FontSize="16" Foreground="#888"/>
+                                        </Button>
+                                    </Grid>
+                                    
+                                    <!-- EXPANDING INSPECTOR CARD (Row Details) -->
+                                    <!-- In a real implementation we would bind IsVisible to an IsExpanded property -->
+                                    <Border Grid.Row="1" 
+                                            Background="#1E1E1E" 
+                                            BorderBrush="#333" 
+                                            BorderThickness="0,1,0,0" 
+                                            Margin="-8,8,-8,-6"
+                                            Padding="16"
+                                            IsVisible="{Binding IsExpanded}">
+                                        <Grid ColumnDefinitions="Auto,*,Auto">
+                                            <!-- High Res Art -->
+                                            <Border Grid.Column="0" Width="120" Height="120" CornerRadius="4" Background="#111" Margin="0,0,20,0">
+                                                <Image Source="{Binding AlbumArtUrl, Converter={StaticResource BitmapValueConverter}}" Stretch="UniformToFill"/>
+                                            </Border>
+                                            
+                                            <!-- Detailed Stats -->
+                                            <StackPanel Grid.Column="1" Spacing="8">
+                                                <TextBlock Text="ANALYSIS DATA" FontSize="10" FontWeight="Bold" Foreground="#666"/>
+                                                
+                                                <Grid ColumnDefinitions="Auto,Auto" RowDefinitions="Auto,Auto,Auto" Margin="0,4">
+                                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Energy" Width="80" Foreground="#888"/>
+                                                    <ProgressBar Grid.Row="0" Grid.Column="1" Value="{Binding Energy}" Maximum="1" Width="150" Height="6" Foreground="#4EC9B0" Background="#333"/>
+                                                    
+                                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Danceability" Width="80" Foreground="#888" Margin="0,8"/>
+                                                    <ProgressBar Grid.Row="1" Grid.Column="1" Value="{Binding Danceability}" Maximum="1" Width="150" Height="6" Foreground="#9C27B0" Background="#333" Margin="0,8"/>
+                                                    
+                                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Valence" Width="80" Foreground="#888"/>
+                                                    <ProgressBar Grid.Row="2" Grid.Column="1" Value="{Binding Valence}" Maximum="1" Width="150" Height="6" Foreground="#FF9800" Background="#333"/>
+                                                </Grid>
+                                            </StackPanel>
+                                            
+                                            <!-- Waveform Placeholder (Phase 2) -->
+                                            <Border Grid.Column="2" Width="300" Height="80" Background="#111" CornerRadius="4" VerticalAlignment="Top">
+                                                <TextBlock Text="Waveform Analysis Pending..." VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="#444" FontSize="11"/>
+                                            </Border>
+                                        </Grid>
+                                    </Border>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
 
                 <!-- Phase 6D: Shimmer Loading Overlay -->
                 <Border Background="#CC1A1A1A"
@@ -418,7 +473,7 @@
                         <Border Classes="skeleton" Height="24" CornerRadius="4"/>
                     </StackPanel>
                 </Border>
-                </Grid>
+            </Grid>
 
             <!-- Floating Action Bar (Multi-Select) -->
             <Border Grid.Row="2" 

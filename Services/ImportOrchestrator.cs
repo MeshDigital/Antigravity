@@ -66,6 +66,16 @@ public class ImportOrchestrator
                      
                      // Retrieve existing job if any (Deduplication)
                      var existingJob = await _libraryService.FindPlaylistJobAsync(newJobId);
+
+                     // Fallback: Check by normalized URL if strict ID match failed
+                     if (existingJob == null)
+                     {
+                         existingJob = await _libraryService.FindPlaylistJobBySourceUrlAsync(input);
+                         if (existingJob != null)
+                         {
+                             _logger.LogInformation("Found duplicate playlist by URL match: {Title}", existingJob.SourceTitle);
+                         }
+                     }
                      
                      // Initialize UI
                      _previewViewModel.InitializeStreamingPreview(provider.Name, provider.Name, newJobId, input, existingJob);

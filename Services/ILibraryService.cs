@@ -69,6 +69,12 @@ public interface ILibraryService
     /// Used to detect if a sync job already exists.
     /// </summary>
     Task<PlaylistJob?> FindPlaylistJobBySourceTypeAsync(string sourceType);
+    
+    /// <summary>
+    /// Finds a playlist job by its Source URL (ignoring query parameters if implemented).
+    /// Used for robust duplicate detection.
+    /// </summary>
+    Task<PlaylistJob?> FindPlaylistJobBySourceUrlAsync(string sourceUrl);
 
     /// <summary>
     /// Saves a new or existing playlist job.

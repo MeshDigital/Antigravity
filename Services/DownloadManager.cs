@@ -578,7 +578,35 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
 
     // Removed OnTrackPropertyChanged - Service no longer listens to VM property changes
     
-    // Helper to update state and publish event
+    // Helper to update state and publish event (Overload: Structured Failure Reason)
+    public async Task UpdateStateAsync(DownloadContext ctx, PlaylistTrackState newState, DownloadFailureReason failureReason)
+    {
+        // Store structured failure data
+        ctx.FailureReason = failureReason;
+        
+        // Generate detailed message from enum + search attempts
+        var displayMessage = failureReason.ToDisplayMessage();
+        var suggestion = failureReason.ToActionableSuggestion();
+        
+        // If we have search attempt logs, add the best rejection details
+        if (ctx.SearchAttempts.Any())
+        {
+            var lastAttempt = ctx.SearchAttempts.Last();
+            if (lastAttempt.Top3RejectedResults.Any())
+            {
+                var bestRejection = lastAttempt.Top3RejectedResults[0]; // Focus on #1
+                displayMessage += $" ({bestRejection.ShortReason})";
+            }
+        }
+        
+        // Store detailed message for persistence
+        ctx.DetailedFailureMessage = $"{displayMessage}. {suggestion}";
+        
+        // Call original method with generated error message
+        await UpdateStateAsync(ctx, newState, ctx.DetailedFailureMessage);
+    }
+    
+    // Helper to update state and publish event (Original: String-based)
     public async Task UpdateStateAsync(DownloadContext ctx, PlaylistTrackState newState, string? error = null)
     {
         if (ctx.State == newState && ctx.ErrorMessage == error) return;
@@ -1259,7 +1287,7 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
 
                 if (bestMatch == null)
                 {
-                    // Check if we should auto-retry
+                    // Check if we should auto-retry (but only for network/transient failures)
                     if (_config.AutoRetryFailedDownloads && ctx.RetryCount < _config.MaxDownloadRetries)
                     {
                          _logger.LogWarning("No match found for {Title}. Auto-retrying (Attempt {Count}/{Max})", 
@@ -1269,7 +1297,26 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
                          throw new Exception("No suitable match found");
                     }
 
-                    await UpdateStateAsync(ctx, PlaylistTrackState.Failed, "No suitable match found");
+                    // Determine specific failure reason based on search history
+                    var failureReason = DownloadFailureReason.NoSearchResults; // Default
+                    
+                    // If we have search attempts, analyze rejection patterns
+                    if (ctx.SearchAttempts.Any())
+                    {
+                        var lastAttempt = ctx.SearchAttempts.Last();
+                        if (lastAttempt.ResultsCount > 0)
+                        {
+                            // Results were found but rejected - determine why
+                            if (lastAttempt.RejectedByQuality > 0)
+                                failureReason = DownloadFailureReason.AllResultsRejectedQuality;
+                            else if (lastAttempt.RejectedByFormat > 0)
+                                failureReason = DownloadFailureReason.AllResultsRejectedFormat;
+                            else if (lastAttempt.RejectedByBlacklist > 0)
+                                failureReason = DownloadFailureReason.AllResultsBlacklisted;
+                        }
+                    }
+                    
+                    await UpdateStateAsync(ctx, PlaylistTrackState.Failed, failureReason);
                     return;
                 }
 
@@ -1309,7 +1356,7 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
                 }
                 else
                 {
-                    await UpdateStateAsync(ctx, PlaylistTrackState.Failed, $"Max retries exceeded: {ex.Message}");
+                    await UpdateStateAsync(ctx, PlaylistTrackState.Failed, DownloadFailureReason.MaxRetriesExceeded);
                 }
             }
         }
@@ -1594,7 +1641,7 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
                         
                         // Mark as failed with specific error
                         await UpdateStateAsync(ctx, PlaylistTrackState.Failed, 
-                            "File verification failed: Invalid audio format or corrupted file");
+                            DownloadFailureReason.FileVerificationFailed);
                         return;
                     }
                     
@@ -1609,7 +1656,7 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
                         
                         // Mark as failed
                         await UpdateStateAsync(ctx, PlaylistTrackState.Failed, 
-                            "File verification failed: File too small or empty");
+                            DownloadFailureReason.FileVerificationFailed);
                         return;
                     }
                     
@@ -1623,7 +1670,7 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
                     try { File.Delete(finalPath); } catch { }
                     
                     await UpdateStateAsync(ctx, PlaylistTrackState.Failed, 
-                        $"File verification error: {verifyEx.Message}");
+                        DownloadFailureReason.FileVerificationFailed);
                     return;
                 }
 
@@ -1663,13 +1710,13 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
             {
                 _logger.LogError(renameEx, "Failed to perform atomic rename for {Track}", ctx.Model.Title);
                 await UpdateStateAsync(ctx, PlaylistTrackState.Failed, 
-                    $"Atomic rename failed: {renameEx.Message}");
+                    DownloadFailureReason.AtomicRenameFailed);
             }
         }
         else
         {
             await UpdateStateAsync(ctx, PlaylistTrackState.Failed, 
-                "Download transfer failed or was cancelled. .part file retained for resume.");
+                DownloadFailureReason.TransferFailed);
         }
     }
     finally

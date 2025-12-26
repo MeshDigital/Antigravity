@@ -18,6 +18,11 @@ public partial class LibraryPage : UserControl
 {
     private readonly ILogger<LibraryPage>? _logger;
 
+    public LibraryPage()
+    {
+        InitializeComponent();
+    }
+
     public LibraryPage(LibraryViewModel viewModel, ILogger<LibraryPage>? logger = null)
     {
         _logger = logger;
@@ -73,6 +78,7 @@ public partial class LibraryPage : UserControl
             _logger?.LogWarning("[DIAGNOSTIC] LibraryPage.OnLoaded: DataContext is NOT LibraryViewModel!");
         }
         
+        
         // Find the playlist ListBox and enable drop
         var playlistListBox = this.FindControl<ListBox>("PlaylistListBox");
         if (playlistListBox != null)
@@ -80,109 +86,7 @@ public partial class LibraryPage : UserControl
             DragDrop.SetAllowDrop(playlistListBox, true);
         }
         
-        // Find the track TreeDataGrid and enable drag
-        var treeDataGrid = this.FindControl<TreeDataGrid>("TracksTreeDataGrid");
-        if (treeDataGrid != null)
-        {
-            treeDataGrid.AddHandler(PointerPressedEvent, OnTrackPointerPressed, RoutingStrategies.Tunnel);
-            treeDataGrid.AddHandler(PointerMovedEvent, OnTrackPointerMoved, RoutingStrategies.Tunnel);
-            treeDataGrid.AddHandler(PointerReleasedEvent, OnTrackPointerReleased, RoutingStrategies.Tunnel);
-        }
-    }
-
-    private void OnTreeDataGridDoubleTapped(object? sender, TappedEventArgs e)
-    {
-        if (DataContext is LibraryViewModel vm)
-        {
-            // The clicked item is in the Source.Selection
-            if (sender is TreeDataGrid grid)
-            {
-                if (grid.Source is ITreeDataGridSource<PlaylistTrackViewModel> source && 
-                    source.Selection is ITreeDataGridRowSelectionModel<PlaylistTrackViewModel> selection &&
-                    selection.SelectedItem is PlaylistTrackViewModel track)
-                {
-                {
-                    if (vm.PlayTrackCommand.CanExecute(track))
-                    {
-                        vm.PlayTrackCommand.Execute(track);
-                    }
-                }
-                }
-            }
-        }
-    }
-
-    private Point? _dragStartPoint;
-    private PlaylistTrackViewModel? _draggedTrack;
-    private DragAdornerService? _adornerService;
-
-    private void OnTrackPointerPressed(object? sender, PointerPressedEventArgs e)
-    {
-        if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
-        {
-            // Find row in TreeDataGrid
-            var row = (e.Source as Control)?.FindAncestorOfType<TreeDataGridRow>();
-            if (row?.DataContext is PlaylistTrackViewModel track)
-            {
-                _dragStartPoint = e.GetPosition(this);
-                _draggedTrack = track;
-            }
-        }
-    }
-
-    private async void OnTrackPointerMoved(object? sender, PointerEventArgs e)
-    {
-        if (_dragStartPoint.HasValue && _draggedTrack != null && e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
-        {
-            var currentPoint = e.GetPosition(this);
-            // The original instruction snippet was malformed. Assuming the intent was to add a dropTarget variable
-            // and keep the 'diff' calculation, and that 'parent' was a placeholder for 'this.Parent'.
-            // Making a best effort to produce syntactically correct code based on the instruction's intent.
-            var dropTarget = this.Parent as Control ?? (Control)this; // Corrected 'parent' to 'this.Parent' for compilation
-            var diff = currentPoint - _dragStartPoint.Value;
-            
-            // Move ghost if it exists
-            _adornerService?.MoveGhost(currentPoint);
-
-            // Check if moved past threshold (5 pixels)
-            if (Math.Abs(diff.X) > 5 || Math.Abs(diff.Y) > 5)
-            {
-                // lazy load service
-                if (_adornerService == null && Application.Current is App app)
-                {
-                    _adornerService = (app.Services?.GetService(typeof(DragAdornerService)) as DragAdornerService) 
-                                     ?? new DragAdornerService(); // fallback
-                }
-
-                // Show visual adorner
-                _adornerService?.ShowGhost(((Control?)(e.Source as Control)?.FindAncestorOfType<TreeDataGridRow>()) ?? this, this);
-
-                // Phase 6D: Decoupled D&D Payload
-                var data = new DataObject();
-                data.Set(DragContext.LibraryTrackFormat, _draggedTrack.GlobalId);
-                
-                // Set temporary global storage for extra context (Source Project ID)
-                if (DataContext is LibraryViewModel vm)
-                {
-                    data.Set("SourceProjectId", vm.SelectedProject?.Id.ToString() ?? "");
-                }
-
-                // Start drag operation
-                await DragDrop.DoDragDrop(e, data, DragDropEffects.Copy);
-                
-                // Clean up
-                _adornerService?.HideGhost();
-                _dragStartPoint = null;
-                _draggedTrack = null;
-            }
-        }
-    }
-
-    private void OnTrackPointerReleased(object? sender, PointerReleasedEventArgs e)
-    {
-        _adornerService?.HideGhost();
-        _dragStartPoint = null;
-        _draggedTrack = null;
+        // TODO: Restore Drag and Drop for the new Track ListBox
     }
 
     private void OnPlaylistDragOver(object? sender, DragEventArgs e)

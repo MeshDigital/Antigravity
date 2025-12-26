@@ -424,14 +424,9 @@ public class DatabaseService
                  await context.Database.ExecuteSqlRawAsync(createCacheTableSql);
             }
 
-            // Check for PendingOrchestrations table
+            // Ensure PendingOrchestrations table exists
             try
             {
-                await context.Database.ExecuteSqlRawAsync("SELECT GlobalId FROM PendingOrchestrations LIMIT 1");
-            }
-            catch
-            {
-                _logger.LogWarning("Schema Patch: Creating missing table 'PendingOrchestrations'");
                 var createPendingTableSql = @"
                     CREATE TABLE IF NOT EXISTS PendingOrchestrations (
                         GlobalId TEXT NOT NULL CONSTRAINT PK_PendingOrchestrations PRIMARY KEY,
@@ -439,6 +434,10 @@ public class DatabaseService
                     );
                 ";
                 await context.Database.ExecuteSqlRawAsync(createPendingTableSql);
+            }
+            catch (Exception ex)
+            {
+                 _logger.LogError(ex, "Failed to ensure PendingOrchestrations table exists");
             }
 
             // Check for LibraryHealth table

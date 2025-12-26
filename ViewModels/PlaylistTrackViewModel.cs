@@ -43,6 +43,43 @@ public class PlaylistTrackViewModel : INotifyPropertyChanged, Library.ILibraryNo
 
     public Guid SourceId { get; set; } // Project ID (PlaylistJob.Id)
     public Guid Id => Model.Id;
+    private bool _isExpanded;
+    public bool IsExpanded
+    {
+        get => _isExpanded;
+        set => SetProperty(ref _isExpanded, value);
+    }
+
+    // Integrity Level (Placeholder for now, future logic will populate this)
+    private string? _integrityLevel;
+    public string? IntegrityLevel
+    {
+        get => _integrityLevel;
+        set => SetProperty(ref _integrityLevel, value);
+    }
+
+    // Audio Analysis Properties (Placeholder defaults for UI testing)
+    private double _energy = 0.0; 
+    public double Energy
+    {
+        get => _energy;
+        set => SetProperty(ref _energy, value);
+    }
+
+    private double _danceability = 0.0;
+    public double Danceability
+    {
+        get => _danceability;
+        set => SetProperty(ref _danceability, value);
+    }
+
+    private double _valence = 0.0;
+    public double Valence
+    {
+        get => _valence;
+        set => SetProperty(ref _valence, value);
+    }
+    
     public string GlobalId { get; set; } // TrackUniqueHash
     
     // Properties linked to Model and Notification
@@ -516,5 +553,13 @@ public class PlaylistTrackViewModel : INotifyPropertyChanged, Library.ILibraryNo
     protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
+
+    protected bool SetProperty<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
+    {
+        if (EqualityComparer<T>.Default.Equals(field, value)) return false;
+        field = value;
+        OnPropertyChanged(propertyName);
+        return true;
     }
 }

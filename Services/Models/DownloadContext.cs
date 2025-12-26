@@ -48,6 +48,11 @@ public class DownloadContext
     // Reliability (Phase 7: DJ's Studio)
     public int RetryCount { get; set; }
     public DateTime? NextRetryTime { get; set; }
+    
+    // Phase: Download Failure Diagnostics
+    public DownloadFailureReason? FailureReason { get; set; }
+    public List<SearchAttemptLog> SearchAttempts { get; set; } = new();
+    public string? DetailedFailureMessage { get; set; }
 
     public DownloadContext(PlaylistTrack model)
     {

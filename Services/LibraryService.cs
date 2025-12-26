@@ -83,16 +83,53 @@ public class LibraryService : ILibraryService
     {
         try
         {
-            var entity = LibraryEntryToEntity(entry);
-            entity.LastUsedAt = DateTime.UtcNow;
+            // Concurrency Fix: Load existing entity first to attach to context
+            var existingEntity = await _databaseService.FindLibraryEntryAsync(entry.UniqueHash).ConfigureAwait(false);
+            
+            if (existingEntity != null)
+            {
+                // Update existing entity fields
+                existingEntity.Artist = entry.Artist;
+                existingEntity.Title = entry.Title;
+                existingEntity.Album = entry.Album;
+                existingEntity.FilePath = entry.FilePath;
+                existingEntity.Bitrate = entry.Bitrate;
+                existingEntity.DurationSeconds = entry.DurationSeconds;
+                existingEntity.Format = entry.Format;
+                existingEntity.LastUsedAt = DateTime.UtcNow;
+                
+                // Preserve scientific data if input is empty (don't overwrite enrichment with nulls)
+                if (!string.IsNullOrEmpty(entry.SpotifyTrackId))
+                {
+                    existingEntity.SpotifyTrackId = entry.SpotifyTrackId;
+                    existingEntity.Energy = entry.Energy;
+                    existingEntity.Danceability = entry.Danceability;
+                    existingEntity.Valence = entry.Valence;
+                    existingEntity.BPM = entry.BPM;
+                    existingEntity.MusicalKey = entry.MusicalKey;
+                }
+                
+                // Only update enrichment flag if true (don't regress)
+                if (entry.IsEnriched) existingEntity.IsEnriched = true;
 
-            await _databaseService.SaveLibraryEntryAsync(entity).ConfigureAwait(false);
-            _logger.LogDebug("Upserted library entry: {Hash}", entry.UniqueHash);
+                await _databaseService.SaveLibraryEntryAsync(existingEntity).ConfigureAwait(false);
+                _logger.LogDebug("Updated library entry: {Hash}", entry.UniqueHash);
+            }
+            else
+            {
+                // Create new
+                var entity = LibraryEntryToEntity(entry);
+                entity.LastUsedAt = DateTime.UtcNow;
+                await _databaseService.SaveLibraryEntryAsync(entity).ConfigureAwait(false);
+                _logger.LogDebug("Created library entry: {Hash}", entry.UniqueHash);
+            }
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to save or update library entry");
-            throw;
+            // Do not throw here to prevent crashing the download flow! 
+            // The file is on disk, we just failed to index it.
+            // A background scan can pick it up later.
         }
     }
 
@@ -171,6 +208,34 @@ public class LibraryService : ILibraryService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to find playlist job by source type {Type}", sourceType);
+            return null;
+        }
+    }
+
+    public async Task<PlaylistJob?> FindPlaylistJobBySourceUrlAsync(string sourceUrl)
+    {
+        if (string.IsNullOrEmpty(sourceUrl)) return null;
+
+        try
+        {
+            var entities = await _databaseService.LoadAllPlaylistJobsAsync().ConfigureAwait(false);
+            
+            // Normalize searching URL (simple: strip query params and trailing slashes)
+            var cleanSearch = sourceUrl.Split('?')[0].TrimEnd('/');
+            
+            // Search logic
+            return entities
+                .Select(EntityToPlaylistJob)
+                .FirstOrDefault(job => 
+                {
+                    if (string.IsNullOrEmpty(job.SourceUrl)) return false;
+                    var cleanSource = job.SourceUrl.Split('?')[0].TrimEnd('/');
+                    return string.Equals(cleanSearch, cleanSource, StringComparison.OrdinalIgnoreCase);
+                });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to find playlist job by source URL {Url}", sourceUrl);
             return null;
         }
     }

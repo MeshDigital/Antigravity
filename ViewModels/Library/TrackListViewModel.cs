@@ -155,6 +155,9 @@ public class TrackListViewModel : ReactiveObject
         get => _selectedCountText;
         private set => this.RaiseAndSetIfChanged(ref _selectedCountText, value);
     }
+    
+    // ListBox Selection Binding
+    public ObservableCollection<PlaylistTrackViewModel> SelectedTracks { get; } = new();
 
     public System.Windows.Input.ICommand SelectAllTracksCommand { get; }
     public System.Windows.Input.ICommand DeselectAllTracksCommand { get; }
@@ -182,33 +185,20 @@ public class TrackListViewModel : ReactiveObject
         _config = config;
 
         Hierarchical = new HierarchicalLibraryViewModel(config, downloadManager);
+        
         SelectAllTracksCommand = ReactiveCommand.Create(() => 
         {
-            var selection = Hierarchical.Selection;
-            if (selection != null)
+            SelectedTracks.Clear();
+            foreach (var track in FilteredTracks)
             {
-                selection.BeginBatchUpdate();
-                try
-                {
-                    // Selection might not have SelectAll, so we iterate rows
-                    for (int i = 0; i < Hierarchical.Source.Rows.Count; i++)
-                    {
-                        var modelIndex = Hierarchical.Source.Rows.RowIndexToModelIndex(i);
-                        if (modelIndex != default)
-                            selection.Select(modelIndex);
-                    }
-                }
-                finally
-                {
-                    selection.EndBatchUpdate();
-                }
-                UpdateSelectionState();
+               SelectedTracks.Add(track);
             }
+            UpdateSelectionState();
         });
 
         DeselectAllTracksCommand = ReactiveCommand.Create(() => 
         {
-            Hierarchical.Selection?.Clear();
+            SelectedTracks.Clear();
             UpdateSelectionState();
         });
 
@@ -219,7 +209,7 @@ public class TrackListViewModel : ReactiveObject
         BulkReEnrichCommand = ReactiveCommand.CreateFromTask(ExecuteBulkReEnrichAsync);
 
         // Selection Change Tracking
-        Hierarchical.Selection.SelectionChanged += (s, e) => UpdateSelectionState();
+        SelectedTracks.CollectionChanged += (s, e) => UpdateSelectionState();
 
         // Throttled search and filter synchronization
         this.WhenAnyValue(
@@ -403,7 +393,7 @@ public class TrackListViewModel : ReactiveObject
 
     private void UpdateSelectionState()
     {
-        var count = Hierarchical.Selection.SelectedItems.Count;
+        var count = SelectedTracks.Count;
         HasSelectedTracks = count > 0;
         HasMultiSelection = count > 1;
         SelectedCountText = $"{count} tracks selected";
@@ -411,15 +401,13 @@ public class TrackListViewModel : ReactiveObject
 
     private async Task ExecuteBulkDownloadAsync()
     {
-        var selectedTracks = Hierarchical.Selection.SelectedItems
-            .OfType<PlaylistTrackViewModel>()
-            .ToList();
+        var selectedTracks = SelectedTracks.ToList();
         
         if (!selectedTracks.Any()) return;
 
         _logger.LogInformation("Bulk download for {Count} tracks", selectedTracks.Count);
         _downloadManager.QueueTracks(selectedTracks.Select(t => t.Model).ToList());
-        Hierarchical.Selection.Clear(); // Clear selection after action
+        SelectedTracks.Clear(); // Clear selection after action
     }
 
     private async Task ExecuteCopyToFolderAsync()
@@ -427,8 +415,7 @@ public class TrackListViewModel : ReactiveObject
         try
         {
             // Get selected completed tracks only
-            var selectedTracks = Hierarchical.Selection.SelectedItems
-                .OfType<PlaylistTrackViewModel>()
+            var selectedTracks = SelectedTracks
                 .Where(t => t.State == PlaylistTrackState.Completed && !string.IsNullOrEmpty(t.Model?.ResolvedFilePath))
                 .ToList();
             
@@ -506,7 +493,7 @@ public class TrackListViewModel : ReactiveObject
             }
 
             _logger.LogInformation("Copy complete: {Success} succeeded, {Fail} failed", successCount, failCount);
-            Hierarchical.Selection.Clear();
+            SelectedTracks.Clear();
         }
         catch (Exception ex)
         {
@@ -516,8 +503,7 @@ public class TrackListViewModel : ReactiveObject
 
     private async Task ExecuteBulkRetryAsync()
     {
-        var selectedTracks = Hierarchical.Selection.SelectedItems
-            .OfType<PlaylistTrackViewModel>()
+        var selectedTracks = SelectedTracks
             .Where(t => t.State == PlaylistTrackState.Failed || t.State == PlaylistTrackState.Cancelled)
             .ToList();
         
@@ -531,13 +517,12 @@ public class TrackListViewModel : ReactiveObject
         
         // Ensure DownloadManager resumes if paused
         _ = _downloadManager.StartAsync();
-        Hierarchical.Selection.Clear();
+        SelectedTracks.Clear();
     }
     
     private async Task ExecuteBulkCancelAsync()
     {
-        var selectedTracks = Hierarchical.Selection.SelectedItems
-            .OfType<PlaylistTrackViewModel>()
+        var selectedTracks = SelectedTracks
             .Where(t => t.IsActive)
             .ToList();
         
@@ -548,14 +533,12 @@ public class TrackListViewModel : ReactiveObject
         {
             track.Cancel();
         }
-        Hierarchical.Selection.Clear();
+        SelectedTracks.Clear();
     }
 
     private async Task ExecuteBulkReEnrichAsync()
     {
-        var selectedTracks = Hierarchical.Selection.SelectedItems
-            .OfType<PlaylistTrackViewModel>()
-            .ToList();
+        var selectedTracks = SelectedTracks.ToList();
         
         if (!selectedTracks.Any()) return;
 
@@ -571,7 +554,7 @@ public class TrackListViewModel : ReactiveObject
             }
         }
         
-        Hierarchical.Selection.Clear();
+        SelectedTracks.Clear();
         _logger.LogInformation("Re-enrichment queued for {Count} tracks - metadata will be refreshed in background", selectedTracks.Count);
     }
 
