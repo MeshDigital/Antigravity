@@ -102,6 +102,7 @@ public class SpotifyEnrichmentService
 
             if (track == null)
             {
+                 _logger.LogWarning("No Spotify match found for: {Artist} - {TrackName}", artist, trackName);
                  return new TrackEnrichmentResult { Success = false, Error = "No match found" };
             }
 
