@@ -536,6 +536,10 @@ public partial class App : Application
         services.AddSingleton<AnalysisQueueService>();
         services.AddHostedService<AnalysisWorker>();
         
+        // Phase 4.2: Drop Detection & Cue Generation Engines
+        services.AddSingleton<Services.Musical.DropDetectionEngine>();
+        services.AddSingleton<Services.Musical.CueGenerationEngine>();
+        
         // Phase 0: ViewModel Refactoring - Library child ViewModels
         services.AddTransient<ViewModels.Library.ProjectListViewModel>();
         services.AddTransient<ViewModels.Library.TrackListViewModel>();

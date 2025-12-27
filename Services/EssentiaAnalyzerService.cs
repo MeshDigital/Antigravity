@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using SLSKDONET.Data.Entities;
 using SLSKDONET.Data.Essentia;
+using SLSKDONET.Services.Musical;
 
 namespace SLSKDONET.Services;
 
@@ -23,6 +24,8 @@ public class EssentiaAnalyzerService : IAudioIntelligenceService
 {
     private readonly ILogger<EssentiaAnalyzerService> _logger;
     private readonly PathProviderService _pathProvider;
+    private readonly DropDetectionEngine _dropEngine;
+    private readonly CueGenerationEngine _cueEngine;
     private const string ESSENTIA_EXECUTABLE = "essentia_streaming_extractor_music.exe";
     private const string ANALYSIS_VERSION = "Essentia-2.1-beta5";
     
@@ -31,10 +34,14 @@ public class EssentiaAnalyzerService : IAudioIntelligenceService
 
     public EssentiaAnalyzerService(
         ILogger<EssentiaAnalyzerService> logger,
-        PathProviderService pathProvider)
+        PathProviderService pathProvider,
+        DropDetectionEngine dropEngine,
+        CueGenerationEngine cueEngine)
     {
         _logger = logger;
         _pathProvider = pathProvider;
+        _dropEngine = dropEngine;
+        _cueEngine = cueEngine;
     }
 
     /// <summary>
@@ -178,16 +185,16 @@ public class EssentiaAnalyzerService : IAudioIntelligenceService
             {
                 TrackUniqueHash = trackUniqueHash,
                 
-                // Core Musical Features (from confirmed DTO properties)
+                // Core Musical Features
                 Bpm = data.Rhythm?.Bpm ?? 0,
-                BpmConfidence = 0.8f, // Placeholder - will be added to DTO in Phase 4.2
+                BpmConfidence = 0.8f, // Will be updated when full Essentia DTOs available
                 Key = data.Tonal?.KeyEdma?.Key ?? string.Empty,
                 Scale = data.Tonal?.KeyEdma?.Scale ?? string.Empty,
                 KeyConfidence = data.Tonal?.KeyEdma?.Strength ?? 0,
-                CamelotKey = string.Empty, // Will be calculated by KeyConverter in Phase 4.2
+                CamelotKey = string.Empty, // Will be calculated by KeyConverter in Phase 4.3
                 
-                // Sonic Characteristics (placeholders - full mapping in Phase 4.2)
-                Energy = 0.5f, // Placeholder
+                // Sonic Characteristics (placeholders - full mapping when DTOs extended)
+                Energy = 0.5f,
                 Danceability = data.Rhythm?.Danceability ?? 0,
                 SpectralCentroid = 0,
                 SpectralComplexity = 0,
@@ -195,16 +202,43 @@ public class EssentiaAnalyzerService : IAudioIntelligenceService
                 DynamicComplexity = 0,
                 LoudnessLUFS = 0,
                 
-                // Drop Detection & Cues (Phase 4.2 - to be implemented)
-                DropTimeSeconds = null,
-                CueBuild = null,
-                CueDrop = null,
-                CuePhraseStart = null,
-                
                 // Metadata
                 AnalysisVersion = ANALYSIS_VERSION,
                 AnalyzedAt = DateTime.UtcNow
             };
+            
+            // Phase 4.2: Drop Detection & Cue Generation
+            if (entity.Bpm > 0)
+            {
+                try
+                {
+                    // Get track duration (estimate from file or use metadata)
+                    var trackFileInfo = new FileInfo(filePath);
+                    float estimatedDuration = 180f; // Default 3 minutes
+                    
+                    // Detect drop
+                    var (dropTime, confidence) = _dropEngine.DetectDrop(data, estimatedDuration);
+                    
+                    if (dropTime.HasValue)
+                    {
+                        // Generate cues from drop
+                        var cues = _cueEngine.GenerateCues(dropTime.Value, entity.Bpm);
+                        
+                        entity.DropTimeSeconds = dropTime;
+                        entity.CuePhraseStart = cues.PhraseStart;
+                        entity.CueBuild = cues.Build;
+                        entity.CueDrop = cues.Drop;
+                        entity.CueIntro = cues.Intro;
+                        
+                        _logger.LogInformation("🎯 Drop + Cues generated: Drop={Drop:F1}s, Build={Build:F1}s, PhraseStart={PS:F1}s",
+                            dropTime.Value, cues.Build, cues.PhraseStart);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Drop/Cue generation failed (non-fatal)");
+                }
+            }
             
             _logger.LogInformation("🧠 Essentia Analyzed {Hash}: BPM={Bpm:F1}, Key={Key} {Scale}", 
                 trackUniqueHash, entity.Bpm, entity.Key, entity.Scale);
