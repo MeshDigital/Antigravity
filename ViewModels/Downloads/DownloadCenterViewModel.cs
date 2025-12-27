@@ -79,12 +79,29 @@ public class DownloadCenterViewModel : ReactiveObject, IDisposable
     
     // Alias for HomeViewModel compatibility
     public string GlobalSpeedDisplay => GlobalSpeed;
+
+    public int MaxConcurrentDownloads
+    {
+        get => _downloadManager.MaxActiveDownloads;
+        set 
+        {
+             // Validate range 1-50
+             if (value < 1 || value > 50) return;
+             
+             if (_downloadManager.MaxActiveDownloads != value)
+             {
+                 _downloadManager.MaxActiveDownloads = value;
+                 this.RaisePropertyChanged();
+             }
+        }
+    }
     
     // Commands
     public ICommand PauseAllCommand { get; }
     public ICommand ResumeAllCommand { get; }
     public ICommand ClearCompletedCommand { get; }
     public ICommand ClearFailedCommand { get; }
+    public ICommand RetryAllFailedCommand { get; }
     
     public DownloadCenterViewModel(DownloadManager downloadManager, IEventBus eventBus)
     {
@@ -103,6 +120,18 @@ public class DownloadCenterViewModel : ReactiveObject, IDisposable
         
         ClearFailedCommand = ReactiveCommand.Create(() => 
             _downloadsSource.Remove(_downloadsSource.Items.Where(x => x.State == PlaylistTrackState.Failed).ToList()));
+
+        RetryAllFailedCommand = ReactiveCommand.CreateFromTask(async () => 
+        {
+            var failedItems = FailedDownloads.ToList();
+            foreach (var item in failedItems)
+            {
+                if (item.RetryCommand.CanExecute(null))
+                {
+                    item.RetryCommand.Execute(null);
+                }
+            }
+        }, this.WhenAnyValue(x => x.FailedDownloads.Count, count => count > 0));
         
         // Initialize DynamicData Pipelines
         

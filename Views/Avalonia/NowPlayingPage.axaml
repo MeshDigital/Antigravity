@@ -125,7 +125,7 @@
                 <Grid Grid.Column="1" VerticalAlignment="Center" Height="40">
                     <!-- Background Waveform -->
                     <!-- TEMPORARILY DISABLED: Build error AVLN2200 (Unknown Type)
-                    <controls:WaveformControl Data="{Binding WaveformData}"
+                    <controls:WaveformControl WaveformData="{Binding WaveformData}"
                                             Progress="{Binding Position}"
                                             Foreground="#404040"
                                             Background="Transparent"

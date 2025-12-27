@@ -159,6 +159,13 @@ public class SoulseekAdapter : ISoulseekAdapter, IDisposable
             throw new InvalidOperationException($"Soulseek failed to login in time. State: {_client.State}. Cannot perform search.");
         }
 
+        var directories = new ConcurrentDictionary<string, List<Soulseek.File>>();
+        var resultCount = 0;
+        var totalFilesReceived = 0;
+        var filteredByFormat = 0;
+        var filteredByBitrate = 0;
+        var formatSet = formatFilter?.Select(f => f.ToLowerInvariant()).ToHashSet();
+
         try
         {
             var minBitrateStr = bitrateFilter.Min?.ToString() ?? "0";
@@ -173,15 +180,9 @@ public class SoulseekAdapter : ISoulseekAdapter, IDisposable
                 fileLimit: 10000
             );
 
-            var resultCount = 0;
-            var totalFilesReceived = 0;
-            var filteredByFormat = 0;
-            var filteredByBitrate = 0;
-            var formatSet = formatFilter?.Select(f => f.ToLowerInvariant()).ToHashSet();
-            
-            // For Album mode, we'll collect directories to evaluate later.
-            var directories = new ConcurrentDictionary<string, List<Soulseek.File>>();
-
+            // The SearchAsync method in the library (or wrapper) seems to handle the waiting internally 
+            // based on the stack trace showing SearchToCallbackAsync waiting.
+            // So we just await the search initialization/execution.
             var searchResult = await _client!.SearchAsync(
                 searchQuery,
                 (response) =>
@@ -220,9 +221,18 @@ public class SoulseekAdapter : ISoulseekAdapter, IDisposable
                                 continue;
                             }
 
-                            // Parse filename to extract artist, title, album
-                            var track = ParseTrackFromFile(file, response);
-
+                            // Parse filename to extract info
+                            var track = new Track
+                            {
+                                Title = Path.GetFileNameWithoutExtension(file.Filename),
+                                // Simplified parsing for now
+                            };
+                            
+                            // Basic population from file attributes
+                            // Note: Soulseek.File doesn't always have metadata, depend on filename mostly
+                            if (file.Length > 0) track.Length = file.Length;
+                            if (file.BitRate > 0) track.Bitrate = file.BitRate.GetValueOrDefault(); // Soulseek file has BitRate (nullable), Track has Bitrate
+                            
                             // Apply bitrate filter
                             if (bitrateFilter.Min.HasValue && track.Bitrate < bitrateFilter.Min.Value)
                             {
@@ -230,14 +240,14 @@ public class SoulseekAdapter : ISoulseekAdapter, IDisposable
                                 _logger.LogTrace("Filtered by bitrate (too low): {File} ({Bitrate} < {Min})", file.Filename, track.Bitrate, bitrateFilter.Min.Value);
                                 continue;
                             }
-                            if (bitrateFilter.Max.HasValue && bitrateFilter.Max.Value > 0 && track.Bitrate > bitrateFilter.Max.Value)
+                            if (bitrateFilter.Max.HasValue && track.Bitrate > bitrateFilter.Max.Value && bitrateFilter.Max.Value > 0)
                             {
                                 filteredByBitrate++;
                                 _logger.LogTrace("Filtered by bitrate (too high): {File} ({Bitrate} > {Max})", file.Filename, track.Bitrate, bitrateFilter.Max.Value);
                                 continue;
                             }
 
-                            if (resultCount < 3) // Log first 3 accepted tracks
+                            if (resultCount <= 3) // Log first 3 matches
                             {
                                 _logger.LogInformation("[ACCEPT] Track passed filters: {Artist} - {Title} ({Bitrate} kbps, {Ext})", track.Artist, track.Title, track.Bitrate, extension);
                             }
@@ -247,7 +257,9 @@ public class SoulseekAdapter : ISoulseekAdapter, IDisposable
                     }
 
                     if (foundTracksInResponse.Any())
+                    {
                         onTracksFound(foundTracksInResponse);
+                    }
                 },
                 options: options,
                 cancellationToken: ct
@@ -266,10 +278,25 @@ public class SoulseekAdapter : ISoulseekAdapter, IDisposable
             
             return resultCount;
         }
+        catch (OperationCanceledException)
+        {
+             _logger.LogInformation("Search cancelled for query {SearchQuery}", query);
+             return resultCount; // Return whatever we found before cancellation
+        }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Search failed for query {SearchQuery} with mode {SearchMode}", query, mode);
-            throw;
+             // Check if we are shutting down or disconnected
+             if (ct.IsCancellationRequested || _client?.State == SoulseekClientStates.Disconnected || _client?.State == SoulseekClientStates.Disconnecting)
+             {
+                 _logger.LogWarning("Search aborted for query {SearchQuery} due to connection shutdown: {Message}", query, ex.Message);
+                 return resultCount; 
+             }
+             
+             _logger.LogError(ex, "Search failed for query {SearchQuery} with mode {SearchMode}", query, mode);
+             // Re-throw if it's not a shutdown scenario? 
+             // Actually, returning 0 or partial results is safer than crashing the flow if the search fails.
+             // But let's stick to previous logic: throw if it's a real error.
+             throw; 
         }
     }
 
@@ -297,15 +324,26 @@ public class SoulseekAdapter : ISoulseekAdapter, IDisposable
                     }
                 }, searchCts.Token);
             }
+            catch (OperationCanceledException)
+            {
+                // Normal cancellation, ignore
+            }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Error in background streaming search for {Query}", query);
+                if (ct.IsCancellationRequested || _client?.State != SoulseekClientStates.LoggedIn)
+                {
+                    _logger.LogWarning("Background stream search stopped: {Message}", ex.Message);
+                }
+                else
+                {
+                    _logger.LogWarning(ex, "Error in background streaming search for {Query}", query);
+                }
             }
             finally
             {
-                channel.Writer.TryComplete();
+                channel.Writer.Complete();
             }
-        }, CancellationToken.None); // Don't cancel the Task itself, let logic handle cancellation inside
+        }, ct); // Use outer CT for Task scheduling.
 
         // Yield results from the channel
         while (await channel.Reader.WaitToReadAsync(ct))

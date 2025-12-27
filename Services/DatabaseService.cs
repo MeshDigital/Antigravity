@@ -1079,9 +1079,13 @@ public class DatabaseService
                     track.Energy = result.Energy;
                     track.Valence = result.Valence;
                     track.Danceability = result.Danceability;
-                    track.IsEnriched = true;
                 }
             }
+            
+            // Mark as enriched regardless of success to prevent infinite loops (Stage 0 stall)
+            // If it failed, it means we tried and couldn't find it. Don't try again immediately.
+            track.IsEnriched = true;
+            
             await context.SaveChangesAsync();
         }
     }
@@ -1386,7 +1390,7 @@ public class DatabaseService
                      context.Entry(jobEntity).State = EntityState.Detached;
 
                      // Re-fetch the phantom existing job (might be soft-deleted)
-                     existingJob = await context.Projects.FirstOrDefaultAsync(j => j.Id == job.Id);
+                     existingJob = await context.Projects.IgnoreQueryFilters().FirstOrDefaultAsync(j => j.Id == job.Id);
                      if (existingJob != null)
                      {
                          // Un-delete if it was soft-deleted
@@ -2158,6 +2162,77 @@ public class DatabaseService
     {
         using var context = new AppDbContext();
         return await context.LibraryEntries.AsNoTracking().ToListAsync();
+    }
+    // ===== Genre Enrichment Methods (Stage 3) =====
+
+    public async Task<List<LibraryEntryEntity>> GetLibraryEntriesNeedingGenresAsync(int limit)
+    {
+        using var context = new AppDbContext();
+        return await context.LibraryEntries
+            .AsNoTracking()
+            .Where(e => !string.IsNullOrEmpty(e.SpotifyArtistId) && e.Genres == null)
+            .OrderByDescending(e => e.AddedAt) // Prioritize recent adds
+            .Take(limit)
+            .ToListAsync();
+    }
+
+    public async Task<List<PlaylistTrackEntity>> GetPlaylistTracksNeedingGenresAsync(int limit)
+    {
+        using var context = new AppDbContext();
+        return await context.PlaylistTracks
+            .AsNoTracking()
+            .Where(t => !string.IsNullOrEmpty(t.SpotifyArtistId) && t.Genres == null)
+            .OrderByDescending(t => t.AddedAt)
+            .Take(limit)
+            .ToListAsync();
+    }
+
+    public async Task UpdateLibraryEntriesGenresAsync(Dictionary<string, List<string>> artistGenreMap)
+    {
+        if (!artistGenreMap.Any()) return;
+
+        await _writeSemaphore.WaitAsync();
+        try
+        {
+            using var context = new AppDbContext();
+            
+            // 1. Update LibraryEntries
+            var artistIds = artistGenreMap.Keys.ToList();
+            var entries = await context.LibraryEntries
+                .Where(e => !string.IsNullOrEmpty(e.SpotifyArtistId) && artistIds.Contains(e.SpotifyArtistId))
+                .ToListAsync();
+
+            foreach (var entry in entries)
+            {
+                if (!string.IsNullOrEmpty(entry.SpotifyArtistId) && artistGenreMap.TryGetValue(entry.SpotifyArtistId, out var genres))
+                {
+                    // Serialize list to comma-separated string or just take first few?
+                    // The property is defined as string? Genres in the entity usually, but let's check
+                    // Entity definition said "Genres TEXT NULL", so likely a string.
+                    // We'll join with commas.
+                    entry.Genres = string.Join(", ", genres);
+                }
+            }
+
+            // 2. Update PlaylistTracks
+            var tracks = await context.PlaylistTracks
+                .Where(t => !string.IsNullOrEmpty(t.SpotifyArtistId) && artistIds.Contains(t.SpotifyArtistId))
+                .ToListAsync();
+
+            foreach (var track in tracks)
+            {
+                if (!string.IsNullOrEmpty(track.SpotifyArtistId) && artistGenreMap.TryGetValue(track.SpotifyArtistId, out var genres))
+                {
+                    track.Genres = string.Join(", ", genres);
+                }
+            }
+
+            await context.SaveChangesAsync();
+        }
+        finally
+        {
+            _writeSemaphore.Release();
+        }
     }
 }
 

@@ -358,6 +358,63 @@
                     <ListBox.ItemTemplate>
                         <DataTemplate>
                             <Border Background="Transparent" Padding="8,6">
+                                <Border.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem Header="Play" 
+                                                  Command="{Binding $parent[UserControl].DataContext.Operations.PlayTrackCommand}" 
+                                                  CommandParameter="{Binding}">
+                                            <MenuItem.Icon>
+                                                <TextBlock Text="▶️"/>
+                                            </MenuItem.Icon>
+                                        </MenuItem>
+                                        
+                                        <MenuItem Header="Open File Location" 
+                                                  Command="{Binding $parent[UserControl].DataContext.Operations.OpenFolderCommand}" 
+                                                  CommandParameter="{Binding}">
+                                             <MenuItem.Icon>
+                                                <TextBlock Text="📂"/>
+                                            </MenuItem.Icon>
+                                        </MenuItem>
+                                        
+                                        <Separator/>
+                                        
+                                        <MenuItem Header="Retry Download" 
+                                                  Command="{Binding $parent[UserControl].DataContext.Operations.HardRetryCommand}" 
+                                                  CommandParameter="{Binding}"
+                                                  IsVisible="{Binding CanHardRetry}">
+                                             <MenuItem.Icon>
+                                                <TextBlock Text="🔄"/>
+                                            </MenuItem.Icon>
+                                        </MenuItem>
+                                                  
+                                         <MenuItem Header="Cancel" 
+                                                  Command="{Binding CancelCommand}" 
+                                                  IsVisible="{Binding CanCancel}">
+                                             <MenuItem.Icon>
+                                                <TextBlock Text="✕"/>
+                                            </MenuItem.Icon>
+                                        </MenuItem>
+                                        
+                                        <Separator/>
+                                        
+                                        <MenuItem Header="Remove from Library" 
+                                                  Command="{Binding $parent[UserControl].DataContext.Operations.RemoveTrackCommand}" 
+                                                  CommandParameter="{Binding}"
+                                                  InputGesture="Delete">
+                                             <MenuItem.Icon>
+                                                <TextBlock Text="🗑️"/>
+                                            </MenuItem.Icon>
+                                        </MenuItem>
+                                        
+                                        <MenuItem Header="Find Harmonic Matches" 
+                                                  Command="{Binding $parent[UserControl].DataContext.FindHarmonicMatchesCommand}" 
+                                                  CommandParameter="{Binding}">
+                                             <MenuItem.Icon>
+                                                <TextBlock Text="🎹"/>
+                                            </MenuItem.Icon>
+                                        </MenuItem>
+                                    </ContextMenu>
+                                </Border.ContextMenu>
                                 <Grid RowDefinitions="Auto,Auto">
                                     <!-- Main Row Content -->
                                     <Grid ColumnDefinitions="Auto,*,Auto,Auto" RowDefinitions="Auto,Auto">

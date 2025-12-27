@@ -31,6 +31,8 @@ namespace SLSKDONET.ViewModels
         private readonly IAudioPlayerService _playerService;
         private readonly DatabaseService _databaseService;
         private readonly Services.Rekordbox.AnlzFileParser _anlzParser;
+        private readonly WaveformAnalysisService _waveformService;
+
         
         private string _trackTitle = "No Track Playing";
         public string TrackTitle
@@ -195,8 +197,8 @@ namespace SLSKDONET.ViewModels
             set => SetProperty(ref _vuRight, value);
         }
 
-        private byte[] _waveformData = Array.Empty<byte>();
-        public byte[] WaveformData
+        private WaveformAnalysisData _waveformData = new();
+        public WaveformAnalysisData WaveformData
         {
             get => _waveformData;
             set => SetProperty(ref _waveformData, value);
@@ -234,11 +236,12 @@ namespace SLSKDONET.ViewModels
         // Phase 5C: UI Throttling
         private DateTime _lastTimeUpdate = DateTime.MinValue;
 
-        public PlayerViewModel(IAudioPlayerService playerService, DatabaseService databaseService, IEventBus eventBus, Services.Rekordbox.AnlzFileParser anlzParser)
+        public PlayerViewModel(IAudioPlayerService playerService, DatabaseService databaseService, IEventBus eventBus, Services.Rekordbox.AnlzFileParser anlzParser, WaveformAnalysisService waveformService)
         {
             _playerService = playerService;
             _databaseService = databaseService;
             _anlzParser = anlzParser;
+            _waveformService = waveformService;
             
             // Phase 6B: Subscribe to playback requests
             eventBus.GetEvent<PlayTrackRequestEvent>().Subscribe(evt => 
@@ -561,9 +564,37 @@ namespace SLSKDONET.ViewModels
 
             if (!string.IsNullOrEmpty(filePath))
             {
-                // Sprint B: Load Rekordbox Waveform if exists
+                // Max Ultra Waveform Logic
+                // 1. Try Rekordbox ANLZ (Fastest, Pre-analyzed)
                 var anlz = _anlzParser.TryFindAndParseAnlz(filePath);
-                WaveformData = anlz.WaveformData;
+                if (anlz != null && anlz.WaveformData != null && anlz.WaveformData.Length > 0)
+                {
+                     // Convert legacy byte[] to new high-res format (Peak only, assume RMS = Peak for simple view)
+                     WaveformData = new WaveformAnalysisData 
+                     { 
+                         PeakData = anlz.WaveformData,
+                         RmsData = anlz.WaveformData, // Fallback
+                         PointsPerSecond = 100 
+                     };
+                }
+                else
+                {
+                     // 2. Generate High-Fidelity Waveform with FFmpeg (Async)
+                     // Fire and forget, UI will update when handy
+                     WaveformData = new WaveformAnalysisData(); // Clear old
+                     _ = Task.Run(async () => 
+                     {
+                         try 
+                         {
+                             var waveform = await _waveformService.GenerateWaveformAsync(filePath);
+                             Dispatcher.UIThread.Post(() => WaveformData = waveform);
+                         }
+                         catch (Exception ex)
+                         {
+                             Console.WriteLine($"[PlayerViewModel] Waveform generation failed: {ex.Message}");
+                         }
+                     });
+                }
                 
                 PlayTrack(filePath, track.Title ?? "Unknown", track.Artist ?? "Unknown");
             }

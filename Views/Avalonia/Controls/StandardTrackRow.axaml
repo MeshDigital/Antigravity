@@ -46,6 +46,60 @@
             BorderThickness="0,0,0,1" 
             Padding="8,6">
             
+        <Border.ContextMenu>
+            <ContextMenu>
+                <MenuItem Header="Play" Command="{Binding PlayCommand}" IsVisible="{Binding IsCompleted}">
+                    <MenuItem.Icon>
+                        <PathIcon Data="{StaticResource play_circle_regular}" Width="16" Height="16"/>
+                    </MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="Show in Explorer" Command="{Binding RevealFileCommand}" IsVisible="{Binding IsCompleted}">
+                    <MenuItem.Icon>
+                        <PathIcon Data="{StaticResource folder_open_regular}" Width="16" Height="16"/>
+                    </MenuItem.Icon>
+                </MenuItem>
+                 <MenuItem Header="Add to Project" Command="{Binding AddToProjectCommand}" IsVisible="{Binding IsCompleted}">
+                    <MenuItem.Icon>
+                        <PathIcon Data="{StaticResource add_circle_regular}" Width="16" Height="16"/>
+                    </MenuItem.Icon>
+                </MenuItem>
+                
+                <Separator IsVisible="{Binding IsCompleted}"/>
+                
+                <MenuItem Header="Retry Download" Command="{Binding RetryCommand}" IsVisible="{Binding IsFailed}">
+                    <MenuItem.Icon>
+                        <PathIcon Data="{StaticResource arrow_counterclockwise_regular}" Width="16" Height="16"/>
+                    </MenuItem.Icon>
+                </MenuItem>
+                
+                <MenuItem Header="Pause" Command="{Binding PauseCommand}" IsVisible="{Binding IsActive}">
+                     <MenuItem.Icon>
+                        <PathIcon Data="{StaticResource pause_regular}" Width="16" Height="16"/>
+                    </MenuItem.Icon>
+                </MenuItem>
+                
+                 <MenuItem Header="Resume" Command="{Binding ResumeCommand}" IsVisible="{Binding IsPaused}">
+                     <MenuItem.Icon>
+                        <PathIcon Data="{StaticResource play_regular}" Width="16" Height="16"/>
+                    </MenuItem.Icon>
+                </MenuItem>
+                
+                <MenuItem Header="Cancel" Command="{Binding CancelCommand}" IsVisible="{Binding IsActive}">
+                     <MenuItem.Icon>
+                        <PathIcon Data="{StaticResource dismiss_regular}" Width="16" Height="16"/>
+                    </MenuItem.Icon>
+                </MenuItem>
+                
+                <Separator/>
+                
+                <MenuItem Header="Remove from List" Command="{Binding CleanCommand}" InputGesture="Delete">
+                    <MenuItem.Icon>
+                        <PathIcon Data="{StaticResource delete_regular}" Width="16" Height="16"/>
+                    </MenuItem.Icon>
+                </MenuItem>
+            </ContextMenu>
+        </Border.ContextMenu>
+            
         <Grid ColumnDefinitions="50, 12, *, Auto" RowDefinitions="Auto, Auto">
         
             <!-- Column 0: Album Art / Status Icon -->
@@ -95,7 +149,12 @@
                 <!-- Line 2: Tech Specs & Curation Data -->
                 
                 <!-- Status/Speed -->
-                <TextBlock Text="{Binding StatusText}" Foreground="{Binding StatusColor}" FontSize="11" FontWeight="Medium"/>
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                    <TextBlock Text="⚠️" IsVisible="{Binding IsFailed}" Foreground="OrangeRed" FontSize="12" ToolTip.Tip="{Binding DetailedStatusText}"/>
+                    <TextBlock Text="{Binding StatusText}" Foreground="{Binding StatusColor}" FontSize="11" FontWeight="Medium" 
+                               TextTrimming="CharacterEllipsis" MaxWidth="200"
+                               ToolTip.Tip="{Binding DetailedStatusText}"/>
+                </StackPanel>
                 
                 <TextBlock Text="•" Foreground="#444"/>
                 

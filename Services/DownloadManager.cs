@@ -49,15 +49,15 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
 
     // Phase 2.5: Concurrency control with SemaphoreSlim throttling
     private readonly CancellationTokenSource _globalCts = new();
-    private readonly SemaphoreSlim _downloadSemaphore = new(4, 4); // Max 4 concurrent downloads
+    private readonly SemaphoreSlim _downloadSemaphore; // Initialized in optimization
     private Task? _processingTask;
 
     // Global State managed via Events
     private readonly List<DownloadContext> _downloads = new();
     private readonly object _collectionLock = new object();
     
-    private const int LAZY_QUEUE_BUFFER_SIZE = 100;
-    private const int REFILL_THRESHOLD = 20;
+    private const int LAZY_QUEUE_BUFFER_SIZE = 5000;
+    private const int REFILL_THRESHOLD = 50;
 
     // Expose read-only copy for internal checks
     public IReadOnlyList<DownloadContext> ActiveDownloads 
@@ -96,7 +96,9 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
         _crashJournal = crashJournal; // Phase 2A
 
         // Initialize from config, but allow runtime changes
-        MaxActiveDownloads = _config.MaxConcurrentDownloads > 0 ? _config.MaxConcurrentDownloads : 3;
+        int initialLimit = _config.MaxConcurrentDownloads > 0 ? _config.MaxConcurrentDownloads : 4;
+        _downloadSemaphore = new SemaphoreSlim(initialLimit, 50); // Hard cap at 50 to prevent DOS
+        MaxActiveDownloads = initialLimit;
 
         // Phase 8: Automation Subscriptions
         _eventBus.GetEvent<AutoDownloadTrackEvent>().Subscribe(OnAutoDownloadTrack);
@@ -213,7 +215,48 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
         }
     }
 
-    public int MaxActiveDownloads { get; set; }
+    private int _maxActiveDownloads;
+    public int MaxActiveDownloads 
+    {
+        get => _maxActiveDownloads;
+        set
+        {
+            if (_maxActiveDownloads == value || value < 1 || value > 50) return;
+            
+            int diff = value - _maxActiveDownloads;
+            _maxActiveDownloads = value;
+            
+            // Adjust semaphore count dynamically
+            if (diff > 0)
+            {
+                try 
+                {
+                    _downloadSemaphore.Release(diff);
+                    _logger.LogInformation("🚀 Increased concurrent download limit to {Count}", value);
+                }
+                catch (SemaphoreFullException) 
+                {
+                     // Should not happen with max 50, but fail safe
+                     _logger.LogWarning("Failed to increase concurrency limit - semaphore full");
+                }
+            }
+            else
+            {
+                // Decrease limit: Acquire slots asynchronously to throttle future downloads
+                // We don't cancel running downloads, just prevent new ones until count drops
+                int reduceBy = Math.Abs(diff);
+                _logger.LogInformation("🛑 Decreasing concurrent download limit to {Count} (throttling {Reduce} slots)", value, reduceBy);
+                
+                Task.Run(async () => 
+                {
+                    for(int i=0; i < reduceBy; i++)
+                    {
+                        await _downloadSemaphore.WaitAsync();
+                    }
+                });
+            }
+        }
+    }
     
     public async Task InitAsync()
     {
@@ -399,7 +442,10 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
                                               existingCtx.State == PlaylistTrackState.Cancelled || 
                                               existingCtx.State == PlaylistTrackState.Deferred))
                     {
-                        _logger.LogInformation("Retrying existing track {Title} (State: {State})", track.Title, existingCtx.State);
+                        _logger.LogInformation("Retrying existing track {Title} (State: {State}) - Bumping to Priority 0", track.Title, existingCtx.State);
+                        
+                        // Smart Download: Bump priority to top (User Intent)
+                        existingCtx.Model.Priority = 0;
                         
                         // Reset State
                         // Do not await here to avoid blocking loop
@@ -1416,6 +1462,18 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
                 else
                 {
                     _logger.LogError(ex, "ProcessTrackAsync error for {GlobalId}", ctx.GlobalId);
+                }
+
+                // FIX: Blacklist the failing peer so we don't pick them again instantly
+                if (!string.IsNullOrEmpty(ctx.CurrentUsername))
+                {
+                    lock (ctx.BlacklistedUsers) // HashSet isn't thread-safe
+                    {
+                        if (ctx.BlacklistedUsers.Add(ctx.CurrentUsername))
+                        {
+                            _logger.LogWarning("🚫 Blacklisted peer {User} for {Track} due to error", ctx.CurrentUsername, ctx.Model.Title);
+                        }
+                    }
                 }
                 
                 // Exponential Backoff Logic (Phase 7)

@@ -69,7 +69,7 @@ public class AppConfig
     // Library Management
     public List<string> LibraryRootPaths { get; set; } = new(); // Root directories to scan for music files
     public bool EnableFilePathResolution { get; set; } = true; // Enable automatic resolution of moved files
-    public double FuzzyMatchThreshold { get; set; } = 0.85; // Minimum similarity score (0.0-1.0) for fuzzy matching
+    public double FuzzyMatchThreshold { get; set; } = 0.70; // Minimum similarity score (0.0-1.0) for fuzzy matching
     
     // Library UI - Column Order Persistence
     public string LibraryColumnOrder { get; set; } = ""; // Comma-separated column IDs (empty = use default)

@@ -2,18 +2,19 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
 using System;
+using SLSKDONET.Models;
 
 namespace SLSKDONET.Views.Avalonia.Controls
 {
     public class WaveformControl : Control
     {
-        public static readonly StyledProperty<byte[]> DataProperty =
-            AvaloniaProperty.Register<WaveformControl, byte[]>(nameof(Data), Array.Empty<byte>());
+        public static readonly StyledProperty<WaveformAnalysisData> WaveformDataProperty =
+            AvaloniaProperty.Register<WaveformControl, WaveformAnalysisData>(nameof(WaveformData));
 
-        public byte[] Data
+        public WaveformAnalysisData WaveformData
         {
-            get => GetValue(DataProperty);
-            set => SetValue(DataProperty, value);
+            get => GetValue(WaveformDataProperty);
+            set => SetValue(WaveformDataProperty, value);
         }
 
         public static readonly StyledProperty<float> ProgressProperty =
@@ -27,14 +28,15 @@ namespace SLSKDONET.Views.Avalonia.Controls
 
         static WaveformControl()
         {
-            AffectsRender<WaveformControl>(DataProperty, ProgressProperty);
+            AffectsRender<WaveformControl>(WaveformDataProperty, ProgressProperty);
         }
 
         public override void Render(DrawingContext context)
         {
-            if (Data == null || Data.Length == 0)
+            var data = WaveformData;
+            if (data == null || data.IsEmpty)
             {
-                // Draw a simple line if no data
+                // Draw a simple flat line if no data
                 context.DrawLine(new Pen(Brushes.Gray, 1), new Point(0, Bounds.Height / 2), new Point(Bounds.Width, Bounds.Height / 2));
                 return;
             }
@@ -43,24 +45,62 @@ namespace SLSKDONET.Views.Avalonia.Controls
             var height = Bounds.Height;
             var mid = height / 2;
 
-            // Simple waveform rendering (assuming Data is array of peaks)
-            // Rekordbox PWAV is actually more complex (bits and colors), 
-            // but for a start we treat it as 1 byte per column or similar.
+            // "Max Ultra" Tri-Color Rendering
+            // 1. RMS Body (Blue/Cyan) - Shows average energy/loudness
+            // 2. Peak Spikes (White) - Shows transient detail
+            // 3. Progress Overlay - Dimmed vs Bright
+
+            var rmsPen = new Pen(new SolidColorBrush(Color.Parse("#00BFFF")), 1); // Deep Sky Blue
+            var peakPen = new Pen(Brushes.White, 1);
+            var playedOverlayBrush = new SolidColorBrush(Colors.Black, 0.5); // Dim played sections? Or maybe just color differently.
             
-            var pen = new Pen(Brushes.Gray, 1);
-            var activePen = new Pen(Brushes.Cyan, 1);
+            // Actually, standard DJ look:
+            // Played: Bright Blue/White
+            // Unplayed: Dim Blue/Gray
             
-            int samples = Data.Length;
+            var unplayedRmsPen = new Pen(new SolidColorBrush(Color.Parse("#4000BFFF")), 1); // Dim Blue
+            var unplayedPeakPen = new Pen(new SolidColorBrush(Color.Parse("#80FFFFFF")), 1); // Dim White
+            
+            var playedRmsPen = new Pen(new SolidColorBrush(Color.Parse("#00BFFF")), 1); // Bright Blue
+            var playedPeakPen = new Pen(Brushes.White, 1);
+
+            int samples = data.PeakData.Length;
             double step = width / samples;
 
+            // If too many samples for pixels, we can decimate or skip, but drawing lines is fast enough usually
+            // Optimization: If samples > width, we should average to pixel width to avoid overdraw
+            
+            // Drawing loop
             for (int i = 0; i < samples; i++)
             {
-                float val = Data[i] / 255f;
                 double x = i * step;
-                double h = val * mid;
-                
-                var currentPen = (x / width <= Progress) ? activePen : pen;
-                context.DrawLine(currentPen, new Point(x, mid - h), new Point(x, mid + h));
+                if (x > width) break;
+
+                bool isPlayed = (float)i / samples <= Progress;
+
+                // Normalized height (0.0 - 1.0)
+                float peakVal = data.PeakData[i] / 255f;
+                float rmsVal = data.RmsData[i] / 255f;
+
+                double peakH = peakVal * mid;
+                double rmsH = rmsVal * mid;
+
+                // Select Pens
+                var currentRmsPen = isPlayed ? playedRmsPen : unplayedRmsPen;
+                var currentPeakPen = isPlayed ? playedPeakPen : unplayedPeakPen;
+
+                // Draw RMS (Thicker/Body)
+                // Offset x slightly if needed, or draw line
+                context.DrawLine(currentRmsPen, new Point(x, mid - rmsH), new Point(x, mid + rmsH));
+
+                // Draw Peak (Tips) - Only if peak > rms (it usually is)
+                if (peakH > rmsH)
+                {
+                     // Top spike
+                     context.DrawLine(currentPeakPen, new Point(x, mid - peakH), new Point(x, mid - rmsH));
+                     // Bottom spike
+                     context.DrawLine(currentPeakPen, new Point(x, mid + rmsH), new Point(x, mid + peakH));
+                }
             }
         }
     }

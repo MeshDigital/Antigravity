@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -195,48 +196,77 @@ public class LibraryEnrichmentWorker : IDisposable
         }
 
         // --- STAGE 2: Batch Musical Intelligence (Unified) ---
-        // Fetch features for identified tracks (Shared across Library and Projects)
-        var needingFeaturesEntries = await _databaseService.GetLibraryEntriesNeedingFeaturesAsync(50);
-        var needingFeaturesPlaylist = await _databaseService.GetPlaylistTracksNeedingFeaturesAsync(50);
-        
-        var allIds = needingFeaturesEntries.Select(e => e.SpotifyTrackId)
-            .Concat(needingFeaturesPlaylist.Select(p => p.SpotifyTrackId))
-            .Where(id => !string.IsNullOrEmpty(id))
-            .Distinct()
-            .Select(id => id!)
-            .Take(100)
-            .ToList();
-
-        if (allIds != null && allIds.Any())
+        // Verify config BEFORE querying DB to prevent infinite loops and blocking Stage 3
+        if (_config.SpotifyEnableAudioFeatures)
         {
-             // Check if Audio Features are enabled (403 Forbidden in Spotify Developer Mode)
-             if (!_config.SpotifyEnableAudioFeatures)
-             {
-                 _logger.LogDebug("Audio Features disabled in settings. Skipping Stage 2 (BPM/Energy enrichment)");
-                 // Continue to allow album art and basic identification in earlier stages
-                 return didWork;
-             }
+            var needingFeaturesEntries = await _databaseService.GetLibraryEntriesNeedingFeaturesAsync(50);
+            var needingFeaturesPlaylist = await _databaseService.GetPlaylistTracksNeedingFeaturesAsync(50);
+            
+            var allIds = needingFeaturesEntries.Select(e => e.SpotifyTrackId)
+                .Concat(needingFeaturesPlaylist.Select(p => p.SpotifyTrackId))
+                .Where(id => !string.IsNullOrEmpty(id))
+                .Distinct()
+                .Select(id => id!)
+                .Take(100)
+                .ToList();
 
-             _logger.LogInformation("Enrichment Stage 2: Batch Features for {Count} unique tracks", allIds.Count);
-             
-             try 
-             {
-                 var featuresMap = await _enrichmentService.GetAudioFeaturesBatchAsync(allIds);
+            if (allIds != null && allIds.Any())
+            {
+                 _logger.LogInformation("Enrichment Stage 2: Batch Features for {Count} unique tracks", allIds.Count);
                  
-                 if (featuresMap != null)
+                 try 
                  {
-                    // Batch DB update (Updates both LibraryEntry and PlaylistTrack tables via Intelligence Sync)
-                    await _databaseService.UpdateLibraryEntriesFeaturesAsync(featuresMap);
-                    
-                    enrichedCount += featuresMap.Count;
-                    _logger.LogInformation("Stage 2 Complete: Enriched {Count} tracks with audio features", featuresMap.Count);
+                     var featuresMap = await _enrichmentService.GetAudioFeaturesBatchAsync(allIds);
+                     
+                     if (featuresMap != null)
+                     {
+                        // Batch DB update (Updates both LibraryEntry and PlaylistTrack tables via Intelligence Sync)
+                        await _databaseService.UpdateLibraryEntriesFeaturesAsync(featuresMap);
+                        
+                        enrichedCount += featuresMap.Count;
+                        _logger.LogInformation("Stage 2 Complete: Enriched {Count} tracks with audio features", featuresMap.Count);
+                     }
                  }
-             }
-             catch (Exception ex)
-             {
-                 _logger.LogError(ex, "Stage 2 Batch failed");
-             }
-             didWork = true;
+                 catch (Exception ex)
+                 {
+                     _logger.LogError(ex, "Stage 2 Batch failed");
+                 }
+                 didWork = true;
+            }
+        }
+
+        // --- STAGE 3: Batch Genre Enrichment ---
+        if (!SpotifyEnrichmentService.IsServiceDegraded)
+        {
+            try 
+            {
+                // Find tracks/entries that have Artist ID but NO Genres
+                // We limit to 50 unique artists to match batch size
+                var entries = await _databaseService.GetLibraryEntriesNeedingGenresAsync(100);
+                var tracks = await _databaseService.GetPlaylistTracksNeedingGenresAsync(100); // 100 limit, we'll dedup
+                
+                var artistIds = new HashSet<string>();
+                if (entries != null) foreach (var e in entries) if (e.SpotifyArtistId != null) artistIds.Add(e.SpotifyArtistId);
+                if (tracks != null) foreach (var t in tracks) if (t.SpotifyArtistId != null) artistIds.Add(t.SpotifyArtistId);
+                
+                if (artistIds.Any())
+                {
+                    _logger.LogInformation("Enrichment Stage 3: Fetching Genres for {Count} artists", artistIds.Count);
+                    var genreMap = await _enrichmentService.GetArtistGenresBatchAsync(artistIds.ToList());
+                    
+                    if (genreMap.Any())
+                    {
+                        await _databaseService.UpdateLibraryEntriesGenresAsync(genreMap);
+                        enrichedCount += genreMap.Count; // Count artists updated
+                        _logger.LogInformation("Stage 3 Complete: Enriched {Count} artists with genres", genreMap.Count);
+                        didWork = true;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                 _logger.LogError(ex, "Stage 3 (Genre Enrichment) failed");
+            }
         }
 
         if (enrichedCount > 0)

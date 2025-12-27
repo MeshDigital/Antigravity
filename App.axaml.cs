@@ -519,7 +519,10 @@ public partial class App : Application
         services.AddSingleton<DownloadDiscoveryService>();
         services.AddSingleton<SearchResultMatcher>(); // Phase 3.1
         services.AddSingleton<MetadataEnrichmentOrchestrator>(); // Phase 3.1
+        services.AddSingleton<SearchResultMatcher>(); // Phase 3.1
+        services.AddSingleton<MetadataEnrichmentOrchestrator>(); // Phase 3.1
         services.AddSingleton<SonicIntegrityService>(); // Phase 8: Sonic Integrity
+        services.AddSingleton<WaveformAnalysisService>(); // Phase 8.1: High-Fidelity Waveforms
         services.AddSingleton<LibraryUpgradeScout>(); // Phase 8: Self-Healing Library
         services.AddSingleton<UpgradeScoutViewModel>();
         services.AddSingleton<Services.Export.RekordboxService>(); // Phase 4: DJ Export

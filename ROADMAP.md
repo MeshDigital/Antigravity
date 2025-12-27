@@ -47,6 +47,10 @@
   - **Visual Swimlanes**: Express (Gold), Standard (Blue), Background (Dimmed).
   - **Quality Badges**: Gold (>92%), Silver (Pulsing 70%), Bronze (<70%).
   - **VIP Pass**: "God Mode" right-click override with Priority Debt limits.
+- **Phase 3C.6: Concurrency Control (Completed Dec 2025)**
+  - **Dynamic Semaphore**: Real-time adjustment of active download slots (1-20).
+  - **Queue Visibility**: Expanded buffer to 5000 items ensuring playlist integrity.
+  - **User Control**: UI Slider in Download Center for "Cruise Control".
 - **Phase 5C: Industrial Hardening (Completed Dec 2025)**
   - **Security**: Windows DPAPI encryption for Spotify tokens (replacing Base64).
   - **Resource Mgmt**: Explicit process killing for FFmpeg (Anti-Zombie).

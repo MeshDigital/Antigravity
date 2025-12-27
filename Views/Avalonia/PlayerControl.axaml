@@ -129,7 +129,7 @@
             <StackPanel Spacing="8">
                 <Panel Height="40">
                     <!-- Background Waveform -->
-                    <controls:WaveformControl Data="{Binding WaveformData}" 
+                    <controls:WaveformControl WaveformData="{Binding WaveformData}" 
                                             Progress="{Binding Position}"
                                             Opacity="0.6"
                                             VerticalAlignment="Stretch"

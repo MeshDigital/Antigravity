@@ -338,6 +338,65 @@ public class SpotifyEnrichmentService
         
         return result;
     }
+    /// <summary>
+    /// Stage 3: Batch fetch Artist details to get Genres.
+    /// Tracks don't contain genres, but Artists do.
+    /// </summary>
+    public async Task<Dictionary<string, System.Collections.Generic.List<string>>> GetArtistGenresBatchAsync(System.Collections.Generic.List<string> artistIds)
+    {
+        var result = new Dictionary<string, System.Collections.Generic.List<string>>();
+        if (!artistIds.Any()) return result;
+
+        try
+        {
+            var client = await _authService.GetAuthenticatedClientAsync();
+            
+            // API allows max 50 IDs per call for Artists
+            var chunkedIds = artistIds.Chunk(50);
+            
+            foreach (var chunk in chunkedIds)
+            {
+                var req = new ArtistsRequest(chunk.ToList());
+                var artistsResponse = await client.Artists.GetSeveral(req);
+                
+                if (artistsResponse?.Artists != null)
+                {
+                    foreach (var artist in artistsResponse.Artists)
+                    {
+                        if (artist != null && artist.Genres != null && artist.Genres.Any())
+                        {
+                            result[artist.Id] = artist.Genres;
+                        }
+                    }
+                }
+            }
+        }
+        catch (APITooManyRequestsException ex)
+        {
+            _logger.LogError("Spotify 429 Rate Limit hit (Genres Batch). Backing off for {Seconds}s.", ex.RetryAfter.TotalSeconds);
+            _isServiceDegraded = true;
+            _retryAfter = DateTime.UtcNow.Add(ex.RetryAfter).AddSeconds(1);
+        }
+        catch (APIException apiEx)
+        {
+            if (apiEx.Response?.StatusCode == System.Net.HttpStatusCode.Forbidden)
+            {
+                 _logger.LogWarning("Spotify API 403 Forbidden in GetArtistGenresBatchAsync. Disabling service temporarily.");
+                 _isServiceDegraded = true;
+                 _retryAfter = DateTime.UtcNow.AddMinutes(30);
+            }
+            else
+            {
+                _logger.LogError(apiEx, "Spotify API error in GetArtistGenresBatchAsync");
+            }
+        }
+        catch (Exception ex)
+        {
+             _logger.LogError(ex, "Failed to batch fetch artist genres");
+        }
+        
+        return result;
+    }
 }
 
 public class SpotifyTrackViewModel

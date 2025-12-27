@@ -14,6 +14,9 @@ public class TrackEnrichmentResult
     public double? Valence { get; set; }
     public double? Danceability { get; set; }
     
+    // Genre Support (Stage 3)
+    public System.Collections.Generic.List<string>? Genres { get; set; }
+    
     public bool Success { get; set; }
     public string? Error { get; set; }
 }

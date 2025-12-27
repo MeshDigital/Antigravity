@@ -81,7 +81,12 @@ public class MetadataTaggerService : ITaggerService
                         TagLib.File? file = null;
                         try 
                         {
-                            file = TagLib.File.Create(tempPath);
+                            // Fix for Atomic Write .tmp files: Explicitly specify MIME type based on original extension
+                            var originalExtension = Path.GetExtension(filePath);
+                            var mimeType = GetMimeTypeFromExtension(originalExtension);
+                            
+                            // Use the overload that accepts MIME type
+                            file = TagLib.File.Create(new TagLib.File.LocalFileAbstraction(tempPath), mimeType, ReadStyle.Average);
                         }
                         catch (TagLib.UnsupportedFormatException)
                         {
@@ -356,6 +361,24 @@ public class MetadataTaggerService : ITaggerService
             ".gif" => "image/gif",
             ".webp" => "image/webp",
             _ => "image/jpeg" // Default to JPEG if uncertain
+        };
+    }
+
+    private string GetMimeTypeFromExtension(string extension)
+    {
+        return extension.ToLowerInvariant() switch
+        {
+            ".mp3" => "audio/mpeg",
+            ".flac" => "audio/x-flac",
+            ".ogg" => "audio/ogg",
+            ".m4a" => "audio/mp4",
+            ".wav" => "audio/wav",
+            ".ape" => "audio/x-ape",
+            ".opus" => "audio/opus",
+            ".wma" => "audio/x-ms-wma",
+            ".aac" => "audio/aac",
+            ".aiff" => "audio/x-aiff",
+            _ => "application/octet-stream"
         };
     }
 }

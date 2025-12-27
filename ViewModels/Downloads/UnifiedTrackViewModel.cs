@@ -109,8 +109,11 @@ public class UnifiedTrackViewModel : ReactiveObject, IDisplayableTrack, IDisposa
             {
                 this.RaiseAndSetIfChanged(ref _state, value);
                 this.RaisePropertyChanged(nameof(StatusText));
+                this.RaisePropertyChanged(nameof(StatusColor)); // Added
+                this.RaisePropertyChanged(nameof(DetailedStatusText)); // Added
                 this.RaisePropertyChanged(nameof(IsIndeterminate));
                 this.RaisePropertyChanged(nameof(IsFailed));
+                this.RaisePropertyChanged(nameof(IsPaused));
                 this.RaisePropertyChanged(nameof(IsActive));
                 this.RaisePropertyChanged(nameof(IsCompleted));
                 this.RaisePropertyChanged(nameof(TechnicalSummary));
@@ -126,8 +129,25 @@ public class UnifiedTrackViewModel : ReactiveObject, IDisplayableTrack, IDisposa
         PlaylistTrackState.Queued => "Queued",
         PlaylistTrackState.Failed => !string.IsNullOrEmpty(FailureReason) ? FailureReason : "Failed",
         PlaylistTrackState.Paused => "Paused",
+
         _ => State.ToString()
     };
+    
+    // Fix: Added StatusColor property for UI binding
+    public Avalonia.Media.IBrush StatusColor => State switch
+    {
+        PlaylistTrackState.Completed => Avalonia.Media.Brushes.LimeGreen,
+        PlaylistTrackState.Failed => Avalonia.Media.Brushes.OrangeRed,
+        PlaylistTrackState.Cancelled => Avalonia.Media.Brushes.Gray,
+        PlaylistTrackState.Downloading => Avalonia.Media.Brushes.Cyan,
+        PlaylistTrackState.Searching => Avalonia.Media.Brushes.Yellow,
+        _ => Avalonia.Media.Brushes.LightGray
+    };
+
+    // Fix: Detailed tooltip text
+    public string DetailedStatusText => IsFailed 
+        ? $"Failed: {FailureReason ?? "Unknown Error"}\n(Click Retry to search for a new peer)" 
+        : StatusText;
 
     private double _progress;
     public double Progress
@@ -138,6 +158,7 @@ public class UnifiedTrackViewModel : ReactiveObject, IDisplayableTrack, IDisposa
 
     public bool IsIndeterminate => State == PlaylistTrackState.Searching || State == PlaylistTrackState.Queued;
     public bool IsFailed => State == PlaylistTrackState.Failed || State == PlaylistTrackState.Cancelled;
+    public bool IsPaused => State == PlaylistTrackState.Paused;
     public bool IsActive => State == PlaylistTrackState.Downloading || State == PlaylistTrackState.Searching;
     public bool IsCompleted => State == PlaylistTrackState.Completed;
 
