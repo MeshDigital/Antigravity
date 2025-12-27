@@ -63,12 +63,13 @@
   - ✅ **Improved Context Menu**: Added Retry/Cancel options to the Failed tab.
 - ✅ **Stability**: Fixed DI container crash (missing `AnlzFileParser`) and reset corrupt database.
 
-### Recent Updates (December 27, 2025)
-- ✅ **Queue Visibility**: Increased internal queue buffer from 100 to 5000 to prevent long playlists from disappearing in the UI.
-- ✅ **Concurrency Control**: Added dynamic slider (1-20) to Download Center header for real-time traffic control.
-- ✅ **UX Refinement**: Added "Retry All Failed" button for bulk recovery.
-- ✅ **Interactivity**: Added Context Menus to track rows (Download/Library) for Retry, Cancel, Play, Reveal.
-- ✅ **State Accuracy**: Improved `Resume` command visibility logic using explicit `IsPaused` state.
+### Recent Updates (December 27, 2025) - Pivot to Local Analysis
+- ⏸️ **PAUSED**: External Audio Features (Spotify BPM/Key/Energy) due to API changes.
+- 🎯 **NEW FOCUS**: Local Audio Analysis First (FFmpeg/Essentia).
+- 🎯 **NEW FOCUS**: Robust "Paste & Import" Workflow.
+- ✅ **NEW FOCUS**: Repairing Spotify Metadata Enrichment Pipeline (6-Layer Architecture).
+- ✅ **Queue Visibility**: Increased internal queue buffer from 100 to 5000.
+- ✅ **Concurrency Control**: Added dynamic slider (1-20).
 
 ---
 

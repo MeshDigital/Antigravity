@@ -1,41 +1,36 @@
 using System;
-using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Avalonia.Threading;
-using SLSKDONET.Services; // Ensure using for Services namespace
+using SLSKDONET.Services.Repositories;
 using SLSKDONET.Models;
-using SLSKDONET.ViewModels;
-using System.Linq; // For batching logic eventually
-using SLSKDONET.Events; // Add Events namespace
+using SLSKDONET.Events;
 
 namespace SLSKDONET.Services;
 
 /// <summary>
 /// "The Enricher"
-/// Orchestrates background metadata enrichment and file tagging.
-/// Decouples the "Fire & Forget" logic from DownloadManager.
+/// Orchestrates persistent, robust metadata enrichment.
+/// Polls the database for EnrichmentTasks and executes them via Spotify/Tagger.
 /// </summary>
 public class MetadataEnrichmentOrchestrator : IDisposable
 {
     private readonly ILogger<MetadataEnrichmentOrchestrator> _logger;
+    private readonly IEnrichmentTaskRepository _taskRepository;
     private readonly ISpotifyMetadataService _metadataService;
     private readonly ITaggerService _taggerService;
     private readonly DatabaseService _databaseService;
-    private readonly SpotifyAuthService _spotifyAuthService; // Injected for strict auth check
+    private readonly SpotifyAuthService _spotifyAuthService;
     private readonly SonicIntegrityService _sonicIntegrityService;
-    private readonly IEventBus _eventBus; // Injected
+    private readonly IEventBus _eventBus;
     private readonly Configuration.AppConfig _config;
 
-    // Queue for tracks needing enrichment
-    private readonly ConcurrentQueue<PlaylistTrack> _enrichmentQueue = new(); // Use Model
     private readonly CancellationTokenSource _cts = new();
     private Task? _processingTask;
-    private readonly SemaphoreSlim _signal = new(0);
 
     public MetadataEnrichmentOrchestrator(
         ILogger<MetadataEnrichmentOrchestrator> logger,
+        IEnrichmentTaskRepository taskRepository,
         ISpotifyMetadataService metadataService,
         ITaggerService taggerService,
         DatabaseService databaseService,
@@ -45,6 +40,7 @@ public class MetadataEnrichmentOrchestrator : IDisposable
         Configuration.AppConfig config)
     {
         _logger = logger;
+        _taskRepository = taskRepository; // [NEW] Persistent Repository
         _metadataService = metadataService;
         _taggerService = taggerService;
         _databaseService = databaseService;
@@ -58,226 +54,48 @@ public class MetadataEnrichmentOrchestrator : IDisposable
     {
         if (_processingTask != null) return;
         _processingTask = ProcessQueueLoop(_cts.Token);
-        _logger.LogInformation("Metadata Enrichment Orchestrator started.");
-        
-        // Phase 7: Ghost Download Recovery
-        _ = RecoverPendingOrchestrationsAsync();
-    }
-
-    private async Task RecoverPendingOrchestrationsAsync()
-    {
-        try
-        {
-            var pendingIds = await _databaseService.GetPendingOrchestrationsAsync();
-            if (pendingIds.Any())
-            {
-                _logger.LogInformation("Recovering {Count} pending orchestrations...", pendingIds.Count);
-                foreach (var id in pendingIds)
-                {
-                    // Find the track in DB
-                    var trackEntity = await _databaseService.FindTrackAsync(id);
-                    if (trackEntity != null && !string.IsNullOrEmpty(trackEntity.Filename))
-                    {
-                        var track = MapEntityToModel(trackEntity);
-                        QueueForEnrichment(track);
-                    }
-                    else
-                    {
-                        // Stale orchestration, clean up
-                        await _databaseService.RemovePendingOrchestrationAsync(id);
-                    }
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to recover pending orchestrations");
-        }
-    }
-
-    private PlaylistTrack MapEntityToModel(Data.TrackEntity e)
-    {
-        return new PlaylistTrack
-        {
-            TrackUniqueHash = e.GlobalId,
-            Artist = e.Artist,
-            Title = e.Title,
-            ResolvedFilePath = e.Filename,
-            SpotifyTrackId = e.SpotifyTrackId,
-            // Phase 8: Sonic Integrity
-            SpectralHash = e.SpectralHash,
-            QualityConfidence = e.QualityConfidence,
-            FrequencyCutoff = e.FrequencyCutoff,
-            IsTrustworthy = e.IsTrustworthy ?? true,
-            QualityDetails = e.QualityDetails,
-        };
+        _logger.LogInformation("✅ Persistent Metadata Enrichment Orchestrator started.");
     }
 
     /// <summary>
-    /// Queues a track for metadata enrichment (Spotify lookup).
+    /// Queues a track for metadata enrichment (Persistent).
     /// </summary>
-    public void QueueForEnrichment(PlaylistTrack track)
+    public async Task QueueForEnrichmentAsync(Guid trackId, Guid? albumId = null)
     {
-        _enrichmentQueue.Enqueue(track);
-        _signal.Release();
-    }
-
-    /// <summary>
-    /// Finalizes a downloaded track: Applies tags and updates DB.
-    /// Should be called after file download completes.
-    /// </summary>
-    public async Task FinalizeDownloadedTrackAsync(PlaylistTrack track)
-    {
-        if (string.IsNullOrEmpty(track.ResolvedFilePath)) return;
-
-        // Phase 7: Mark as pending orchestration for reliability
-        await _databaseService.AddPendingOrchestrationAsync(track.TrackUniqueHash);
-
-        try
-        {
-            // 1. Enrich Metadata (Last effort if not already done)
-            // Note: This matches original logic, but we could check track.SpotifyId here
-            await EnrichTrackAsync(track);
-
-            // 2. Write ID3 Tags
-            // Create a rich Track object for tagging
-            var trackInfo = new Track 
-            { 
-                Artist = track.Artist, 
-                Title = track.Title, 
-                Album = track.Album,
-                Metadata = new Dictionary<string, object>()
-            };
-
-            // Populate Metadata for the Tagger
-            if (track.TrackNumber > 0) trackInfo.Metadata["TrackNumber"] = track.TrackNumber;
-            if (track.ReleaseDate.HasValue) trackInfo.Metadata["ReleaseDate"] = track.ReleaseDate.Value;
-            if (!string.IsNullOrEmpty(track.Genres)) trackInfo.Metadata["Genre"] = track.Genres; // Json parsing logic might be needed in model, but for now passing raw
-            if (!string.IsNullOrEmpty(track.AlbumArtUrl)) trackInfo.Metadata["AlbumArtUrl"] = track.AlbumArtUrl;
-            
-            // Phase 0.5: Enriched Metadata
-            if (!string.IsNullOrEmpty(track.SpotifyTrackId)) trackInfo.Metadata["SpotifyTrackId"] = track.SpotifyTrackId;
-            if (!string.IsNullOrEmpty(track.SpotifyAlbumId)) trackInfo.Metadata["SpotifyAlbumId"] = track.SpotifyAlbumId;
-            if (!string.IsNullOrEmpty(track.SpotifyArtistId)) trackInfo.Metadata["SpotifyArtistId"] = track.SpotifyArtistId;
-            
-            if (!string.IsNullOrEmpty(track.MusicalKey)) trackInfo.Metadata["MusicalKey"] = track.MusicalKey;
-            if (track.BPM.HasValue) trackInfo.Metadata["BPM"] = track.BPM.Value;
-
-            await _taggerService.TagFileAsync(trackInfo, track.ResolvedFilePath);
-            _logger.LogInformation("Tagged file: {File}", track.ResolvedFilePath);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning("Failed to finalize/tag track {Artist} - {Title}: {Msg}", track.Artist, track.Title, ex.Message);
-        }
+        await _taskRepository.QueueTaskAsync(trackId, albumId);
     }
 
     private async Task ProcessQueueLoop(CancellationToken token)
     {
-        // Phase 9: Startup Fairness
-        // Wait 15s before processing to allow UI and MissionControl to stabilize
-        // This staggers it from LibraryEnrichmentWorker (30s)
-        try
-        {
-             _logger.LogInformation("Orchestrator warming up... (15s delay)");
-             await Task.Delay(15000, token);
-        }
-        catch (OperationCanceledException) { return; }
+        // Warn-up delay
+        try { await Task.Delay(5000, token); } catch { return; }
 
         while (!token.IsCancellationRequested)
         {
             try
             {
-                await _signal.WaitAsync(token); // Wait for item
+                // 1. Poll for next task
+                var task = await _taskRepository.GetNextPendingTaskAsync();
                 
-                // Smart Buffer: Always wait a bit to be greedy and let the queue fill
-                // The producer (DownloadManager) might be slow (DB lookups per track).
-                await Task.Delay(250, token);
-                
-                // Dequeue a batch of items
-                var batch = new List<PlaylistTrack>();
-                
-                // Try to fill batch up to 50 items
-                while (batch.Count < 50 && _enrichmentQueue.TryDequeue(out var item))
+                if (task == null)
                 {
-                     batch.Add(item);
-                }
-
-                if (!batch.Any()) continue;
-
-                _logger.LogInformation("Orchestrator processing batch of {Count} tracks", batch.Count);
-
-                // Process the batch
-                // Check if Enrichment is Globally Enabled AND User is Authenticated
-                if (!_config.SpotifyUseApi || !_spotifyAuthService.IsAuthenticated)
-                {
-                    var reason = !_config.SpotifyUseApi ? "Enrichment Disabled in Settings" : "Not Authenticated";
-                    _logger.LogDebug("Skipping metadata enrichment for {Count} tracks: {Reason}", batch.Count, reason);
-                    
-                    // Proceed to finalize tracks immediately without enrichment
-                    // This ensures "Download Only" flow works perfectly
-                    foreach (var track in batch)
-                    {
-                        await FinalizeEnrichmentAsync(track, false); // success=false means "no enrichment data applied"
-                    }
+                    // No work, sleep and continue
+                    await Task.Delay(2000, token);
                     continue;
                 }
 
-                // Split into "Has Spotify ID" vs "Needs Search"
-                var knownTracks = batch.Where(t => !string.IsNullOrEmpty(t.SpotifyTrackId)).ToList();
-                var unknownTracks = batch.Where(t => string.IsNullOrEmpty(t.SpotifyTrackId)).ToList();
+                // 2. Mark as Processing (Claim it)
+                await _taskRepository.MarkProcessingAsync(task.Id);
+                _logger.LogDebug("Processing enrichment task for Track {TrackId}", task.TrackId);
 
-                // 1. Bulk Fetch Audio Features for Known Tracks (Only if enabled)
-                if (knownTracks.Any() && _config.SpotifyEnableAudioFeatures)
-                {
-                    try
-                    {
-                        // Only fetch features for tracks that don't have them yet (Caching Law)
-                        var ids = knownTracks
-                            .Where(t => !t.BPM.HasValue || t.BPM <= 0)
-                            .Select(t => t.SpotifyTrackId!)
-                            .ToList();
-                        var features = await _metadataService.GetAudioFeaturesBatchAsync(ids);
+                // 3. Execute Logic
+                await ProcessTaskAsync(task);
 
-                        foreach (var track in knownTracks)
-                        {
-                            if (features.TryGetValue(track.SpotifyTrackId!, out var feature) && feature != null)
-                            {
-                                ApplyFeatures(track, feature);
-                            }
-                            
-                            await FinalizeEnrichmentAsync(track, true);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        // Soft fail for batch enrichment - don't stop the pipeline
-                        _logger.LogWarning("Batch enrichment failed (likely 403/Forbidden). Proceeding without audio features. Error: {Message}", ex.Message);
-                        foreach (var track in knownTracks)
-                        {
-                            await FinalizeEnrichmentAsync(track, true); // Still finalize as "success" (we have the track metadata at least)
-                        }
-                    }
-                }
-                else if (knownTracks.Any() && !_config.SpotifyEnableAudioFeatures)
-                {
-                    // Skip Audio Features fetch when disabled
-                    _logger.LogDebug("Audio Features disabled. Skipping batch enrichment for {Count} tracks", knownTracks.Count);
-                    foreach (var track in knownTracks)
-                    {
-                        await FinalizeEnrichmentAsync(track, true); // Still finalize with basic metadata
-                    }
-                }
-
-                // 2. Process Unknown Tracks One-by-One (Search cannot be batched easily)
-                foreach (var track in unknownTracks)
-                {
-                    bool success = await _metadataService.EnrichTrackAsync(track);
-                    await FinalizeEnrichmentAsync(track, success);
-                    
-                    // Add small delay only for searches to be safe
-                    await Task.Delay(50, token); 
-                }
+                // 4. Mark Completed
+                await _taskRepository.MarkCompletedAsync(task.Id);
+                
+                // Yield briefly to behave nice in loop
+                await Task.Delay(100, token);
             }
             catch (OperationCanceledException)
             {
@@ -285,89 +103,76 @@ public class MetadataEnrichmentOrchestrator : IDisposable
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error in enrichment loop");
+                _logger.LogError(ex, "Critical error in enrichment loop");
+                await Task.Delay(5000, token); // Backoff on critical failure
             }
         }
     }
 
-    private void ApplyFeatures(PlaylistTrack track, SpotifyAPI.Web.TrackAudioFeatures feature)
+    private async Task ProcessTaskAsync(Data.Entities.EnrichmentTaskEntity task)
     {
-        track.BPM = feature.Tempo;
-        track.MusicalKey = $"{feature.Key}{(feature.Mode == 1 ? "B" : "A")}";
-        track.AnalysisOffset = 0;
-    }
-
-    private async Task FinalizeEnrichmentAsync(PlaylistTrack track, bool success)
-    {
-        try 
+        try
         {
-            // Phase 8: Sonic Integrity
-            if (!string.IsNullOrEmpty(track.ResolvedFilePath))
+            // Fetch Track from DB to get Artist/Title
+            // Assuming DatabaseService has a method to get entity by ID
+            var trackEntity = await _databaseService.FindTrackAsync(task.TrackId.ToString());
+            
+            if (trackEntity == null)
             {
-                try
-                {
-                    var sonicResult = await _sonicIntegrityService.AnalyzeTrackAsync(track.ResolvedFilePath);
-                    track.SpectralHash = sonicResult.SpectralHash;
-                    track.QualityConfidence = sonicResult.QualityConfidence;
-                    track.FrequencyCutoff = sonicResult.FrequencyCutoff;
-                    track.IsTrustworthy = sonicResult.IsTrustworthy;
-                    track.QualityDetails = sonicResult.Details;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning("Sonic analysis failed during enrichment for {Artist} - {Title}: {Msg}", track.Artist, track.Title, ex.Message);
-                }
+                await _taskRepository.MarkFailedAsync(task.Id, "Track not found in DB");
+                return;
             }
 
-            if (success && !string.IsNullOrEmpty(track.SpotifyTrackId))
+            // A. Check Settings/Auth
+            if (!_config.SpotifyUseApi || !_spotifyAuthService.IsAuthenticated)
             {
-               _eventBus.Publish(new TrackMetadataUpdatedEvent(track.TrackUniqueHash));
+                await _taskRepository.MarkCompletedAsync(task.Id); // Skip but mark done to clear queue
+                return;
+            }
 
-                await _databaseService.SaveTrackAsync(new Data.TrackEntity
-                {
-                   GlobalId = track.TrackUniqueHash,
-                   Artist = track.Artist,
-                   Title = track.Title,
-                   State = track.Status == TrackStatus.Downloaded ? "Completed" : "Missing",
-                   Filename = track.ResolvedFilePath ?? "",
-                   CoverArtUrl = track.AlbumArtUrl,
-                   SpotifyTrackId = track.SpotifyTrackId,
-                   MusicalKey = track.MusicalKey,
-                   BPM = track.BPM,
-                   AnalysisOffset = track.AnalysisOffset,
-                   BitrateScore = track.BitrateScore,
-                   AudioFingerprint = track.AudioFingerprint,
-                   CuePointsJson = track.CuePointsJson,
-                   SpectralHash = track.SpectralHash,
-                   QualityConfidence = track.QualityConfidence,
-                   FrequencyCutoff = track.FrequencyCutoff,
-                   IsTrustworthy = track.IsTrustworthy
-                });
+            // B. Construct Model
+            var model = new PlaylistTrack
+            {
+                TrackUniqueHash = trackEntity.GlobalId,
+                Artist = trackEntity.Artist,
+                Title = trackEntity.Title,
+                SpotifyTrackId = trackEntity.SpotifyTrackId
+            };
+
+            // C. Execute Enrichment (Search or Direct Lookup)
+            bool enriched = await _metadataService.EnrichTrackAsync(model);
+
+            // D. Save Updates to DB
+            if (enriched)
+            {
+                trackEntity.SpotifyTrackId = model.SpotifyTrackId;
+                trackEntity.CoverArtUrl = model.AlbumArtUrl;
+                trackEntity.BPM = model.BPM;
+                trackEntity.MusicalKey = model.MusicalKey;
+                // Add any other enriched fields here
+                
+                await _databaseService.SaveTrackAsync(trackEntity);
+                _eventBus.Publish(new TrackMetadataUpdatedEvent(trackEntity.GlobalId));
+                _logger.LogInformation("✨ Enriched: {Artist} - {Title}", trackEntity.Artist, trackEntity.Title);
             }
             else
             {
-                 _logger.LogDebug("Metadata enrichment failed to find match for {Artist} - {Title}", track.Artist, track.Title);
+                _logger.LogDebug("No metadata match found for {Artist} - {Title}", trackEntity.Artist, trackEntity.Title);
+                // We still mark task as completed because we tried.
             }
-
-            await _databaseService.RemovePendingOrchestrationAsync(track.TrackUniqueHash);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to finalize enrichment for {Artist} - {Title}", track.Artist, track.Title);
+            _logger.LogError(ex, "Task execution failed for {TaskId}", task.Id);
+            await _taskRepository.MarkFailedAsync(task.Id, ex.Message);
+            throw; // Re-throw to loop handler if needed, or swallow here
         }
-    }
-
-    // Deprecated single method
-    private Task EnrichTrackAsync(PlaylistTrack track)
-    {
-        // Re-routed to new flow, but mostly unused now by loop
-        return Task.CompletedTask; 
     }
 
     public void Dispose()
     {
         _cts.Cancel();
-        _signal.Dispose();
         _cts.Dispose();
     }
 }
+

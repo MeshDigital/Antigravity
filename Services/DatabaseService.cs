@@ -440,6 +440,31 @@ public class DatabaseService
                  _logger.LogError(ex, "Failed to ensure PendingOrchestrations table exists");
             }
 
+            // Phase 1: Ensure EnrichmentTasks table exists (Manual Patch)
+            try 
+            {
+                await context.Database.ExecuteSqlRawAsync("SELECT Id FROM EnrichmentTasks LIMIT 1");
+            }
+            catch 
+            {
+                _logger.LogWarning("Schema Patch: Creating missing table 'EnrichmentTasks'");
+                var createEnrichmentTableSql = @"
+                    CREATE TABLE IF NOT EXISTS EnrichmentTasks (
+                        Id TEXT NOT NULL CONSTRAINT PK_EnrichmentTasks PRIMARY KEY,
+                        TrackId TEXT NOT NULL,
+                        AlbumId TEXT NULL,
+                        Status INTEGER NOT NULL,
+                        RetryCount INTEGER NOT NULL,
+                        ErrorMessage TEXT NULL,
+                        CreatedAt TEXT NOT NULL,
+                        UpdatedAt TEXT NULL
+                    );
+                    CREATE INDEX IF NOT EXISTS IX_EnrichmentTasks_Status ON EnrichmentTasks (Status);
+                    CREATE INDEX IF NOT EXISTS IX_EnrichmentTasks_Status_CreatedAt ON EnrichmentTasks (Status, CreatedAt);
+                ";
+                await context.Database.ExecuteSqlRawAsync(createEnrichmentTableSql);
+            }
+
             // Check for LibraryHealth table
             try
             {

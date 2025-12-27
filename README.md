@@ -47,6 +47,7 @@ Where traditional P2P clients download the first available file, ORBIT analyzes 
 - **Infinite Enrichment**: Secondary task continues to fetch deep audio features for all library tracks
 - **Duration Validation**: Uses Spotify's canonical duration to verify file versions
 - **Liked Songs Support**: Import your entire Spotify library
+- **Persistent Queue 6.0**: Enrichment tasks are stored in `EnrichmentTasks` SQLite table, ensuring metadata jobs survive app restarts.
 
 ### 💿 DJ-Ready Metadata
 - **Camelot Key Notation**: Automatic detection and tagging (e.g., "8A")
@@ -141,6 +142,8 @@ ORBIT/
 │   ├── DownloadManager.cs       # Queue orchestration + heartbeat
 │   ├── SearchResultMatcher.cs   # Ranking algorithm
 │   ├── CrashRecoveryJournal.cs  # Recovery checkpoint logging
+│   ├── MetadataEnrichmentOrchestrator.cs # Persistent enrichment queue consumer
+│   ├── EnrichmentTaskRepository.cs # Task queue persistence logic
 │   └── SonicIntegrityService.cs # Spectral analysis (Phase 8)
 ├── Models/                  # Data models & events
 ├── Configuration/           # Scoring constants, app settings

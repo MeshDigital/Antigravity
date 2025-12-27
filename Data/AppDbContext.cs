@@ -16,6 +16,7 @@ public class AppDbContext : DbContext
     public DbSet<Entities.SpotifyMetadataCacheEntity> SpotifyMetadataCache { get; set; }
     public DbSet<LibraryHealthEntity> LibraryHealth { get; set; }
     public DbSet<Entities.PendingOrchestrationEntity> PendingOrchestrations { get; set; }
+    public DbSet<Entities.EnrichmentTaskEntity> EnrichmentTasks { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
@@ -113,5 +114,14 @@ public class AppDbContext : DbContext
             .WithOne(l => l.Job)
             .HasForeignKey(l => l.PlaylistId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        // Phase 1: Enrichment Task Indexes
+        modelBuilder.Entity<Entities.EnrichmentTaskEntity>()
+            .HasIndex(e => e.Status)
+            .HasDatabaseName("IX_EnrichmentTasks_Status");
+
+        modelBuilder.Entity<Entities.EnrichmentTaskEntity>()
+            .HasIndex(e => new { e.Status, e.CreatedAt })
+            .HasDatabaseName("IX_EnrichmentTasks_Status_CreatedAt");
     }
 }

@@ -446,6 +446,9 @@ public partial class App : Application
         services.AddSingleton<Services.ImportProviders.SpotifyLikedSongsImportProvider>();
         services.AddSingleton<Services.ImportProviders.TracklistImportProvider>();
         
+        // Phase 1: Persistent Enrichment Queue
+        services.AddSingleton<Services.Repositories.IEnrichmentTaskRepository, Services.Repositories.EnrichmentTaskRepository>();
+        
         // Register as interface for Orchestrator
         services.AddSingleton<IImportProvider>(sp => sp.GetRequiredService<Services.ImportProviders.SpotifyImportProvider>());
         services.AddSingleton<IImportProvider>(sp => sp.GetRequiredService<Services.ImportProviders.CsvImportProvider>());

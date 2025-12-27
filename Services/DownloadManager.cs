@@ -19,6 +19,7 @@ using SLSKDONET.Utils;
 using SLSKDONET.Models;
 using SLSKDONET.Services.Models;
 using Microsoft.EntityFrameworkCore;
+using SLSKDONET.Services.Repositories; // [NEW] Namespace
 
 
 namespace SLSKDONET.Services;
@@ -46,6 +47,7 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
     private readonly PathProviderService _pathProvider;
     private readonly SLSKDONET.Services.IO.IFileWriteService _fileWriteService; // Phase 1A
     private readonly CrashRecoveryJournal _crashJournal; // Phase 2A
+    private readonly IEnrichmentTaskRepository _enrichmentTaskRepository; // [NEW]
 
     // Phase 2.5: Concurrency control with SemaphoreSlim throttling
     private readonly CancellationTokenSource _globalCts = new();
@@ -77,10 +79,11 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
         ILibraryService libraryService,
         IEventBus eventBus,
         DownloadDiscoveryService discoveryService,
-        MetadataEnrichmentOrchestrator enrichmentOrchestrator,
+        MetadataEnrichmentOrchestrator enrichmentOrchestrator, // Keeping this for legacy calls if any
         PathProviderService pathProvider,
-        SLSKDONET.Services.IO.IFileWriteService fileWriteService, // Phase 1A
-        CrashRecoveryJournal crashJournal) // Phase 2A
+        SLSKDONET.Services.IO.IFileWriteService fileWriteService,
+        CrashRecoveryJournal crashJournal,
+        IEnrichmentTaskRepository enrichmentTaskRepository) // [NEW] Injected
     {
         _logger = logger;
         _config = config;
@@ -90,10 +93,11 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
         _libraryService = libraryService;
         _eventBus = eventBus;
         _discoveryService = discoveryService;
-        _enrichmentOrchestrator = enrichmentOrchestrator;
+        _enrichmentOrchestrator = enrichmentOrchestrator; 
         _pathProvider = pathProvider;
-        _fileWriteService = fileWriteService; // Phase 1A
-        _crashJournal = crashJournal; // Phase 2A
+        _fileWriteService = fileWriteService;
+        _crashJournal = crashJournal;
+        _enrichmentTaskRepository = enrichmentTaskRepository;
 
         // Initialize from config, but allow runtime changes
         int initialLimit = _config.MaxConcurrentDownloads > 0 ? _config.MaxConcurrentDownloads : 4;
@@ -398,8 +402,16 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
             try
             {
                 await _libraryService.SavePlaylistJobWithTracksAsync(job);
+                await _libraryService.SavePlaylistJobWithTracksAsync(job);
                 _logger.LogInformation("Saved PlaylistJob to database with {TrackCount} tracks", job.PlaylistTracks.Count);
                 await _databaseService.LogPlaylistJobDiagnostic(job.Id);
+
+                // 2. [NEW] Queue Enrichment Tasks for all tracks
+                foreach (var track in job.PlaylistTracks)
+                {
+                    await _enrichmentTaskRepository.QueueTaskAsync(track.Id, job.Id);
+                }
+                _logger.LogInformation("Queued enrichment tasks for {Count} tracks", job.PlaylistTracks.Count);
             }
             catch (Exception ex)
             {
@@ -457,7 +469,8 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
                         existingCtx.FailureReason = null;
                         
                         // Queue for enrichment/download
-                        _enrichmentOrchestrator.QueueForEnrichment(existingCtx.Model);
+                        // Fire-and-forget for synchronous method
+                        _ = _enrichmentTaskRepository.QueueTaskAsync(existingCtx.Model.Id, existingCtx.Model.PlaylistId);
                         queued++; // Count as queued now
                         continue;
                     }
@@ -494,7 +507,7 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
                 // Only queue enrichment if it's new/pending
                 if (ctx.State == PlaylistTrackState.Pending || ctx.State == PlaylistTrackState.Searching)
                 {
-                    _enrichmentOrchestrator.QueueForEnrichment(ctx.Model);
+                    _ = _enrichmentTaskRepository.QueueTaskAsync(ctx.Model.Id, ctx.Model.PlaylistId);
                 }
             }
         }
@@ -1836,7 +1849,9 @@ public class DownloadManager : INotifyPropertyChanged, IDisposable
                 _logger.LogInformation("📚 Added to library: {Artist} - {Title}", ctx.Model.Artist, ctx.Model.Title);
 
                 // Phase 3.1: Finalize with Metadata Service (Tagging)
-                await _enrichmentOrchestrator.FinalizeDownloadedTrackAsync(ctx.Model);
+                // [Fixed] Finalization is now handled by persistent enrichment pipeline
+                // await _enrichmentOrchestrator.FinalizeDownloadedTrackAsync(ctx.Model);
+                await _enrichmentOrchestrator.QueueForEnrichmentAsync(ctx.Model.Id, ctx.Model.PlaylistId);
             }
             catch (Exception renameEx)
             {
